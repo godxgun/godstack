@@ -17,12 +17,13 @@
  * 0.0.0 - @vasco - prototyping
  * 0.1.0 - @vasco - linux x11 that automagically loads X11 DLL
  * 0.1.1 - @vasco - fixed event handling on linux
- *
- * TODO: demo that stress tests the whole API
+ * 0.1.2 - @vasco - better handling of windows, if multiple windows becomes necessary in the future
+ * 0.2.0 - @vasco - multiple windows, major-ish API changes.
+ * 0.3.0 - @vasco - web via emscripten
+ * 0.4.0 - @vasco - win32
  */
 
 #include <assert.h>
-#include <stdarg.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -52,15 +53,13 @@
     #else
         #define PEAK_MACOS
     #endif
-#elif defined(__linux__)
-    #define PEAK_LINUX
-#elif defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__bsdi__) || defined(__DragonFly__)
-    #define PEAK_BSD
 #elif defined(__ANDROID__)
     #define PEAK_ANDROID
     #define PEAK_LINUX
 #elif defined(__linux__)
     #define PEAK_LINUX
+#elif defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__bsdi__) || defined(__DragonFly__)
+    #define PEAK_BSD
 #endif 
 
 #if defined(PEAK_LINUX) || defined(PEAK_BSD) || defined(PEAK_APPLE)
@@ -77,7 +76,8 @@
 #endif
 
 typedef enum {
-    PEAK_KEYMOD_ALT = 0,
+    PEAK_KEYMOD_NONE = 0,
+    PEAK_KEYMOD_ALT,
     PEAK_KEYMOD_SHIFT,
     PEAK_KEYMOD_CTRL,
     PEAK_KEYMOD_CAPS,
@@ -102,7 +102,7 @@ typedef enum {
     PEAK_EVENT_POINTER_CONNECTED,
     PEAK_EVENT_POINTER_DISCONNECTED,
     PEAK_EVENT_LAST
-} PeakEvenType;
+} PeakEventType;
 
 typedef enum {
     PEAK_POINTER_MOVED = 0,
@@ -118,7 +118,7 @@ typedef enum {
 } PeakPointerType;
 
 typedef struct {
-    PeakEvenType type;
+    PeakEventType type;
     union {
         struct { PeakKeyCode key; PeakKeyMod mod; } key;
         struct { uint32_t width, height; } resize;
@@ -126,106 +126,53 @@ typedef struct {
     };
 } PeakEvent;
 
-/* Public API */
-PEAK void peak_init(void); // open a window and initialize graphics. called automatically if using peak_setup().
-PEAK void peak_quit(void); // close the window and release resources. called automatically if using peak_setup().
-PEAK bool peak_poll_events(PeakEvent *ev); // Poll the next event from the window queue. Returns true if an event was retrieved.
-PEAK void peak_extensions(void); // retrieve gpu window surface extensions for native api access (e.g., vulkan/opengl).
-PEAK void peak_blit(int offset_x, int offset_y, const uint32_t *rgba, size_t width, size_t height); // blit rgba pixels to the screen.
-PEAK void peak_clip(int x, int y, size_t w, size_t h); // restrict all subsequent rendering operations to this bounding rectangle.
-PEAK void peak_clip_reset(void); // reset clipping plane to window size.
-PEAK void peak_draw_rectangle(int x, int y, size_t w, size_t h, uint32_t color); // draw a solid-color filled rectangle.
-PEAK void peak_draw_rectangle_gradient(int x, int y, size_t w, size_t h, uint32_t c0, uint32_t c1, uint32_t c2, uint32_t c3); // fill rectangle interpolating four corner colors in clock-wise order.
-PEAK void peak_draw_triangle(int x0, int y0, int x1, int y1, int x2, int y2, uint32_t color); // draw a solid-color filled triangle.
-PEAK void peak_draw_triangle_gradient(int x0, int y0, int x1, int y1, int x2, int y2, uint32_t c0, uint32_t c1, uint32_t c2); // fill triangle with color interpolation clock-wise across its three vertices.
-PEAK void peak_draw_line(int x0, int y0, int x1, int y1, size_t width, uint32_t color); // draw a line between two points.
-PEAK void peak_draw_line_gradient(int x0, int y0, int x1, int y1, size_t width, uint32_t c0, uint32_t c1); // draw a line with a color gradient.
-
 /* Implemented by the platform */
-PEAK void peak_platform_window_open();
-PEAK void peak_platform_window_close();
-PEAK uint32_t *peak_platform_window_buffer(size_t *width, size_t *height);
-PEAK bool peak_platform_epoll(PeakEvent *ev);
+typedef struct peak_window_internal_t PeakWindowInternal;
+typedef struct PeakWindow PeakWindow;  
 
-/*
- * He was wipping up amazing foods, like making happiness.
- * Actual happiness?
- * Actual happiness and joy. 
- * Oh the smell, it was so divine.
- * He was making happiness!?
- * Happiness in the kettle!
- */
-#ifdef PEAK_REPLACE_MAIN
-enum PeakReturn { PEAK_CONTINUE = 0, PEAK_STOP = 1 };
-extern int  peak__main(int argc, char**argv);
-extern void peak_events(PeakEvent ev);
-extern void peak_tick();
-static bool running = true;
-static inline void peak_stop() { running = false; }
-#ifndef PEAK_WEB
-#define main(...)\
-main(int argc, char **argv) {\
-    assert(peak_events != 0 && "Declare peak_events() to handle window events.");\
-    assert(peak_tick != 0 && "Declare peak_tick() to handle each frame ticks.");\
-    peak_init();\
-    int ret = peak__main(argc, argv);\
-    if (ret != PEAK_CONTINUE) return ret;\
-    PeakEvent ev;\
-    while (running) {\
-        while (running && peak_poll_events(&ev)) {\
-            peak_events(ev);\
-        }\
-        peak_tick();\
-    }\
-    peak_quit();\
-}\
-int peak__main(__VA_ARGS__)
-#else
-#include <emscripten.h>
-/*
- * He was wipping up agony in the kettle.
- * Actual pain?
- * Boiling hatred in the kettle.
- * The smell, it's pain.
- * Boiling anger!?
- * Yes, boiling anger.
- */
+/* Public API */
+PEAK int  peak_init(void); // Initialize platform context and load necessary DLLs.
+PEAK void peak_quit(void); // Close platform context.
+PEAK PeakWindow peak_window_open(const char *name, uint32_t width, uint32_t height, uint32_t flags); // Open a window.
+PEAK void       peak_window_close(PeakWindow *window); // Close a window.
+PEAK void       peak_window_run(PeakWindow *win, int (*peak_tick)(PeakWindow *win, void *userdata), void *userdata); // Hijacking the main loop makes life easier on platforms like web
+PEAK int        peak_window_epoll(PeakWindow *win, PeakEvent *ev); // Poll a window for events.
+PEAK uint32_t*  peak_window_backbuffer(PeakWindow *win, size_t *width, size_t *height); // Get the windows backbuffer.
+PEAK void       peak_window_clear(PeakWindow *win, float r, float g, float b, float a);
+PEAK void       peak_window_present(PeakWindow *win);
 
-static inline void
-peak__emscripten_loop_step(void *arg) 
-{
-    (void)arg;
-    PeakEvent ev;
-    while (peak_poll_events(&ev)) {
-        peak_events(ev);
-    }
-    
-    if (running) {
-        peak_tick();
-    } else {
-        emscripten_cancel_main_loop();
-        peak_quit();
-    }
-}
-
-#define main(...)\
-    main(int argc, char **argv) {\
-        _Static_assert(peak_events != 0, "When using peak_setup, declare peak_events() to handle window events.");\
-        _Static_assert(peak_tick != 0, "When using peak_setup, declare peak_tick() to handle frame ticks.");\
-        peak_init();\
-        int ret = peak__main(argc, argv);\
-        if (ret != PEAK_CONTINUE) return ret;\
-        emscripten_set_main_loop_arg(peak__emscripten_loop_step, NULL, 0, 1);\
-        return 0;\
-    }\
-    int peak__main(__VA_ARGS__)
-#endif
-#endif // PEAK_DONT_REPLACE_MAIN
-        
 #endif // PEAK_H
 
 #ifdef PEAK_IMPLEMENTATION 
 #undef PEAK_IMPLEMENTATION
+
+#if defined(PEAK_WIN32) || defined(PEAK_WEB)
+#define PEAK_Q 64
+
+typedef struct {
+    unsigned h, n;
+    PeakEvent e[PEAK_Q];
+} PeakQ;
+
+static void
+peak_q_push(PeakQ *q, PeakEvent ev)
+{
+    if (!q || q->n == PEAK_Q)
+        return;
+    q->e[(q->h + q->n++) % PEAK_Q] = ev;
+}
+
+static int
+peak_q_pop(PeakQ *q, PeakEvent *ev)
+{
+    if (!q || !q->n)
+        return 0;
+    *ev = q->e[q->h];
+    q->h = (q->h + 1) % PEAK_Q;
+    q->n--;
+    return 1;
+}
+#endif
 
 #if defined(PEAK_WIN32)
 #include "p_win32.c" // <REPLACE>
@@ -234,6 +181,19 @@ peak__emscripten_loop_step(void *arg)
 #elif defined(PEAK_WEB)
 #include "p_emscripten.c" // <REPLACE>
 #endif
+
+/* We define PeakWindow only when we know the type of peak_window_internal_t */
+struct PeakWindow { 
+    PeakWindowInternal internal;
+    int (*tick)(struct PeakWindow *win, void *userdata);
+    void *userdata;
+    uint32_t *buffer;
+    uint32_t width;
+    uint32_t height;
+    uint32_t bufsize;
+    int running;
+};
+
 
 #include "peak.c" // <REPLACE>
 

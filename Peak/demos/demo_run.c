@@ -1,8 +1,5 @@
 #include <stdio.h>
-#include <math.h>
-#include <unistd.h>
 
-#define PEAK_REPLACE_MAIN
 #define PEAK_IMPLEMENTATION
 #include "../peak.h"
 
@@ -42,26 +39,38 @@ typedef struct {
 
 static AppData data;
 
-int main(int argc, char**argv) {
-    data.msg = "Hello World";
-    return PEAK_CONTINUE;
-}
-
-void
-peak_events(PeakEvent ev) 
+static int
+peak_run_func(PeakWindow *win, void *userdata) 
 {
-    print_event[ev.type](ev);
-    switch (ev.type) {
-        case PEAK_EVENT_WINDOW_CLOSE:
-            printf("stoppppeeed\n");
-            peak_stop();
-            break;
+    AppData d = *(AppData*) userdata;
+    static PeakEvent ev; 
+    while (peak_window_epoll(win, &ev)) {
+        switch (ev.type) {
+            case PEAK_EVENT_NONE:
+                continue;
+            case PEAK_EVENT_WINDOW_CLOSE:
+                return 0;
+            default:
+                print_event[ev.type](ev);
+                continue;
+        }
     }
+    printf("%s\n", d.msg);
+    return 1;
 }
 
-void
-peak_tick() 
+int
+main(int argc, char**argv) 
 {
-    printf("%s\n",data.msg);
-    sleep(1);
+    data.msg = "Hello World";
+
+    if (!peak_init()) {
+        return 1;
+    }
+
+    PeakWindow win = peak_window_open("demo", 400, 400, 0);
+    peak_window_run(&win, peak_run_func, &data);
+    peak_window_close(&win);
+    peak_quit();
+    return 0;
 }

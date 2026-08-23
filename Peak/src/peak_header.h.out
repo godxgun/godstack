@@ -17,12 +17,11 @@
  * 0.0.0 - @vasco - prototyping
  * 0.1.0 - @vasco - linux x11 that automagically loads X11 DLL
  * 0.1.1 - @vasco - fixed event handling on linux
- *
- * TODO: demo that stress tests the whole API
+ * 0.1.2 - @vasco - better handling of windows, if multiple windows becomes necessary in the future
+ * 0.2.0 - @vasco - win32
  */
 
 #include <assert.h>
-#include <stdarg.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -52,15 +51,13 @@
     #else
         #define PEAK_MACOS
     #endif
-#elif defined(__linux__)
-    #define PEAK_LINUX
-#elif defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__bsdi__) || defined(__DragonFly__)
-    #define PEAK_BSD
 #elif defined(__ANDROID__)
     #define PEAK_ANDROID
     #define PEAK_LINUX
 #elif defined(__linux__)
     #define PEAK_LINUX
+#elif defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__bsdi__) || defined(__DragonFly__)
+    #define PEAK_BSD
 #endif 
 
 #if defined(PEAK_LINUX) || defined(PEAK_BSD) || defined(PEAK_APPLE)
@@ -77,7 +74,8 @@
 #endif
 
 typedef enum {
-    PEAK_KEYMOD_ALT = 0,
+    PEAK_KEYMOD_NONE = 0,
+    PEAK_KEYMOD_ALT,
     PEAK_KEYMOD_SHIFT,
     PEAK_KEYMOD_CTRL,
     PEAK_KEYMOD_CAPS,
@@ -102,7 +100,7 @@ typedef enum {
     PEAK_EVENT_POINTER_CONNECTED,
     PEAK_EVENT_POINTER_DISCONNECTED,
     PEAK_EVENT_LAST
-} PeakEvenType;
+} PeakEventType;
 
 typedef enum {
     PEAK_POINTER_MOVED = 0,
@@ -118,7 +116,7 @@ typedef enum {
 } PeakPointerType;
 
 typedef struct {
-    PeakEvenType type;
+    PeakEventType type;
     union {
         struct { PeakKeyCode key; PeakKeyMod mod; } key;
         struct { uint32_t width, height; } resize;
@@ -126,727 +124,1085 @@ typedef struct {
     };
 } PeakEvent;
 
-/* Public API */
-PEAK void peak_init(void); // open a window and initialize graphics. called automatically if using peak_setup().
-PEAK void peak_quit(void); // close the window and release resources. called automatically if using peak_setup().
-PEAK bool peak_poll_events(PeakEvent *ev); // Poll the next event from the window queue. Returns true if an event was retrieved.
-PEAK void peak_extensions(void); // retrieve gpu window surface extensions for native api access (e.g., vulkan/opengl).
-PEAK void peak_blit(int offset_x, int offset_y, const uint32_t *rgba, size_t width, size_t height); // blit rgba pixels to the screen.
-PEAK void peak_clip(int x, int y, size_t w, size_t h); // restrict all subsequent rendering operations to this bounding rectangle.
-PEAK void peak_clip_reset(void); // reset clipping plane to window size.
-PEAK void peak_draw_rectangle(int x, int y, size_t w, size_t h, uint32_t color); // draw a solid-color filled rectangle.
-PEAK void peak_draw_rectangle_gradient(int x, int y, size_t w, size_t h, uint32_t c0, uint32_t c1, uint32_t c2, uint32_t c3); // fill rectangle interpolating four corner colors in clock-wise order.
-PEAK void peak_draw_triangle(int x0, int y0, int x1, int y1, int x2, int y2, uint32_t color); // draw a solid-color filled triangle.
-PEAK void peak_draw_triangle_gradient(int x0, int y0, int x1, int y1, int x2, int y2, uint32_t c0, uint32_t c1, uint32_t c2); // fill triangle with color interpolation clock-wise across its three vertices.
-PEAK void peak_draw_line(int x0, int y0, int x1, int y1, size_t width, uint32_t color); // draw a line between two points.
-PEAK void peak_draw_line_gradient(int x0, int y0, int x1, int y1, size_t width, uint32_t c0, uint32_t c1); // draw a line with a color gradient.
-
 /* Implemented by the platform */
-PEAK void peak_platform_window_open();
-PEAK void peak_platform_window_close();
-PEAK uint32_t *peak_platform_window_buffer(size_t *width, size_t *height);
-PEAK bool peak_platform_epoll(PeakEvent *ev);
+typedef struct peak_window_internal_t PeakWindowInternal;
+typedef struct PeakWindow PeakWindow;  
 
-/*
- * He was wipping up amazing foods, like making happiness.
- * Actual happiness?
- * Actual happiness and joy. 
- * Oh the smell, it was so divine.
- * He was making happiness!?
- * Happiness in the kettle!
- */
-#ifdef PEAK_REPLACE_MAIN
-enum PeakReturn { PEAK_CONTINUE = 0, PEAK_STOP = 1 };
-extern int  peak__main(int argc, char**argv);
-extern void peak_events(PeakEvent ev);
-extern void peak_tick();
-static bool running = true;
-static inline void peak_stop() { running = false; }
-#ifndef PEAK_WEB
-#define main(...)\
-main(int argc, char **argv) {\
-    assert(peak_events != 0 && "Declare peak_events() to handle window events.");\
-    assert(peak_tick != 0 && "Declare peak_tick() to handle each frame ticks.");\
-    peak_init();\
-    int ret = peak__main(argc, argv);\
-    if (ret != PEAK_CONTINUE) return ret;\
-    PeakEvent ev;\
-    while (running) {\
-        while (running && peak_poll_events(&ev)) {\
-            peak_events(ev);\
-        }\
-        peak_tick();\
-    }\
-    peak_quit();\
-}\
-int peak__main(__VA_ARGS__)
-#else
-#include <emscripten.h>
-/*
- * He was wipping up agony in the kettle.
- * Actual pain?
- * Boiling hatred in the kettle.
- * The smell, it's pain.
- * Boiling anger!?
- * Yes, boiling anger.
- */
+/* Public API */
+PEAK int  peak_init(void); // Initialize platform context and load necessary DLLs.
+PEAK void peak_quit(void); // Close platform context.
+PEAK PeakWindow peak_window_open(const char *name, uint32_t width, uint32_t height, uint32_t flags); // Open a window.
+PEAK void       peak_window_close(PeakWindow *window); // Close a window.
+PEAK void       peak_window_run(PeakWindow *win, int (*peak_tick)(PeakWindow *win, void *userdata), void *userdata); // Hijacking the main loop makes life easier on platforms like web
+PEAK int        peak_window_epoll(PeakWindow *win, PeakEvent *ev); // Poll a window for events.
+PEAK uint32_t*  peak_window_backbuffer(PeakWindow *win, size_t *width, size_t *height); // Get the windows backbuffer.
+PEAK void       peak_window_clear(PeakWindow *win, float r, float g, float b, float a);
+PEAK void       peak_window_present(PeakWindow *win);
 
-static inline void
-peak__emscripten_loop_step(void *arg) 
-{
-    (void)arg;
-    PeakEvent ev;
-    while (peak_poll_events(&ev)) {
-        peak_events(ev);
-    }
-    
-    if (running) {
-        peak_tick();
-    } else {
-        emscripten_cancel_main_loop();
-        peak_quit();
-    }
-}
-
-#define main(...)\
-    main(int argc, char **argv) {\
-        _Static_assert(peak_events != 0, "When using peak_setup, declare peak_events() to handle window events.");\
-        _Static_assert(peak_tick != 0, "When using peak_setup, declare peak_tick() to handle frame ticks.");\
-        peak_init();\
-        int ret = peak__main(argc, argv);\
-        if (ret != PEAK_CONTINUE) return ret;\
-        emscripten_set_main_loop_arg(peak__emscripten_loop_step, NULL, 0, 1);\
-        return 0;\
-    }\
-    int peak__main(__VA_ARGS__)
-#endif
-#endif // PEAK_DONT_REPLACE_MAIN
-        
 #endif // PEAK_H
 
 #ifdef PEAK_IMPLEMENTATION 
 #undef PEAK_IMPLEMENTATION
 
+#if defined(PEAK_WIN32) || defined(PEAK_WEB)
+#define PEAK_Q 64
+
+typedef struct {
+    unsigned h, n;
+    PeakEvent e[PEAK_Q];
+} PeakQ;
+
+static void
+peak_q_push(PeakQ *q, PeakEvent ev)
+{
+    if (!q || q->n == PEAK_Q)
+        return;
+    q->e[(q->h + q->n++) % PEAK_Q] = ev;
+}
+
+static int
+peak_q_pop(PeakQ *q, PeakEvent *ev)
+{
+    if (!q || !q->n)
+        return 0;
+    *ev = q->e[q->h];
+    q->h = (q->h + 1) % PEAK_Q;
+    q->n--;
+    return 1;
+}
+#endif
+
 #if defined(PEAK_WIN32)
 /* --- Start of p_win32.c --- */
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+
 #include <windows.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-void
-peak_platform_window_open()
+#define PEAK_WIN32_USER32 "user32.dll"
+#define PEAK_WIN32_GDI32  "gdi32.dll"
+#define PEAK_WIN32_CLASS  "PeakWindow"
+#define PEAK_WIN32_PROP   "Peak"
+
+#define PEAK_USER32_API(X) \
+	X(RegisterClassExA,   ATOM,    WINAPI, (const WNDCLASSEXA *)) \
+	X(UnregisterClassA,   BOOL,    WINAPI, (LPCSTR, HINSTANCE)) \
+	X(CreateWindowExA,    HWND,    WINAPI, (DWORD, LPCSTR, LPCSTR, DWORD, int, int, int, int, HWND, HMENU, HINSTANCE, LPVOID)) \
+	X(DestroyWindow,      BOOL,    WINAPI, (HWND)) \
+	X(ShowWindow,         BOOL,    WINAPI, (HWND, int)) \
+	X(GetDC,              HDC,     WINAPI, (HWND)) \
+	X(ReleaseDC,          int,     WINAPI, (HWND, HDC)) \
+	X(PeekMessageA,       BOOL,    WINAPI, (LPMSG, HWND, UINT, UINT, UINT)) \
+	X(TranslateMessage,   BOOL,    WINAPI, (const MSG *)) \
+	X(DispatchMessageA,   LRESULT, WINAPI, (const MSG *)) \
+	X(DefWindowProcA,     LRESULT, WINAPI, (HWND, UINT, WPARAM, LPARAM)) \
+	X(SetPropA,           BOOL,    WINAPI, (HWND, LPCSTR, HANDLE)) \
+	X(GetPropA,           HANDLE,  WINAPI, (HWND, LPCSTR)) \
+	X(RemovePropA,        HANDLE,  WINAPI, (HWND, LPCSTR)) \
+	X(BeginPaint,         HDC,     WINAPI, (HWND, LPPAINTSTRUCT)) \
+	X(EndPaint,           BOOL,    WINAPI, (HWND, const PAINTSTRUCT *)) \
+	X(AdjustWindowRectEx, BOOL,    WINAPI, (LPRECT, DWORD, BOOL, DWORD)) \
+	X(LoadCursorA,        HCURSOR, WINAPI, (HINSTANCE, LPCSTR)) \
+	X(GetKeyState,        SHORT,   WINAPI, (int))
+
+#define PEAK_GDI32_API(X) \
+	X(StretchDIBits, int, WINAPI, (HDC, int, int, int, int, int, int, int, int, const void *, const BITMAPINFO *, UINT, DWORD))
+
+typedef struct {
+#define X(name, ret, conv, args) ret (conv *name) args;
+	PEAK_USER32_API(X)
+#undef X
+} PeakUser32Api;
+
+typedef struct {
+#define X(name, ret, conv, args) ret (conv *name) args;
+	PEAK_GDI32_API(X)
+#undef X
+} PeakGdi32Api;
+
+typedef struct {
+	HMODULE user32;
+	HMODULE gdi32;
+	int class_reg;
+} PeakWin32;
+
+struct peak_win32_win {
+	HWND hwnd;
+	HDC hdc;
+	uint32_t *buffer;
+	uint32_t width;
+	uint32_t height;
+	PeakQ q;
+};
+
+struct peak_window_internal_t {
+	struct peak_win32_win *w;
+};
+
+static PeakWin32 peak_win32;
+static PeakUser32Api peak_user32;
+static PeakGdi32Api peak_gdi32;
+
+static int
+peak_internal_user32_load(HMODULE handle)
 {
+#define X(name, ret, conv, args) peak_user32.name = (ret (conv *) args)(void *)GetProcAddress(handle, #name);
+	PEAK_USER32_API(X)
+#undef X
+#define X(name, ret, conv, args) || !peak_user32.name
+	if (0 PEAK_USER32_API(X))
+		return 0;
+#undef X
+	return 1;
 }
 
-void
-peak_platform_window_close()
+static int
+peak_internal_gdi32_load(HMODULE handle)
 {
+#define X(name, ret, conv, args) peak_gdi32.name = (ret (conv *) args)(void *)GetProcAddress(handle, #name);
+	PEAK_GDI32_API(X)
+#undef X
+#define X(name, ret, conv, args) || !peak_gdi32.name
+	if (0 PEAK_GDI32_API(X))
+		return 0;
+#undef X
+	return 1;
 }
 
-uint32_t*
-peak_platform_window_buffer(size_t *width, size_t *height)
+static PeakKeyCode
+peak_internal_win32_key_map(WPARAM vk)
 {
+	if (vk >= 'A' && vk <= 'Z')
+		return (PeakKeyCode)(PEAK_KEY_A + (int)(vk - 'A'));
+	switch (vk) {
+	case VK_UP: return PEAK_KEY_UP;
+	case VK_DOWN: return PEAK_KEY_DOWN;
+	case VK_LEFT: return PEAK_KEY_LEFT;
+	case VK_RIGHT: return PEAK_KEY_RIGHT;
+	case VK_SPACE: return PEAK_KEY_SPACE;
+	case VK_ESCAPE: return PEAK_KEY_ESCAPE;
+	case VK_RETURN: return PEAK_KEY_ENTER;
+	default: return PEAK_KEY_UNKNOWN;
+	}
 }
 
-bool
-peak_platform_epoll(PeakEvent *ev)
+static PeakKeyMod
+peak_internal_win32_mod_map(void)
 {
+	if (peak_user32.GetKeyState(VK_CONTROL) & 0x8000) return PEAK_KEYMOD_CTRL;
+	if (peak_user32.GetKeyState(VK_MENU) & 0x8000) return PEAK_KEYMOD_ALT;
+	if (peak_user32.GetKeyState(VK_SHIFT) & 0x8000) return PEAK_KEYMOD_SHIFT;
+	if (peak_user32.GetKeyState(VK_CAPITAL) & 1) return PEAK_KEYMOD_CAPS;
+	return (PeakKeyMod)0;
+}
+
+static int
+peak_win32_buffer(struct peak_win32_win *w, uint32_t width, uint32_t height)
+{
+	uint32_t *buffer;
+
+	buffer = calloc((size_t)width * height, sizeof *buffer);
+	if (!buffer)
+		return 0;
+	free(w->buffer);
+	w->buffer = buffer;
+	w->width = width;
+	w->height = height;
+	return 1;
+}
+
+static LRESULT CALLBACK
+peak_internal_win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
+{
+	struct peak_win32_win *w;
+	PeakEvent ev;
+
+	if (msg == WM_NCCREATE) {
+		CREATESTRUCTA *cs = (CREATESTRUCTA *)lparam;
+		peak_user32.SetPropA(hwnd, PEAK_WIN32_PROP, cs->lpCreateParams);
+	}
+
+	w = (struct peak_win32_win *)peak_user32.GetPropA(hwnd, PEAK_WIN32_PROP);
+	if (!w)
+		return peak_user32.DefWindowProcA(hwnd, msg, wparam, lparam);
+
+	switch (msg) {
+	case WM_CLOSE:
+		memset(&ev, 0, sizeof ev);
+		ev.type = PEAK_EVENT_WINDOW_CLOSE;
+		peak_q_push(&w->q, ev);
+		return 0;
+	case WM_SIZE: {
+		uint32_t width, height;
+		if (wparam == SIZE_MINIMIZED)
+			return 0;
+		width = (uint32_t)LOWORD(lparam);
+		height = (uint32_t)HIWORD(lparam);
+		if (!width || !height || (width == w->width && height == w->height))
+			return 0;
+		if (!peak_win32_buffer(w, width, height))
+			return 0;
+		memset(&ev, 0, sizeof ev);
+		ev.type = PEAK_EVENT_WINDOW_RESIZE;
+		ev.resize.width = w->width;
+		ev.resize.height = w->height;
+		peak_q_push(&w->q, ev);
+		return 0;
+	}
+	case WM_KEYDOWN:
+	case WM_KEYUP:
+	case WM_SYSKEYDOWN:
+	case WM_SYSKEYUP:
+		memset(&ev, 0, sizeof ev);
+		ev.type = (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN) ? PEAK_EVENT_KEY_DOWN : PEAK_EVENT_KEY_UP;
+		ev.key.key = peak_internal_win32_key_map(wparam);
+		ev.key.mod = peak_internal_win32_mod_map();
+		peak_q_push(&w->q, ev);
+		return 0;
+	case WM_MOUSEMOVE:
+	case WM_LBUTTONDOWN:
+	case WM_LBUTTONUP:
+	case WM_RBUTTONDOWN:
+	case WM_RBUTTONUP:
+	case WM_MBUTTONDOWN:
+	case WM_MBUTTONUP:
+		memset(&ev, 0, sizeof ev);
+		ev.type = PEAK_EVENT_POINTER;
+		ev.pointer.x = (float)(short)LOWORD(lparam);
+		ev.pointer.y = (float)(short)HIWORD(lparam);
+		if (msg == WM_MOUSEMOVE) {
+			ev.pointer.state = PEAK_POINTER_MOVED;
+			ev.pointer.type = (wparam & MK_RBUTTON) ? PEAK_POINTER_RIGHT :
+			                  (wparam & MK_MBUTTON) ? PEAK_POINTER_MIDDLE : PEAK_POINTER_LEFT;
+		} else if (msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN || msg == WM_MBUTTONDOWN) {
+			ev.pointer.state = PEAK_POINTER_PRESSED;
+			ev.pointer.type = (msg == WM_RBUTTONDOWN) ? PEAK_POINTER_RIGHT :
+			                  (msg == WM_MBUTTONDOWN) ? PEAK_POINTER_MIDDLE : PEAK_POINTER_LEFT;
+		} else {
+			ev.pointer.state = PEAK_POINTER_RELEASED;
+			ev.pointer.type = (msg == WM_RBUTTONUP) ? PEAK_POINTER_RIGHT :
+			                  (msg == WM_MBUTTONUP) ? PEAK_POINTER_MIDDLE : PEAK_POINTER_LEFT;
+		}
+		peak_q_push(&w->q, ev);
+		return 0;
+	case WM_PAINT: {
+		PAINTSTRUCT ps;
+		peak_user32.BeginPaint(hwnd, &ps);
+		peak_user32.EndPaint(hwnd, &ps);
+		return 0;
+	}
+	case WM_ERASEBKGND:
+		return 1;
+	case WM_DESTROY:
+		peak_user32.RemovePropA(hwnd, PEAK_WIN32_PROP);
+		return 0;
+	default:
+		return peak_user32.DefWindowProcA(hwnd, msg, wparam, lparam);
+	}
+}
+
+static int
+peak_platform_init(void)
+{
+	WNDCLASSEXA wc;
+
+	if (!peak_user32.CreateWindowExA) {
+		if (!(peak_win32.user32 = LoadLibraryA(PEAK_WIN32_USER32))) {
+			fputs("Failed to load user32.dll. What system are you fucking using and abusing?", stderr);
+			return 0;
+		}
+		if (!peak_internal_user32_load(peak_win32.user32)) {
+			fputs("Failed to load user32 symbols", stderr);
+			return 0;
+		}
+	}
+	if (!peak_gdi32.StretchDIBits) {
+		if (!(peak_win32.gdi32 = LoadLibraryA(PEAK_WIN32_GDI32))) {
+			fputs("Failed to load gdi32.dll. What system are you fucking using and abusing?", stderr);
+			return 0;
+		}
+		if (!peak_internal_gdi32_load(peak_win32.gdi32)) {
+			fputs("Failed to load gdi32 symbols", stderr);
+			return 0;
+		}
+	}
+	if (!peak_win32.class_reg) {
+		memset(&wc, 0, sizeof wc);
+		wc.cbSize = sizeof wc;
+		wc.style = CS_OWNDC;
+		wc.lpfnWndProc = peak_internal_win32_wndproc;
+		wc.hInstance = GetModuleHandleA(NULL);
+		wc.hCursor = peak_user32.LoadCursorA(NULL, IDC_ARROW);
+		wc.lpszClassName = PEAK_WIN32_CLASS;
+		if (!peak_user32.RegisterClassExA(&wc) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) {
+			fputs("Failed to register window class", stderr);
+			return 0;
+		}
+		peak_win32.class_reg = 1;
+	}
+	return 1;
+}
+
+static void
+peak_platform_quit(void)
+{
+	if (!peak_win32.class_reg)
+		return;
+	peak_user32.UnregisterClassA(PEAK_WIN32_CLASS, GetModuleHandleA(NULL));
+	peak_win32.class_reg = 0;
+}
+
+static PeakWindowInternal
+peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uint32_t flags)
+{
+	PeakWindowInternal intern = {0};
+	struct peak_win32_win *w;
+	DWORD style, ex;
+	RECT r;
+	HINSTANCE inst;
+
+	(void)flags;
+	if (!peak_user32.CreateWindowExA && !peak_platform_init())
+		return intern;
+
+	w = calloc(1, sizeof *w);
+	if (!w)
+		return intern;
+	if (!peak_win32_buffer(w, width, height)) {
+		free(w);
+		return intern;
+	}
+
+	ex = 0;
+	style = WS_OVERLAPPEDWINDOW;
+	r.left = 0;
+	r.top = 0;
+	r.right = (LONG)width;
+	r.bottom = (LONG)height;
+	peak_user32.AdjustWindowRectEx(&r, style, FALSE, ex);
+	inst = GetModuleHandleA(NULL);
+	w->hwnd = peak_user32.CreateWindowExA(ex, PEAK_WIN32_CLASS, name, style,
+		CW_USEDEFAULT, CW_USEDEFAULT, r.right - r.left, r.bottom - r.top,
+		NULL, NULL, inst, w);
+	if (!w->hwnd) {
+		free(w->buffer);
+		free(w);
+		return intern;
+	}
+
+	w->hdc = peak_user32.GetDC(w->hwnd);
+	if (!w->hdc) {
+		peak_user32.DestroyWindow(w->hwnd);
+		free(w->buffer);
+		free(w);
+		return intern;
+	}
+
+	peak_user32.ShowWindow(w->hwnd, SW_SHOWNORMAL);
+	intern.w = w;
+	return intern;
+}
+
+static void
+peak_platform_window_close(PeakWindowInternal *intern)
+{
+	struct peak_win32_win *w;
+	if (!intern || !intern->w)
+		return;
+	w = intern->w;
+	if (w->hdc && w->hwnd)
+		peak_user32.ReleaseDC(w->hwnd, w->hdc);
+	if (w->hwnd) {
+		peak_user32.RemovePropA(w->hwnd, PEAK_WIN32_PROP);
+		peak_user32.DestroyWindow(w->hwnd);
+	}
+	free(w->buffer);
+	free(w);
+	intern->w = NULL;
+}
+
+static uint32_t *
+peak_platform_window_buffer(PeakWindowInternal *intern, size_t *width, size_t *height)
+{
+	struct peak_win32_win *w = intern ? intern->w : NULL;
+	if (!w) {
+		*width = 0;
+		*height = 0;
+		return NULL;
+	}
+	*width = w->width;
+	*height = w->height;
+	return w->buffer;
+}
+
+static void
+peak_platform_window_present(PeakWindowInternal *intern)
+{
+	struct peak_win32_win *w = intern ? intern->w : NULL;
+	BITMAPINFO bmi;
+
+	if (!w || !w->hwnd || !w->hdc || !w->buffer)
+		return;
+
+	memset(&bmi, 0, sizeof bmi);
+	bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+	bmi.bmiHeader.biWidth = (LONG)w->width;
+	bmi.bmiHeader.biHeight = -(LONG)w->height;
+	bmi.bmiHeader.biPlanes = 1;
+	bmi.bmiHeader.biBitCount = 32;
+	bmi.bmiHeader.biCompression = BI_RGB;
+	peak_gdi32.StretchDIBits(w->hdc,
+		0, 0, (int)w->width, (int)w->height,
+		0, 0, (int)w->width, (int)w->height,
+		w->buffer, &bmi, DIB_RGB_COLORS, SRCCOPY);
+}
+
+static bool
+peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
+{
+	MSG msg;
+	struct peak_win32_win *w = intern ? intern->w : NULL;
+
+	if (!w || !w->hwnd)
+		return 0;
+
+	while (peak_user32.PeekMessageA(&msg, w->hwnd, 0, 0, PM_REMOVE)) {
+		peak_user32.TranslateMessage(&msg);
+		peak_user32.DispatchMessageA(&msg);
+		if (peak_q_pop(&w->q, ev))
+			return 1;
+	}
+	return peak_q_pop(&w->q, ev);
 }
 /* --- End of p_win32.c --- */
 #elif defined(PEAK_LINUX)
 /* --- Start of p_linux.c --- */
-#include <dlfcn.h>
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+
 #include <X11/Xlib.h>
-#include <X11/Xutil.h>
 #include <X11/Xatom.h>
+#include <X11/Xutil.h>
 #include <X11/keysym.h>
-#include <stdbool.h>
+#include <dlfcn.h>
+#include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
-#define PEAK_X11_LINUX "/usr/lib/libX11.so.6"
+#define PEAK_X11_LINUX "libX11.so.6"
 
-#define PEAK_LINUX_DEFAULT_WIDTH  800
-#define PEAK_LINUX_DEFAULT_HEIGHT 600
-
-typedef Display*  (*XOpenDisplay_t)(const char*);
-typedef int       (*XCloseDisplay_t)(Display*);
-typedef Window    (*XCreateSimpleWindow_t)(Display*, Window, int, int, unsigned int, unsigned int, unsigned int, unsigned long, unsigned long);
-typedef int       (*XStoreName_t)(Display*, Window, const char*);
-typedef Atom      (*XInternAtom_t)(Display*, const char*, Bool);
-typedef Status    (*XSetWMProtocols_t)(Display*, Window, Atom*, int);
-typedef int       (*XSelectInput_t)(Display*, Window, long);
-typedef GC        (*XCreateGC_t)(Display*, Window, unsigned long, XGCValues*);
-typedef XImage*   (*XCreateImage_t)(Display*, Visual*, unsigned int, int, int, char*, unsigned int, unsigned int, int, int);
-typedef int       (*XMapRaised_t)(Display*, Window);
-typedef int       (*XFlush_t)(Display*);
-typedef int       (*XFreeGC_t)(Display*, GC);
-typedef int       (*XDestroyWindow_t)(Display*, Window);
-typedef int       (*XPending_t)(Display*);
-typedef int       (*XNextEvent_t)(Display*, XEvent*);
-typedef KeySym    (*XLookupKeysym_t)(XKeyEvent*, int);
-typedef int       (*XPutImage_t)(Display*, Drawable, GC, XImage*, int, int, int, int, unsigned int, unsigned int);
-typedef int       (*XDefaultScreen_t)(Display*);
-typedef Window    (*XRootWindow_t)(Display*, int);
-typedef unsigned long (*XBlackPixel_t)(Display*, int);
-typedef Visual*   (*XDefaultVisual_t)(Display*, int);
-typedef int       (*XDefaultDepth_t)(Display*, int);
+#define PEAK_X11_API(X) \
+	X(XOpenDisplay,        Display *, (const char *)) \
+	X(XCloseDisplay,       int, (Display *)) \
+	X(XCreateSimpleWindow, Window, (Display *, Window, int, int, unsigned int, unsigned int, unsigned int, unsigned long, unsigned long)) \
+	X(XStoreName,          int, (Display *, Window, const char *)) \
+	X(XInternAtom,         Atom, (Display *, const char *, Bool)) \
+	X(XSetWMProtocols,     Status, (Display *, Window, Atom *, int)) \
+	X(XSelectInput,        int, (Display *, Window, long)) \
+	X(XCreateGC,           GC, (Display *, Window, unsigned long, XGCValues *)) \
+	X(XCreateImage,        XImage *, (Display *, Visual *, unsigned int, int, int, char *, unsigned int, unsigned int, int, int)) \
+	X(XMapRaised,          int, (Display *, Window)) \
+	X(XFlush,              int, (Display *)) \
+	X(XFreeGC,             int, (Display *, GC)) \
+	X(XDestroyWindow,      int, (Display *, Window)) \
+	X(XCheckIfEvent,       Bool, (Display *, XEvent *, Bool (*)(Display *, XEvent *, XPointer), XPointer)) \
+	X(XLookupKeysym,       KeySym, (XKeyEvent *, int)) \
+	X(XPutImage,           int, (Display *, Drawable, GC, XImage *, int, int, int, int, unsigned int, unsigned int))
 
 typedef struct {
-    XOpenDisplay_t        XOpenDisplay;
-    XCloseDisplay_t       XCloseDisplay;
-    XCreateSimpleWindow_t XCreateSimpleWindow;
-    XStoreName_t          XStoreName;
-    XInternAtom_t         XInternAtom;
-    XSetWMProtocols_t     XSetWMProtocols;
-    XSelectInput_t        XSelectInput;
-    XCreateGC_t           XCreateGC;
-    XCreateImage_t        XCreateImage;
-    XMapRaised_t          XMapRaised;
-    XFlush_t              XFlush;
-    XFreeGC_t             XFreeGC;
-    XDestroyWindow_t      XDestroyWindow;
-    XPending_t            XPending;
-    XNextEvent_t          XNextEvent;
-    XLookupKeysym_t       XLookupKeysym;
-    XPutImage_t           XPutImage;
-    XDefaultScreen_t      XDefaultScreen;
-    XRootWindow_t         XRootWindow;
-    XBlackPixel_t         XBlackPixel;
-    XDefaultVisual_t      XDefaultVisual;
-    XDefaultDepth_t       XDefaultDepth;
+#define X(name, ret, args) ret (*name) args;
+	PEAK_X11_API(X)
+#undef X
 } PeakX11Api;
 
-static PeakX11Api peak_x11;
-
-static int peak_load_x11(void *handle) {
-    peak_x11.XOpenDisplay        = (XOpenDisplay_t)dlsym(handle, "XOpenDisplay");
-    peak_x11.XCloseDisplay       = (XCloseDisplay_t)dlsym(handle, "XCloseDisplay");
-    peak_x11.XCreateSimpleWindow = (XCreateSimpleWindow_t)dlsym(handle, "XCreateSimpleWindow");
-    peak_x11.XStoreName          = (XStoreName_t)dlsym(handle, "XStoreName");
-    peak_x11.XInternAtom         = (XInternAtom_t)dlsym(handle, "XInternAtom");
-    peak_x11.XSetWMProtocols     = (XSetWMProtocols_t)dlsym(handle, "XSetWMProtocols");
-    peak_x11.XSelectInput        = (XSelectInput_t)dlsym(handle, "XSelectInput");
-    peak_x11.XCreateGC           = (XCreateGC_t)dlsym(handle, "XCreateGC");
-    peak_x11.XCreateImage        = (XCreateImage_t)dlsym(handle, "XCreateImage");
-    peak_x11.XMapRaised          = (XMapRaised_t)dlsym(handle, "XMapRaised");
-    peak_x11.XFlush              = (XFlush_t)dlsym(handle, "XFlush");
-    peak_x11.XFreeGC             = (XFreeGC_t)dlsym(handle, "XFreeGC");
-    peak_x11.XDestroyWindow      = (XDestroyWindow_t)dlsym(handle, "XDestroyWindow");
-    peak_x11.XPending            = (XPending_t)dlsym(handle, "XPending");
-    peak_x11.XNextEvent          = (XNextEvent_t)dlsym(handle, "XNextEvent");
-    peak_x11.XLookupKeysym       = (XLookupKeysym_t)dlsym(handle, "XLookupKeysym");
-    peak_x11.XPutImage           = (XPutImage_t)dlsym(handle, "XPutImage");
-    peak_x11.XDefaultScreen      = (XDefaultScreen_t)dlsym(handle, "XDefaultScreen");
-    peak_x11.XRootWindow         = (XRootWindow_t)dlsym(handle, "XRootWindow");
-    peak_x11.XBlackPixel         = (XBlackPixel_t)dlsym(handle, "XBlackPixel");
-    peak_x11.XDefaultVisual      = (XDefaultVisual_t)dlsym(handle, "XDefaultVisual");
-    peak_x11.XDefaultDepth       = (XDefaultDepth_t)dlsym(handle, "XDefaultDepth");
-
-    if (!peak_x11.XOpenDisplay || !peak_x11.XCloseDisplay || !peak_x11.XCreateSimpleWindow ||
-        !peak_x11.XStoreName || !peak_x11.XInternAtom || !peak_x11.XSetWMProtocols ||
-        !peak_x11.XSelectInput || !peak_x11.XCreateGC || !peak_x11.XCreateImage ||
-        !peak_x11.XMapRaised || !peak_x11.XFlush || 
-        !peak_x11.XFreeGC || !peak_x11.XDestroyWindow || !peak_x11.XPending ||
-        !peak_x11.XNextEvent || !peak_x11.XLookupKeysym || !peak_x11.XPutImage ||
-        !peak_x11.XDefaultScreen || !peak_x11.XRootWindow || !peak_x11.XBlackPixel ||
-        !peak_x11.XDefaultVisual || !peak_x11.XDefaultDepth) {
-        return 0;
-    }
-    return 1;
-}
-
-
 typedef struct {
-    Display *display;
-    Atom     wm_delete_window;
-    bool     initialized;
+	Display *display;
+	Atom wm_delete_window;
 } PeakLinux;
 
-typedef struct {
-    Window window;
-    GC     gfx_ctx;    /* GRAPHICS CONTEXT, not garbage collector lol */
-} PeakLinuxWindow;
+struct peak_window_internal_t {
+	Window window;
+	GC gfx_ctx;
+	XImage *ximage;
+	uint32_t *buffer;
+	uint32_t width;
+	uint32_t height;
+};
 
-static PeakLinux       peak_linux        = {0};
-static PeakLinuxWindow peak_linux_window = {0};
-static XImage         *peak_linux_ximage = NULL;
-static uint32_t       *peak_linux_buffer = NULL;
-static size_t          peak_linux_width  = PEAK_LINUX_DEFAULT_WIDTH;
-static size_t          peak_linux_height = PEAK_LINUX_DEFAULT_HEIGHT;
+static PeakLinux peak_linux;
+static PeakX11Api peak_x11;
+
+static int
+peak_internal_x11_load(void *handle)
+{
+#define X(name, ret, args) peak_x11.name = (ret (*) args)dlsym(handle, #name);
+	PEAK_X11_API(X)
+#undef X
+#define X(name, ret, args) || !peak_x11.name
+	if (0 PEAK_X11_API(X))
+		return 0;
+#undef X
+	return 1;
+}
 
 static PeakKeyCode
-peak__x11_map_key(KeySym sym)
+peak_internal_x11_key_map(KeySym sym)
 {
-    if (sym >= XK_a && sym <= XK_z) return (PeakKeyCode)(PEAK_KEY_A + (int)(sym - XK_a));
-    if (sym >= XK_A && sym <= XK_Z) return (PeakKeyCode)(PEAK_KEY_A + (int)(sym - XK_A));
-    switch (sym) {
-        case XK_Up:     return PEAK_KEY_UP;
-        case XK_Down:   return PEAK_KEY_DOWN;
-        case XK_Left:   return PEAK_KEY_LEFT;
-        case XK_Right:  return PEAK_KEY_RIGHT;
-        case XK_space:  return PEAK_KEY_SPACE;
-        case XK_Escape: return PEAK_KEY_ESCAPE;
-        case XK_Return: return PEAK_KEY_ENTER;
-        default:        return PEAK_KEY_UNKNOWN;
-    }
+	if (sym >= XK_a && sym <= XK_z)
+		return (PeakKeyCode)(PEAK_KEY_A + (int)(sym - XK_a));
+	if (sym >= XK_A && sym <= XK_Z)
+		return (PeakKeyCode)(PEAK_KEY_A + (int)(sym - XK_A));
+	switch (sym) {
+	case XK_Up: return PEAK_KEY_UP;
+	case XK_Down: return PEAK_KEY_DOWN;
+	case XK_Left: return PEAK_KEY_LEFT;
+	case XK_Right: return PEAK_KEY_RIGHT;
+	case XK_space: return PEAK_KEY_SPACE;
+	case XK_Escape: return PEAK_KEY_ESCAPE;
+	case XK_Return: return PEAK_KEY_ENTER;
+	default: return PEAK_KEY_UNKNOWN;
+	}
 }
 
 static PeakKeyMod
-peak__x11_map_mod(unsigned int state)
+peak_internal_x11_mod_map(unsigned int state)
 {
-    if (state & ControlMask) return PEAK_KEYMOD_CTRL;
-    if (state & Mod1Mask)    return PEAK_KEYMOD_ALT;
-    if (state & ShiftMask)   return PEAK_KEYMOD_SHIFT;
-    if (state & LockMask)    return PEAK_KEYMOD_CAPS;
-    return (PeakKeyMod)0;
+	if (state & ControlMask) return PEAK_KEYMOD_CTRL;
+	if (state & Mod1Mask) return PEAK_KEYMOD_ALT;
+	if (state & ShiftMask) return PEAK_KEYMOD_SHIFT;
+	if (state & LockMask) return PEAK_KEYMOD_CAPS;
+	return (PeakKeyMod)0;
 }
 
-void
-peak_platform_window_open()
+static Bool
+peak_internal_x11_window_match(Display *dpy, XEvent *ev, XPointer arg)
 {
-    void *x11_handle = dlopen(PEAK_X11_LINUX, RTLD_LOCAL | RTLD_NOW);
-    assert(x11_handle && "Failed to load X11 library. What system are you fucking using and abusing?");
-
-    int success = peak_load_x11(x11_handle);
-    assert(success && "Failed to open X11 display");
-    
-    peak_linux.display = peak_x11.XOpenDisplay(NULL);
-    assert(peak_linux.display && "Failed to open X11 display");
-
-    /* Who design this API??? */
-    int screen = DefaultScreen(peak_linux.display);
-    peak_linux_window.window = peak_x11.XCreateSimpleWindow(peak_linux.display, RootWindow(peak_linux.display, screen), 0, 0, peak_linux_width, peak_linux_height, 0, BlackPixel(peak_linux.display, screen), BlackPixel(peak_linux.display, screen));
-    peak_x11.XStoreName(peak_linux.display, peak_linux_window.window, "Peak");
-    peak_linux.wm_delete_window = peak_x11.XInternAtom(peak_linux.display, "WM_DELETE_WINDOW", False);
-    peak_x11.XSetWMProtocols(peak_linux.display, peak_linux_window.window, &peak_linux.wm_delete_window, 1);
-    peak_x11.XSelectInput(peak_linux.display, peak_linux_window.window, ExposureMask      | KeyPressMask    | KeyReleaseMask   | ButtonPressMask   | ButtonReleaseMask | PointerMotionMask | StructureNotifyMask);
-    peak_linux_window.gfx_ctx = peak_x11.XCreateGC(peak_linux.display, peak_linux_window.window, 0, NULL);
-    peak_linux_buffer = (uint32_t *)calloc(peak_linux_width * peak_linux_height, sizeof(uint32_t));
-    assert(peak_linux_buffer && "Failed to allocate framebuffer");
-
-    /* Wrap the buffer in an XImage for XPutImage blitting */
-    Visual *visual = DefaultVisual(peak_linux.display, screen);
-    int     depth  = DefaultDepth(peak_linux.display, screen);
-
-    peak_linux_ximage = peak_x11.XCreateImage(peak_linux.display, visual, depth, ZPixmap, 0, (char *)peak_linux_buffer, peak_linux_width, peak_linux_height, 32, 0);
-    assert(peak_linux_ximage && "Failed to create XImage");
-
-    peak_x11.XMapRaised(peak_linux.display, peak_linux_window.window);
-    peak_x11.XFlush(peak_linux.display);
-
-    peak_linux.initialized = true;
+	(void)dpy;
+	return ev->xany.window == *(Window *)arg;
 }
 
-void
-peak_platform_window_close()
+static int
+peak_linux_buffer(PeakWindowInternal *w, uint32_t width, uint32_t height)
 {
-    if (!peak_linux.initialized) return;
+	int screen;
 
-    if (peak_linux_ximage) {
-        peak_linux_ximage->data = NULL;
-        XDestroyImage(peak_linux_ximage);
-        peak_linux_ximage = NULL;
-    }
+	if (w->ximage) {
+		w->ximage->data = NULL;
+		XDestroyImage(w->ximage);
+		w->ximage = NULL;
+	}
+	free(w->buffer);
+	w->buffer = calloc((size_t)width * height, sizeof *w->buffer);
+	if (!w->buffer)
+		return 0;
 
-    free(peak_linux_buffer);
-    peak_linux_buffer = NULL;
-
-    peak_x11.XFreeGC(peak_linux.display, peak_linux_window.gfx_ctx);
-    peak_x11.XDestroyWindow(peak_linux.display, peak_linux_window.window);
-    peak_x11.XCloseDisplay(peak_linux.display);
-
-    peak_linux.initialized = false;
+	w->width = width;
+	w->height = height;
+	screen = DefaultScreen(peak_linux.display);
+	w->ximage = peak_x11.XCreateImage(peak_linux.display,
+		DefaultVisual(peak_linux.display, screen),
+		DefaultDepth(peak_linux.display, screen),
+		ZPixmap, 0, (char *)w->buffer, width, height, 32, 0);
+	if (!w->ximage) {
+		free(w->buffer);
+		w->buffer = NULL;
+		return 0;
+	}
+	return 1;
 }
 
-uint32_t *
-peak_platform_window_buffer(size_t *width, size_t *height)
+static int
+peak_platform_init(void)
 {
-    *width  = peak_linux_width;
-    *height = peak_linux_height;
-    return peak_linux_buffer;
+	void *handle;
+
+	if (!peak_x11.XOpenDisplay) {
+		if (!(handle = dlopen(PEAK_X11_LINUX, RTLD_LOCAL | RTLD_NOW))) {
+			fputs("Failed to load X11 library. What system are you fucking using and abusing?", stderr);
+			return 0;
+		}
+		if (!peak_internal_x11_load(handle)) {
+			fputs("Failed to load X11 symbols", stderr);
+			return 0;
+		}
+	}
+	if (!peak_linux.display) {
+		if (!(peak_linux.display = peak_x11.XOpenDisplay(NULL))) {
+			fputs("Failed to open X11 display", stderr);
+			return 0;
+		}
+		peak_linux.wm_delete_window = peak_x11.XInternAtom(peak_linux.display, "WM_DELETE_WINDOW", False);
+	}
+	return 1;
 }
 
-bool
-peak_platform_epoll(PeakEvent *ev)
+static void
+peak_platform_quit(void)
 {
-    if (!peak_linux.initialized) return false;
+	if (!peak_linux.display)
+		return;
+	peak_x11.XCloseDisplay(peak_linux.display);
+	peak_linux.display = 0;
+}
 
-    Display *dpy = peak_linux.display;
+static PeakWindowInternal
+peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uint32_t flags)
+{
+	PeakWindowInternal w = {0};
+	int screen;
 
-    while (peak_x11.XPending(dpy) > 0) {
-        XEvent xev;
-        peak_x11.XNextEvent(dpy, &xev);
+	(void)flags;
+	if (!peak_linux.display && !peak_platform_init())
+		return w;
 
-        switch (xev.type) {
+	screen = DefaultScreen(peak_linux.display);
+	w.window = peak_x11.XCreateSimpleWindow(peak_linux.display,
+		RootWindow(peak_linux.display, screen), 0, 0, width, height, 0,
+		BlackPixel(peak_linux.display, screen), BlackPixel(peak_linux.display, screen));
+	peak_x11.XStoreName(peak_linux.display, w.window, name);
+	peak_x11.XSetWMProtocols(peak_linux.display, w.window, &peak_linux.wm_delete_window, 1);
+	peak_x11.XSelectInput(peak_linux.display, w.window,
+		KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask |
+		PointerMotionMask | StructureNotifyMask);
+	w.gfx_ctx = peak_x11.XCreateGC(peak_linux.display, w.window, 0, NULL);
 
-        case ClientMessage:
-            if ((Atom)xev.xclient.data.l[0] == peak_linux.wm_delete_window) {
-                ev->type = PEAK_EVENT_WINDOW_CLOSE;
-                printf("CLLOOOOOOOSEEEE");
-                return true;
-            }
-            continue;
+	if (!peak_linux_buffer(&w, width, height)) {
+		peak_x11.XFreeGC(peak_linux.display, w.gfx_ctx);
+		peak_x11.XDestroyWindow(peak_linux.display, w.window);
+		return (PeakWindowInternal){0};
+	}
 
-        case KeyPress:
-        case KeyRelease: {
-            KeySym sym  = peak_x11.XLookupKeysym(&xev.xkey, 0);
-            ev->type    = (xev.type == KeyPress) ? PEAK_EVENT_KEY_DOWN : PEAK_EVENT_KEY_UP;
-            ev->key.key = peak__x11_map_key(sym);
-            ev->key.mod = peak__x11_map_mod(xev.xkey.state);
-            return true;
-        }
+	peak_x11.XMapRaised(peak_linux.display, w.window);
+	peak_x11.XFlush(peak_linux.display);
+	return w;
+}
 
-        case ButtonPress:
-        case ButtonRelease: {
-            ev->type          = PEAK_EVENT_POINTER;
-            ev->pointer.state = (xev.type == ButtonPress) ? PEAK_POINTER_PRESSED : PEAK_POINTER_RELEASED;
-            ev->pointer.x = (float)xev.xbutton.x;
-            ev->pointer.y = (float)xev.xbutton.y;
-            switch (xev.xbutton.button) {
-                case Button1: ev->pointer.type = PEAK_POINTER_LEFT;   break;
-                case Button2: ev->pointer.type = PEAK_POINTER_MIDDLE; break;
-                case Button3: ev->pointer.type = PEAK_POINTER_RIGHT;  break;
-                default:      ev->pointer.type = PEAK_POINTER_LEFT;   break;
-            }
-            return true;
-        }
+static void
+peak_platform_window_close(PeakWindowInternal *w)
+{
+	if (!w || !w->window || !peak_linux.display)
+		return;
+	if (w->ximage) {
+		w->ximage->data = NULL;
+		XDestroyImage(w->ximage);
+	}
+	free(w->buffer);
+	if (w->gfx_ctx)
+		peak_x11.XFreeGC(peak_linux.display, w->gfx_ctx);
+	peak_x11.XDestroyWindow(peak_linux.display, w->window);
+	*w = (PeakWindowInternal){0};
+}
 
-        case MotionNotify:
-            ev->type          = PEAK_EVENT_POINTER;
-            ev->pointer.state = PEAK_POINTER_MOVED;
-            ev->pointer.x     = (float)xev.xmotion.x;
-            ev->pointer.y     = (float)xev.xmotion.y;
-            if (xev.xmotion.state & Button3Mask)
-                ev->pointer.type = PEAK_POINTER_RIGHT;
-            else if (xev.xmotion.state & Button2Mask)
-                ev->pointer.type = PEAK_POINTER_MIDDLE;
-            else
-                ev->pointer.type = PEAK_POINTER_LEFT;
-            return true;
+static uint32_t *
+peak_platform_window_buffer(PeakWindowInternal *w, size_t *width, size_t *height)
+{
+	if (!w || !w->window) {
+		*width = 0;
+		*height = 0;
+		return NULL;
+	}
+	*width = w->width;
+	*height = w->height;
+	return w->buffer;
+}
 
-        case ConfigureNotify:
-            if ((size_t)xev.xconfigure.width  != peak_linux_width ||
-                (size_t)xev.xconfigure.height != peak_linux_height) {
-                ev->type          = PEAK_EVENT_WINDOW_RESIZE;
-                ev->resize.width  = (uint32_t)xev.xconfigure.width;
-                ev->resize.height = (uint32_t)xev.xconfigure.height;
-                return true;
-            }
-            continue;
+static void
+peak_platform_window_present(PeakWindowInternal *w)
+{
+	if (!w || !w->ximage || !peak_linux.display)
+		return;
+	peak_x11.XPutImage(peak_linux.display, w->window, w->gfx_ctx, w->ximage,
+		0, 0, 0, 0, w->width, w->height);
+	peak_x11.XFlush(peak_linux.display);
+}
 
-        case Expose:
-            if (xev.xexpose.count == 0) {
-                peak_x11.XPutImage(dpy, peak_linux_window.window, peak_linux_window.gfx_ctx, peak_linux_ximage, 0, 0, 0, 0, peak_linux_width, peak_linux_height);
-            }
-            continue;
+static bool
+peak_platform_epoll(PeakWindowInternal *w, PeakEvent *ev)
+{
+	XEvent xev;
 
-        default:
-            continue;
-        }
-    }
+	if (!w || !w->window || !peak_linux.display)
+		return 0;
 
-    peak_x11.XPutImage(dpy, peak_linux_window.window, peak_linux_window.gfx_ctx, peak_linux_ximage, 0, 0, 0, 0, peak_linux_width, peak_linux_height);
-    peak_x11.XFlush(dpy);
-    return false;
+	while (peak_x11.XCheckIfEvent(peak_linux.display, &xev, peak_internal_x11_window_match, (XPointer)&w->window)) {
+		switch (xev.type) {
+		case ClientMessage:
+			if ((Atom)xev.xclient.data.l[0] == peak_linux.wm_delete_window) {
+				ev->type = PEAK_EVENT_WINDOW_CLOSE;
+				return 1;
+			}
+			continue;
+		case KeyPress:
+		case KeyRelease:
+			ev->type = (xev.type == KeyPress) ? PEAK_EVENT_KEY_DOWN : PEAK_EVENT_KEY_UP;
+			ev->key.key = peak_internal_x11_key_map(peak_x11.XLookupKeysym(&xev.xkey, 0));
+			ev->key.mod = peak_internal_x11_mod_map(xev.xkey.state);
+			return 1;
+		case ButtonPress:
+		case ButtonRelease:
+			ev->type = PEAK_EVENT_POINTER;
+			ev->pointer.state = (xev.type == ButtonPress) ? PEAK_POINTER_PRESSED : PEAK_POINTER_RELEASED;
+			ev->pointer.x = (float)xev.xbutton.x;
+			ev->pointer.y = (float)xev.xbutton.y;
+			ev->pointer.type = (xev.xbutton.button == Button2) ? PEAK_POINTER_MIDDLE :
+			                   (xev.xbutton.button == Button3) ? PEAK_POINTER_RIGHT : PEAK_POINTER_LEFT;
+			return 1;
+		case MotionNotify:
+			ev->type = PEAK_EVENT_POINTER;
+			ev->pointer.state = PEAK_POINTER_MOVED;
+			ev->pointer.x = (float)xev.xmotion.x;
+			ev->pointer.y = (float)xev.xmotion.y;
+			ev->pointer.type = (xev.xmotion.state & Button3Mask) ? PEAK_POINTER_RIGHT :
+			                   (xev.xmotion.state & Button2Mask) ? PEAK_POINTER_MIDDLE : PEAK_POINTER_LEFT;
+			return 1;
+		case ConfigureNotify: {
+			uint32_t width = (uint32_t)xev.xconfigure.width;
+			uint32_t height = (uint32_t)xev.xconfigure.height;
+			if (width == w->width && height == w->height)
+				continue;
+			if (!peak_linux_buffer(w, width, height))
+				continue;
+			ev->type = PEAK_EVENT_WINDOW_RESIZE;
+			ev->resize.width = w->width;
+			ev->resize.height = w->height;
+			return 1;
+		}
+		default:
+			continue;
+		}
+	}
+	return 0;
 }
 /* --- End of p_linux.c --- */
 #elif defined(PEAK_WEB)
 /* --- Start of p_emscripten.c --- */
+#include <emscripten.h>
+#include <emscripten/html5.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
+#include <stdint.h>
 
-#define PEAK_CANVAS "#PeakCanvas"
+EM_JS(void, peak_web_dom_open, (const char *id, int w, int h), {
+	var name = UTF8ToString(id);
+	var c = document.getElementById(name);
+	if (!c) {
+		c = document.createElement('canvas');
+		c.id = name;
+		document.body.appendChild(c);
+	}
+	c.width = w;
+	c.height = h;
+	c.tabIndex = 0;
+	c.focus();
+});
 
-static PeakKeyCode map_key(const char *code);
-static PeakKeyMod map_mod(const EmscriptenKeyboardEvent *keyEvent);
-static EM_BOOL key_callback(int eventType, const EmscriptenKeyboardEvent *keyEvent, void *userData);
-static EM_BOOL mouse_callback(int eventType, const EmscriptenMouseEvent *mouseEvent, void *userData);
-static EM_BOOL resize_callback(int eventType, const EmscriptenUiEvent *uiEvent, void *userData);
+EM_JS(void, peak_web_dom_present, (const char *id, int w, int h, uintptr_t pixels), {
+	var c = document.getElementById(UTF8ToString(id));
+	if (!c) return;
+	var ctx = c.getContext('2d');
+	if (c.width !== w || c.height !== h) {
+		c.width = w;
+		c.height = h;
+	}
+	var img = ctx.createImageData(w, h);
+	img.data.set(HEAPU8.subarray(pixels, pixels + w * h * 4));
+	ctx.putImageData(img, 0, 0);
+});
 
-void
-peak_platform_window_open()
+struct peak_web_win {
+	char name[64];
+	uint32_t width, height;
+	PeakQ q;
+	uint32_t buffer[];
+};
+
+struct peak_window_internal_t {
+	struct peak_web_win *w;
+};
+
+static void
+peak_web_sel(const char *name, char *out, size_t n)
 {
-    emscripten_set_keydown_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, NULL, EM_TRUE, key_callback);
-    emscripten_set_keyup_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, NULL, EM_TRUE, key_callback);
-    emscripten_set_mousedown_callback(PEAK_CANVAS, NULL, EM_TRUE, mouse_callback);
-    emscripten_set_mouseup_callback(PEAK_CANVAS, NULL, EM_TRUE, mouse_callback);
-    emscripten_set_mousemove_callback(PEAK_CANVAS, NULL, EM_TRUE, mouse_callback);
-    emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, NULL, EM_TRUE, resize_callback);
+	out[0] = '#';
+	strncpy(out + 1, name, n - 2);
+	out[n - 1] = 0;
 }
 
-void
-peak_platform_window_close()
+static PeakKeyCode
+peak_web_key_map(const char *code)
+{
+	if (code[0] == 'K' && code[1] == 'e' && code[2] == 'y' && code[3] >= 'A' && code[3] <= 'Z' && code[4] == 0)
+		return (PeakKeyCode)(PEAK_KEY_A + (code[3] - 'A'));
+	if (!strcmp(code, "ArrowUp")) return PEAK_KEY_UP;
+	if (!strcmp(code, "ArrowDown")) return PEAK_KEY_DOWN;
+	if (!strcmp(code, "ArrowLeft")) return PEAK_KEY_LEFT;
+	if (!strcmp(code, "ArrowRight")) return PEAK_KEY_RIGHT;
+	if (!strcmp(code, "Space")) return PEAK_KEY_SPACE;
+	if (!strcmp(code, "Escape")) return PEAK_KEY_ESCAPE;
+	if (!strcmp(code, "Enter")) return PEAK_KEY_ENTER;
+	return PEAK_KEY_UNKNOWN;
+}
+
+static EM_BOOL
+peak_web_key(int type, const EmscriptenKeyboardEvent *e, void *ud)
+{
+	PeakEvent ev = {0};
+	ev.type = (type == EMSCRIPTEN_EVENT_KEYDOWN) ? PEAK_EVENT_KEY_DOWN : PEAK_EVENT_KEY_UP;
+	ev.key.key = peak_web_key_map(e->code);
+	ev.key.mod = e->ctrlKey ? PEAK_KEYMOD_CTRL : e->altKey ? PEAK_KEYMOD_ALT : e->shiftKey ? PEAK_KEYMOD_SHIFT : 0;
+	peak_q_push(&((struct peak_web_win *)ud)->q, ev);
+	return EM_TRUE;
+}
+
+static EM_BOOL
+peak_web_mouse(int type, const EmscriptenMouseEvent *e, void *ud)
+{
+	PeakEvent ev = {0};
+	ev.type = PEAK_EVENT_POINTER;
+	ev.pointer.x = (float)e->targetX;
+	ev.pointer.y = (float)e->targetY;
+	if (type == EMSCRIPTEN_EVENT_MOUSEDOWN)
+		ev.pointer.state = PEAK_POINTER_PRESSED;
+	else if (type == EMSCRIPTEN_EVENT_MOUSEUP)
+		ev.pointer.state = PEAK_POINTER_RELEASED;
+	else
+		ev.pointer.state = PEAK_POINTER_MOVED;
+	if (type == EMSCRIPTEN_EVENT_MOUSEMOVE) {
+		ev.pointer.type = (e->buttons & 4) ? PEAK_POINTER_MIDDLE :
+		                  (e->buttons & 2) ? PEAK_POINTER_RIGHT : PEAK_POINTER_LEFT;
+	} else {
+		ev.pointer.type = (e->button == 1) ? PEAK_POINTER_MIDDLE :
+		                  (e->button == 2) ? PEAK_POINTER_RIGHT : PEAK_POINTER_LEFT;
+	}
+	peak_q_push(&((struct peak_web_win *)ud)->q, ev);
+	return EM_TRUE;
+}
+
+static void
+peak_web_listen(struct peak_web_win *w, int on)
+{
+	char sel[66];
+	peak_web_sel(w->name, sel, sizeof sel);
+	emscripten_set_keydown_callback(sel, w, EM_TRUE, on ? peak_web_key : NULL);
+	emscripten_set_keyup_callback(sel, w, EM_TRUE, on ? peak_web_key : NULL);
+	emscripten_set_mousedown_callback(sel, w, EM_TRUE, on ? peak_web_mouse : NULL);
+	emscripten_set_mouseup_callback(sel, w, EM_TRUE, on ? peak_web_mouse : NULL);
+	emscripten_set_mousemove_callback(sel, w, EM_TRUE, on ? peak_web_mouse : NULL);
+}
+
+static int
+peak_platform_init(void)
+{
+	return 1;
+}
+
+static void
+peak_platform_quit(void)
 {
 }
 
-uint32_t*
-peak_platform_window_buffer(size_t *width, size_t *height)
+static PeakWindowInternal
+peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uint32_t flags)
 {
+	PeakWindowInternal intern = {0};
+	struct peak_web_win *w;
+
+	(void)flags;
+
+	w = calloc(1, sizeof *w + (size_t)width * height * sizeof *w->buffer);
+	if (!w)
+		return intern;
+	strncpy(w->name, name, sizeof w->name - 1);
+	w->width = width;
+	w->height = height;
+
+	peak_web_dom_open(w->name, (int)width, (int)height);
+
+	peak_web_listen(w, 1);
+	intern.w = w;
+	return intern;
 }
 
-bool
-peak_platform_epoll(PeakEvent *ev)
+static void
+peak_platform_window_close(PeakWindowInternal *intern)
 {
-    return 0;
+	struct peak_web_win *w;
+	if (!intern || !intern->w)
+		return;
+	w = intern->w;
+	peak_web_listen(w, 0);
+	free(w);
+	intern->w = NULL;
+}
+
+static uint32_t *
+peak_platform_window_buffer(PeakWindowInternal *intern, size_t *width, size_t *height)
+{
+	struct peak_web_win *w = intern ? intern->w : NULL;
+	if (!w) {
+		*width = 0;
+		*height = 0;
+		return NULL;
+	}
+	*width = w->width;
+	*height = w->height;
+	return w->buffer;
+}
+
+static void
+peak_platform_window_present(PeakWindowInternal *intern)
+{
+	struct peak_web_win *w = intern ? intern->w : NULL;
+	if (!w)
+		return;
+	peak_web_dom_present(w->name, (int)w->width, (int)w->height, (uintptr_t)w->buffer);
+}
+
+static bool
+peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
+{
+	struct peak_web_win *w = intern ? intern->w : NULL;
+	return w ? peak_q_pop(&w->q, ev) : 0;
 }
 /* --- End of p_emscripten.c --- */
 #endif
 
+/* We define PeakWindow only when we know the type of peak_window_internal_t */
+struct PeakWindow { 
+    PeakWindowInternal internal;
+    int (*tick)(struct PeakWindow *win, void *userdata);
+    void *userdata;
+    uint32_t *buffer;
+    uint32_t width;
+    uint32_t height;
+    uint32_t bufsize;
+    int running;
+};
+
+
 /* --- Start of peak.c --- */
-static inline void peak__put_pixel(int x, int y, uint32_t color);
-static inline uint32_t peak__lerp_color(uint32_t c0, uint32_t c1, float t);
-static inline float peak__edge_cross(float ax, float ay, float bx, float by, float cx, float cy);
-
-static uint32_t *peak_window_buffer;
-static size_t peak_window_width;
-static size_t peak_window_height;
-static int peak_clip_x;
-static int peak_clip_y;
-static size_t peak_clip_width;
-static size_t peak_clip_height;
-
-void
-peak__put_pixel(int x, int y, uint32_t color) 
+static uint32_t *
+peak_window_sync(PeakWindow *win, size_t *width, size_t *height)
 {
-    if (x < peak_clip_x || x >= (int)(peak_clip_x + peak_clip_width) ||
-        y < peak_clip_y || y >= (int)(peak_clip_y + peak_clip_height)) {
-        return;
-    }
-    if (x < 0 || x >= (int)peak_window_width || y < 0 || y >= (int)peak_window_height) {
-        return;
-    }
-    peak_window_buffer[y * peak_window_width + x] = color;
+    size_t w = 0, h = 0;
+    win->buffer = peak_platform_window_buffer(&win->internal, &w, &h);
+    win->width = (uint32_t)w;
+    win->height = (uint32_t)h;
+    win->bufsize = win->width * win->height;
+    if (width) *width = w;
+    if (height) *height = h;
+    return win->buffer;
 }
 
-uint32_t
-peak__lerp_color(uint32_t c0, uint32_t c1, float t) 
+int
+peak_init(void)
 {
-    if (t <= 0.0f) return c0;
-    if (t >= 1.0f) return c1;
-
-    uint32_t a0 = (c0 >> 24) & 0xFF, a1 = (c1 >> 24) & 0xFF;
-    uint32_t r0 = (c0 >> 16) & 0xFF, r1 = (c1 >> 16) & 0xFF;
-    uint32_t g0 = (c0 >> 8)  & 0xFF, g1 = (c1 >> 8)  & 0xFF;
-    uint32_t b0 = c0 & 0xFF,        b1 = c1 & 0xFF;
-
-    uint32_t a = (uint32_t)(a0 + t * ((float)a1 - (float)a0));
-    uint32_t r = (uint32_t)(r0 + t * ((float)r1 - (float)r0));
-    uint32_t g = (uint32_t)(g0 + t * ((float)g1 - (float)g0));
-    uint32_t b = (uint32_t)(b0 + t * ((float)b1 - (float)b0));
-
-    return (a << 24) | (r << 16) | (g << 8) | b;
-}
-
-float
-peak__edge_cross(float ax, float ay, float bx, float by, float cx, float cy) 
-{
-    return (cx - ax) * (by - ay) - (cy - ay) * (bx - ax);
+    return peak_platform_init();
 }
 
 void
-peak_init(void) 
+peak_quit(void)
 {
-    peak_platform_window_open();
-    peak_window_buffer = peak_platform_window_buffer(&peak_window_width, &peak_window_height);
-    peak_clip_x = 0;
-    peak_clip_y = 0;
-    peak_clip_width = peak_window_width;
-    peak_clip_height = peak_window_height;
+    peak_platform_quit();
+}
+
+PeakWindow
+peak_window_open(const char *name, uint32_t width, uint32_t height, uint32_t flags)
+{
+    PeakWindow win = {0};
+    if (!name || !name[0]) name = "Peak";
+    if (!width) width = 800;
+    if (!height) height = 600;
+    win.internal = peak_platform_window_open(name, width, height, flags);
+    if (!peak_window_sync(&win, NULL, NULL)) return win;
+    win.running = 1;
+    return win;
 }
 
 void
-peak_quit(void) 
+peak_window_close(PeakWindow *win)
 {
-    peak_platform_window_close();
+    win->running = 0;
+    peak_platform_window_close(&win->internal);
+    win->buffer = NULL;
+    win->width = 0;
+    win->height = 0;
+    win->bufsize = 0;
+}
+
+int
+peak_window_epoll(PeakWindow *win, PeakEvent *ev)
+{
+    int got = peak_platform_epoll(&win->internal, ev);
+    if (got && ev->type == PEAK_EVENT_WINDOW_RESIZE)
+        peak_window_sync(win, NULL, NULL);
+    return got;
+}
+
+uint32_t *
+peak_window_backbuffer(PeakWindow *win, size_t *width, size_t *height)
+{
+    return peak_window_sync(win, width, height);
 }
 
 void
-peak_extensions(void) 
+peak_window_clear(PeakWindow *win, float r, float g, float b, float a)
 {
-    // TODO
-}
-
-bool
-peak_poll_events(PeakEvent *ev)
-{
-    return peak_platform_epoll(ev);
-}
-
-void
-peak_blit(int offset_x, int offset_y, const uint32_t *rgba, size_t width, size_t height) 
-{
-    for (size_t y = 0; y < height; ++y) {
-        int target_y = offset_y + (int)y;
-        if (target_y < peak_clip_y || target_y >= (int)(peak_clip_y + peak_clip_height) ||
-                target_y < 0 || target_y >= (int)peak_window_height) continue;
-
-        int start_x = offset_x < peak_clip_x ? peak_clip_x : offset_x;
-        int end_x = (offset_x + (int)width) > (int)(peak_clip_x + peak_clip_width) 
-            ? (int)(peak_clip_x + peak_clip_width) 
-            : (offset_x + (int)width);
-
-        if (start_x >= end_x) continue;
-
-        size_t src_offset_x = (size_t)(start_x - offset_x);
-        size_t copy_pixels = (size_t)(end_x - start_x);
-
-        memcpy(&peak_window_buffer[target_y * peak_window_width + start_x], &rgba[y * width + src_offset_x], copy_pixels * sizeof(uint32_t));
-    }
+    uint32_t c, i;
+    if (!win || !win->buffer) return;
+#if defined(PEAK_WEB)
+    /* ImageData RGBA bytes = LE 0xAABBGGRR */
+    c =  (uint32_t)(r * 255.f)
+      | ((uint32_t)(g * 255.f) << 8)
+      | ((uint32_t)(b * 255.f) << 16)
+      | ((uint32_t)(a * 255.f) << 24);
+#else
+    c = ((uint32_t)(a * 255.f) << 24)
+      | ((uint32_t)(r * 255.f) << 16)
+      | ((uint32_t)(g * 255.f) << 8)
+      |  (uint32_t)(b * 255.f);
+#endif
+    for (i = 0; i < win->bufsize; i++)
+        win->buffer[i] = c;
 }
 
 void
-peak_clip(int x, int y, size_t w, size_t h) 
+peak_window_present(PeakWindow *win)
 {
-    peak_clip_x = x;
-    peak_clip_y = y;
-    peak_clip_width = w;
-    peak_clip_height = h;
+    if (win) peak_platform_window_present(&win->internal);
 }
 
-void
-peak_clip_reset(void) 
+#ifdef PEAK_WEB
+#include <emscripten.h>
+static void
+peak_internal_web_step(void *arg)
 {
-    peak_clip_x = 0;
-    peak_clip_y = 0;
-    peak_clip_width = peak_window_width;
-    peak_clip_height = peak_window_height;
-}
-
-void
-peak_draw_rectangle(int x, int y, size_t w, size_t h, uint32_t color) 
-{
-    int start_x = (x < peak_clip_x) ? peak_clip_x : x;
-    int start_y = (y < peak_clip_y) ? peak_clip_y : y;
-    int end_x = (x + (int)w > (int)(peak_clip_x + peak_clip_width)) ? (int)(peak_clip_x + peak_clip_width) : x + (int)w;
-    int end_y = (y + (int)h > (int)(peak_clip_y + peak_clip_height)) ? (int)(peak_clip_y + peak_clip_height) : y + (int)h;
-
-    for (int py = start_y; py < end_y; ++py) {
-        if (py < 0 || py >= (int)peak_window_height) continue;
-        for (int px = start_x; px < end_x; ++px) {
-            if (px < 0 || px >= (int)peak_window_width) continue;
-            peak_window_buffer[py * peak_window_width + px] = color;
-        }
+    PeakWindow *win = arg;
+    if (!win->tick(win, win->userdata) || !win->running) {
+        win->running = 0;
+        emscripten_cancel_main_loop();
     }
 }
+#endif
 
 void
-peak_draw_rectangle_gradient(int x, int y, size_t w, size_t h, uint32_t c0, uint32_t c1, uint32_t c2, uint32_t c3) 
+peak_window_run(PeakWindow *win, int (*peak_tick)(PeakWindow *win, void *userdata), void *userdata)
 {
-    for (size_t ry = 0; ry < h; ++ry) {
-        float ty = (h > 1) ? (float)ry / (float)(h - 1) : 0.0f;
-        uint32_t left_color  = peak__lerp_color(c0, c3, ty);
-        uint32_t right_color = peak__lerp_color(c1, c2, ty);
-
-        for (size_t rx = 0; rx < w; ++rx) {
-            float tx = (w > 1) ? (float)rx / (float)(w - 1) : 0.0f;
-            uint32_t final_color = peak__lerp_color(left_color, right_color, tx);
-            peak__put_pixel(x + (int)rx, y + (int)ry, final_color);
-        }
-    }
+    assert(win && "peak_window_run needs a window");
+    assert(peak_tick && "peak_window_run needs tick callback");
+    win->tick = peak_tick;
+    win->userdata = userdata;
+    win->running = 1;
+#ifdef PEAK_WEB
+    emscripten_set_main_loop_arg(peak_internal_web_step, win, 0, 1);
+#else
+    while (win->running && win->tick(win, win->userdata));
+#endif
 }
-
-void
-peak_draw_triangle(int x0, int y0, int x1, int y1, int x2, int y2, uint32_t color) 
-{
-    int min_x = (x0 < x1) ? ((x0 < x2) ? x0 : x2) : ((x1 < x2) ? x1 : x2);
-    int max_x = (x0 > x1) ? ((x0 > x2) ? x0 : x2) : ((x1 > x2) ? x1 : x2);
-    int min_y = (y0 < y1) ? ((y0 < y2) ? y0 : y2) : ((y1 < y2) ? y1 : y2);
-    int max_y = (y0 > y1) ? ((y0 > y2) ? y0 : y2) : ((y1 > y2) ? y1 : y2);
-
-    float area = peak__edge_cross((float)x0, (float)y0, (float)x1, (float)y1, (float)x2, (float)y2);
-    if (area == 0.0f) return;
-
-    for (int y = min_y; y <= max_y; ++y) {
-        for (int x = min_x; x <= max_x; ++x) {
-            float w0 = peak__edge_cross((float)x1, (float)y1, (float)x2, (float)y2, (float)x, (float)y);
-            float w1 = peak__edge_cross((float)x2, (float)y2, (float)x0, (float)y0, (float)x, (float)y);
-            float w2 = peak__edge_cross((float)x0, (float)y0, (float)x1, (float)y1, (float)x, (float)y);
-
-            if ((w0 >= 0 && w1 >= 0 && w2 >= 0) || (w0 <= 0 && w1 <= 0 && w2 <= 0)) {
-                peak__put_pixel(x, y, color);
-            }
-        }
-    }
-}
-
-void
-peak_draw_triangle_gradient(int x0, int y0, int x1, int y1, int x2, int y2, uint32_t c0, uint32_t c1, uint32_t c2) 
-{
-    int min_x = (x0 < x1) ? ((x0 < x2) ? x0 : x2) : ((x1 < x2) ? x1 : x2);
-    int max_x = (x0 > x1) ? ((x0 > x2) ? x0 : x2) : ((x1 > x2) ? x1 : x2);
-    int min_y = (y0 < y1) ? ((y0 < y2) ? y0 : y2) : ((y1 < y2) ? y1 : y2);
-    int max_y = (y0 > y1) ? ((y0 > y2) ? y0 : y2) : ((y1 > y2) ? y1 : y2);
-
-    float area = peak__edge_cross((float)x0, (float)y0, (float)x1, (float)y1, (float)x2, (float)y2);
-    if (area == 0.0f) return;
-
-    for (int y = min_y; y <= max_y; ++y) {
-        for (int x = min_x; x <= max_x; ++x) {
-            float w0 = peak__edge_cross((float)x1, (float)y1, (float)x2, (float)y2, (float)x, (float)y) / area;
-            float w1 = peak__edge_cross((float)x2, (float)y2, (float)x0, (float)y0, (float)x, (float)y) / area;
-            float w2 = peak__edge_cross((float)x0, (float)y0, (float)x1, (float)y1, (float)x, (float)y) / area;
-
-            if (w0 >= 0.0f && w1 >= 0.0f && w2 >= 0.0f) {
-                uint32_t col_a = peak__lerp_color(c0, c1, w1 / (w0 + w1 + 1e-6f));
-                uint32_t final_color = peak__lerp_color(col_a, c2, w2);
-                peak__put_pixel(x, y, final_color);
-            }
-        }
-    }
-}
-
-void
-peak_draw_line(int x0, int y0, int x1, int y1, size_t width, uint32_t color)
-{
-    int dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
-    int dy = -abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
-    int err = dx + dy, e2;
-
-    int half_w = (int)width / 2;
-
-    while (1) {
-        /* Draw square footprint for line thickness */
-        for (int ox = -half_w; ox <= half_w; ++ox) {
-            for (int oy = -half_w; oy <= half_w; ++oy) {
-                peak__put_pixel(x0 + ox, y0 + oy, color);
-            }
-        }
-        if (x0 == x1 && y0 == y1) break;
-        e2 = 2 * err;
-        if (e2 >= dy) { err += dy; x0 += sx; }
-        if (e2 <= dx) { err += dx; y0 += sy; }
-    }
-}
-
-void
-peak_draw_line_gradient(int x0, int y0, int x1, int y1, size_t width, uint32_t c0, uint32_t c1) 
-{
-    float total_dist = sqrtf((float)((x1 - x0)*(x1 - x0) + (y1 - y0)*(y1 - y0)));
-    int dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
-    int dy = -abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
-    int err = dx + dy, e2;
-
-    int orig_x0 = x0, orig_y0 = y0;
-    int half_w = (int)width / 2;
-
-    while (1) {
-        float current_dist = sqrtf((float)((x0 - orig_x0)*(x0 - orig_x0) + (y0 - orig_y0)*(y0 - orig_y0)));
-        float t = (total_dist > 0.0f) ? (current_dist / total_dist) : 0.0f;
-        uint32_t color = peak__lerp_color(c0, c1, t);
-
-        for (int ox = -half_w; ox <= half_w; ++ox) {
-            for (int oy = -half_w; oy <= half_w; ++oy) {
-                peak__put_pixel(x0 + ox, y0 + oy, color);
-            }
-        }
-
-        if (x0 == x1 && y0 == y1) break;
-        e2 = 2 * err;
-        if (e2 >= dy) { err += dy; x0 += sx; }
-        if (e2 <= dx) { err += dx; y0 += sy; }
-    }
-}
-
 /* --- End of peak.c --- */
 
 #endif // PEAK_IMPLEMENTATION
