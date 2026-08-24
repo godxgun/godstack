@@ -233,10 +233,10 @@ int main() {
     rend_buffer_destroy(&vert_buf);
     rend_buffer_destroy(&ind_buf);
     rend_renderer_destroy(renderer);
-    rend_quit();
 
     peak_window_close(&win);
     peak_quit();
+    rend_quit();
 
     return 0;
 }

@@ -11,7 +11,7 @@
 
 #define PEAK_MAJOR "0"
 #define PEAK_MINOR "5"
-#define PEAK_PATCH "2"
+#define PEAK_PATCH "3"
 
 /* CHANGE LOG 
  * 0.0.0 - @vasco - prototyping
@@ -24,6 +24,7 @@
  * 0.5.0 - @vasco - audio start/stop, s16le pull callback
  * 0.5.1 - @vasco - log, file, time, vulkan extensions
  * 0.5.2 - @vasco - vulkan surface from window
+ * 0.5.3 - @vasco - skip XCloseDisplay after vulkan teardown
  */
 
 #define NANOS_PER_SEC 1000000000ull
@@ -1145,9 +1146,11 @@ peak_platform_init(void)
 static void
 peak_platform_quit(void)
 {
+	/* NOTE: NVIDIA's Vulkan ICD registers an XCloseDisplay hook, then
+	 * vkDestroyInstance unloads the ICD. Closing afterwards is a SIGSEGV
+	 * into unmapped memory. The connection is dropped on process exit. */
 	if (!peak_linux.display)
 		return;
-	peak_x11.XCloseDisplay(peak_linux.display);
 	peak_linux.display = 0;
 }
 

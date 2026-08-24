@@ -199,9 +199,11 @@ peak_platform_init(void)
 static void
 peak_platform_quit(void)
 {
+	/* NOTE: NVIDIA's Vulkan ICD registers an XCloseDisplay hook, then
+	 * vkDestroyInstance unloads the ICD. Closing afterwards is a SIGSEGV
+	 * into unmapped memory. The connection is dropped on process exit. */
 	if (!peak_linux.display)
 		return;
-	peak_x11.XCloseDisplay(peak_linux.display);
 	peak_linux.display = 0;
 }
 
