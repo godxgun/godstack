@@ -10,16 +10,23 @@
 #define PEAK_H
 
 #define PEAK_MAJOR "0"
-#define PEAK_MINOR "1"
-#define PEAK_PATCH "1"
+#define PEAK_MINOR "5"
+#define PEAK_PATCH "2"
 
 /* CHANGE LOG 
  * 0.0.0 - @vasco - prototyping
  * 0.1.0 - @vasco - linux x11 that automagically loads X11 DLL
  * 0.1.1 - @vasco - fixed event handling on linux
  * 0.1.2 - @vasco - better handling of windows, if multiple windows becomes necessary in the future
- * 0.2.0 - @vasco - win32
+ * 0.2.0 - @vasco - multiple windows, major-ish API changes.
+ * 0.3.0 - @vasco - web via emscripten
+ * 0.4.0 - @vasco - win32
+ * 0.5.0 - @vasco - audio start/stop, s16le pull callback
+ * 0.5.1 - @vasco - log, file, time, vulkan extensions
+ * 0.5.2 - @vasco - vulkan surface from window
  */
+
+#define NANOS_PER_SEC 1000000000ull
 
 #include <assert.h>
 #include <stdint.h>
@@ -71,6 +78,62 @@
     #define PEAK static inline
 #else
     #define PEAK extern
+#endif
+
+typedef enum PeakLogLevel {
+    P_LOG_LEVEL_FATAL = 0,
+    P_LOG_LEVEL_ERROR,
+    P_LOG_LEVEL_WARN,
+    P_LOG_LEVEL_INFO,
+    P_LOG_LEVEL_DEBUG,
+    P_LOG_LEVEL_TRACE,
+    P_COUNT_LOG_LEVEL
+} PeakLogLevel;
+
+#define P_PREFIX_LEN 7
+static const char *p_prefix[P_COUNT_LOG_LEVEL] = {
+    [P_LOG_LEVEL_FATAL] = "[FATAL]",
+    [P_LOG_LEVEL_ERROR] = "[ERROR]",
+    [P_LOG_LEVEL_WARN]  = "[WARNI]",
+    [P_LOG_LEVEL_INFO]  = "[INFOR]",
+    [P_LOG_LEVEL_DEBUG] = "[DEBUG]",
+    [P_LOG_LEVEL_TRACE] = "[TRACE]",
+};
+
+#ifndef P_LOG_WARN_ENABLED
+#define P_LOG_WARN_ENABLED 1
+#endif
+#ifndef P_LOG_INFO_ENABLED
+#define P_LOG_INFO_ENABLED 1
+#endif
+#ifndef P_LOG_DEBUG_ENABLED
+#define P_LOG_DEBUG_ENABLED 0
+#endif
+#ifndef P_LOG_TRACE_ENABLED
+#define P_LOG_TRACE_ENABLED 0
+#endif
+
+#define PFATAL(message, ...) peak_log_printf(P_LOG_LEVEL_FATAL, message, ##__VA_ARGS__)
+#define PERROR(message, ...) peak_log_printf(P_LOG_LEVEL_ERROR, message, ##__VA_ARGS__)
+#if P_LOG_WARN_ENABLED == 1
+#define PWARN(message, ...)  peak_log_printf(P_LOG_LEVEL_WARN, message, ##__VA_ARGS__)
+#else
+#define PWARN(message, ...)
+#endif
+#if P_LOG_INFO_ENABLED == 1
+#define PINFO(message, ...)  peak_log_printf(P_LOG_LEVEL_INFO, message, ##__VA_ARGS__)
+#else
+#define PINFO(message, ...)
+#endif
+#if P_LOG_DEBUG_ENABLED == 1
+#define PDEBUG(message, ...) peak_log_printf(P_LOG_LEVEL_DEBUG, message, ##__VA_ARGS__)
+#else
+#define PDEBUG(message, ...)
+#endif
+#if P_LOG_TRACE_ENABLED == 1
+#define PTRACE(message, ...) peak_log_printf(P_LOG_LEVEL_TRACE, message, ##__VA_ARGS__)
+#else
+#define PTRACE(message, ...)
 #endif
 
 typedef enum {
@@ -128,22 +191,49 @@ typedef struct {
 typedef struct peak_window_internal_t PeakWindowInternal;
 typedef struct PeakWindow PeakWindow;  
 
-/* Public API */
+/* Initialize the platform. */
 PEAK int  peak_init(void); // Initialize platform context and load necessary DLLs.
 PEAK void peak_quit(void); // Close platform context.
+
+/* Do sexy stuff with the windows. */
 PEAK PeakWindow peak_window_open(const char *name, uint32_t width, uint32_t height, uint32_t flags); // Open a window.
 PEAK void       peak_window_close(PeakWindow *window); // Close a window.
 PEAK void       peak_window_run(PeakWindow *win, int (*peak_tick)(PeakWindow *win, void *userdata), void *userdata); // Hijacking the main loop makes life easier on platforms like web
 PEAK int        peak_window_epoll(PeakWindow *win, PeakEvent *ev); // Poll a window for events.
 PEAK uint32_t*  peak_window_backbuffer(PeakWindow *win, size_t *width, size_t *height); // Get the windows backbuffer.
-PEAK void       peak_window_clear(PeakWindow *win, float r, float g, float b, float a);
-PEAK void       peak_window_present(PeakWindow *win);
+PEAK void       peak_window_clear(PeakWindow *win, float r, float g, float b, float a); // Clear window to color.
+PEAK void       peak_window_present(PeakWindow *win); // Present window backbuffer.
+
+/* Play some tunes. */
+PEAK int peak_audio_start(uint32_t channels, uint32_t rate, void (*fill)(int16_t *out, size_t frames, void *userdata), void *userdata); // Device pulls interleaved s16le
+PEAK void peak_audio_stop(void); // Stop audio.
+                        
+/* Time */
+PEAK uint64_t peak_get_time(void); // Get time in nanoseconds.
+PEAK void peak_sleep_ns(int64_t ns); // Sleep for nanoseconds!!!
+
+/* File */
+PEAK int peak_file_exists(const char *path); // Does this file exist?
+PEAK void *peak_file_alloc(const char *path, unsigned long *buf_size); // Allocate an entire file.
+
+/* Graphics API bull... */
+PEAK const char **peak_vulkan_get_extensions(uint32_t *count); // Get vulkan extensions.
+PEAK int peak_vulkan_create_surface(PeakWindow *win, void *instance, const void *allocator, void *out_surface); // Create a vulkan surface for a window. Needs PEAK_VULKAN.
+
+/* Debug your amazing code. */
+PEAK void peak_log_printf(PeakLogLevel level, const char *src, ...); // Printf with log level.
+PEAK void *peak_debug_malloc_impl(size_t size, const char *file, int line, const char *func); // Malloc for debuggin.
+PEAK void peak_debug_free_impl(void *ptr, const char *file, int line, const char *func); // Free for debugging.
+PEAK void *peak_debug_realloc_impl(void *ptr, size_t size, const char *file, int line, const char *func); // Realloc for debugging.
+PEAK void peak_debug_memory_report(void); // Report memory.
 
 #endif // PEAK_H
 
 #ifdef PEAK_IMPLEMENTATION 
 #undef PEAK_IMPLEMENTATION
 
+/* NOTE(vasco): Some platforms require an event queue 
+ * while others have it built in. */
 #if defined(PEAK_WIN32) || defined(PEAK_WEB)
 #define PEAK_Q 64
 
@@ -174,43 +264,68 @@ peak_q_pop(PeakQ *q, PeakEvent *ev)
 
 #if defined(PEAK_WIN32)
 /* --- Start of p_win32.c --- */
+/*
+ * Win32 window, input, StretchDIBits present, and waveOut audio.
+ * user32.dll, gdi32.dll, and winmm.dll are loaded at runtime.
+ *
+ * * 0.4.0 - @vasco - win32
+ * * 0.5.0 - @vasco - audio start/stop, s16le pull callback
+ */
+
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
 
+/* windows.h must precede mmsystem.h */
 #include <windows.h>
+#include <mmsystem.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef PEAK_VULKAN
+#define VK_USE_PLATFORM_WIN32_KHR
+#include <vulkan/vulkan.h>
+#endif
 
 #define PEAK_WIN32_USER32 "user32.dll"
 #define PEAK_WIN32_GDI32  "gdi32.dll"
+#define PEAK_WIN32_WINMM  "winmm.dll"
 #define PEAK_WIN32_CLASS  "PeakWindow"
 #define PEAK_WIN32_PROP   "Peak"
+#define PEAK_AUDIO_FRAMES  256
+#define PEAK_AUDIO_BUFFERS 2
 
 #define PEAK_USER32_API(X) \
-	X(RegisterClassExA,   ATOM,    WINAPI, (const WNDCLASSEXA *)) \
-	X(UnregisterClassA,   BOOL,    WINAPI, (LPCSTR, HINSTANCE)) \
-	X(CreateWindowExA,    HWND,    WINAPI, (DWORD, LPCSTR, LPCSTR, DWORD, int, int, int, int, HWND, HMENU, HINSTANCE, LPVOID)) \
-	X(DestroyWindow,      BOOL,    WINAPI, (HWND)) \
-	X(ShowWindow,         BOOL,    WINAPI, (HWND, int)) \
-	X(GetDC,              HDC,     WINAPI, (HWND)) \
-	X(ReleaseDC,          int,     WINAPI, (HWND, HDC)) \
-	X(PeekMessageA,       BOOL,    WINAPI, (LPMSG, HWND, UINT, UINT, UINT)) \
-	X(TranslateMessage,   BOOL,    WINAPI, (const MSG *)) \
-	X(DispatchMessageA,   LRESULT, WINAPI, (const MSG *)) \
-	X(DefWindowProcA,     LRESULT, WINAPI, (HWND, UINT, WPARAM, LPARAM)) \
-	X(SetPropA,           BOOL,    WINAPI, (HWND, LPCSTR, HANDLE)) \
-	X(GetPropA,           HANDLE,  WINAPI, (HWND, LPCSTR)) \
-	X(RemovePropA,        HANDLE,  WINAPI, (HWND, LPCSTR)) \
-	X(BeginPaint,         HDC,     WINAPI, (HWND, LPPAINTSTRUCT)) \
-	X(EndPaint,           BOOL,    WINAPI, (HWND, const PAINTSTRUCT *)) \
-	X(AdjustWindowRectEx, BOOL,    WINAPI, (LPRECT, DWORD, BOOL, DWORD)) \
-	X(LoadCursorA,        HCURSOR, WINAPI, (HINSTANCE, LPCSTR)) \
-	X(GetKeyState,        SHORT,   WINAPI, (int))
+        X(RegisterClassExA,   ATOM,    WINAPI, (const WNDCLASSEXA *)) \
+        X(UnregisterClassA,   BOOL,    WINAPI, (LPCSTR, HINSTANCE)) \
+        X(CreateWindowExA,    HWND,    WINAPI, (DWORD, LPCSTR, LPCSTR, DWORD, int, int, int, int, HWND, HMENU, HINSTANCE, LPVOID)) \
+        X(DestroyWindow,      BOOL,    WINAPI, (HWND)) \
+        X(ShowWindow,         BOOL,    WINAPI, (HWND, int)) \
+        X(GetDC,              HDC,     WINAPI, (HWND)) \
+        X(ReleaseDC,          int,     WINAPI, (HWND, HDC)) \
+        X(PeekMessageA,       BOOL,    WINAPI, (LPMSG, HWND, UINT, UINT, UINT)) \
+        X(TranslateMessage,   BOOL,    WINAPI, (const MSG *)) \
+        X(DispatchMessageA,   LRESULT, WINAPI, (const MSG *)) \
+        X(DefWindowProcA,     LRESULT, WINAPI, (HWND, UINT, WPARAM, LPARAM)) \
+        X(SetPropA,           BOOL,    WINAPI, (HWND, LPCSTR, HANDLE)) \
+        X(GetPropA,           HANDLE,  WINAPI, (HWND, LPCSTR)) \
+        X(RemovePropA,        HANDLE,  WINAPI, (HWND, LPCSTR)) \
+        X(BeginPaint,         HDC,     WINAPI, (HWND, LPPAINTSTRUCT)) \
+        X(EndPaint,           BOOL,    WINAPI, (HWND, const PAINTSTRUCT *)) \
+        X(AdjustWindowRectEx, BOOL,    WINAPI, (LPRECT, DWORD, BOOL, DWORD)) \
+        X(LoadCursorA,        HCURSOR, WINAPI, (HINSTANCE, LPCSTR)) \
+        X(GetKeyState,        SHORT,   WINAPI, (int))
 
 #define PEAK_GDI32_API(X) \
-	X(StretchDIBits, int, WINAPI, (HDC, int, int, int, int, int, int, int, int, const void *, const BITMAPINFO *, UINT, DWORD))
+        X(StretchDIBits, int, WINAPI, (HDC, int, int, int, int, int, int, int, int, const void *, const BITMAPINFO *, UINT, DWORD))
+
+#define PEAK_WINMM_API(X) \
+        X(waveOutOpen,            MMRESULT, WINAPI, (LPHWAVEOUT, UINT, LPCWAVEFORMATEX, DWORD_PTR, DWORD_PTR, DWORD)) \
+        X(waveOutClose,           MMRESULT, WINAPI, (HWAVEOUT)) \
+        X(waveOutPrepareHeader,   MMRESULT, WINAPI, (HWAVEOUT, LPWAVEHDR, UINT)) \
+        X(waveOutUnprepareHeader, MMRESULT, WINAPI, (HWAVEOUT, LPWAVEHDR, UINT)) \
+        X(waveOutWrite,           MMRESULT, WINAPI, (HWAVEOUT, LPWAVEHDR, UINT)) \
+        X(waveOutReset,           MMRESULT, WINAPI, (HWAVEOUT))
 
 typedef struct {
 #define X(name, ret, conv, args) ret (conv *name) args;
@@ -223,6 +338,25 @@ typedef struct {
 	PEAK_GDI32_API(X)
 #undef X
 } PeakGdi32Api;
+
+typedef struct {
+#define X(name, ret, conv, args) ret (conv *name) args;
+	PEAK_WINMM_API(X)
+#undef X
+} PeakWinmmApi;
+
+typedef struct {
+	volatile int run;
+	HANDLE thread;
+	HANDLE event;
+	HWAVEOUT out;
+	WAVEHDR hdr[PEAK_AUDIO_BUFFERS];
+	int16_t *pcm[PEAK_AUDIO_BUFFERS];
+	uint32_t channels;
+	uint32_t bytes;
+	void (*fill)(int16_t *out, size_t frames, void *userdata);
+	void *userdata;
+} PeakAudio;
 
 typedef struct {
 	HMODULE user32;
@@ -243,9 +377,28 @@ struct peak_window_internal_t {
 	struct peak_win32_win *w;
 };
 
+static int peak_internal_user32_load(HMODULE handle);
+static int peak_internal_gdi32_load(HMODULE handle);
+static PeakKeyCode peak_internal_win32_key_map(WPARAM vk);
+static PeakKeyMod peak_internal_win32_mod_map(void);
+static int peak_internal_win32_buffer(struct peak_win32_win *w, uint32_t width, uint32_t height);
+static LRESULT CALLBACK peak_internal_win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
+static int peak_platform_init(void);
+static void peak_platform_quit(void);
+static PeakWindowInternal peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uint32_t flags);
+static void peak_platform_window_close(PeakWindowInternal *intern);
+static uint32_t *peak_platform_window_buffer(PeakWindowInternal *intern, size_t *width, size_t *height);
+static void peak_platform_window_present(PeakWindowInternal *intern);
+static bool peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev);
+static int peak_internal_winmm_load(void);
+static void peak_internal_win32_audio_fill(int i);
+static DWORD WINAPI peak_internal_win32_audio_thread(LPVOID arg);
+
 static PeakWin32 peak_win32;
 static PeakUser32Api peak_user32;
 static PeakGdi32Api peak_gdi32;
+static PeakWinmmApi peak_winmm;
+static PeakAudio peak_audio;
 
 static int
 peak_internal_user32_load(HMODULE handle)
@@ -279,34 +432,45 @@ peak_internal_win32_key_map(WPARAM vk)
 	if (vk >= 'A' && vk <= 'Z')
 		return (PeakKeyCode)(PEAK_KEY_A + (int)(vk - 'A'));
 	switch (vk) {
-	case VK_UP: return PEAK_KEY_UP;
-	case VK_DOWN: return PEAK_KEY_DOWN;
-	case VK_LEFT: return PEAK_KEY_LEFT;
-	case VK_RIGHT: return PEAK_KEY_RIGHT;
-	case VK_SPACE: return PEAK_KEY_SPACE;
-	case VK_ESCAPE: return PEAK_KEY_ESCAPE;
-	case VK_RETURN: return PEAK_KEY_ENTER;
-	default: return PEAK_KEY_UNKNOWN;
+	case VK_UP:
+		return PEAK_KEY_UP;
+	case VK_DOWN:
+		return PEAK_KEY_DOWN;
+	case VK_LEFT:
+		return PEAK_KEY_LEFT;
+	case VK_RIGHT:
+		return PEAK_KEY_RIGHT;
+	case VK_SPACE:
+		return PEAK_KEY_SPACE;
+	case VK_ESCAPE:
+		return PEAK_KEY_ESCAPE;
+	case VK_RETURN:
+		return PEAK_KEY_ENTER;
+	default:
+		return PEAK_KEY_UNKNOWN;
 	}
 }
 
 static PeakKeyMod
 peak_internal_win32_mod_map(void)
 {
-	if (peak_user32.GetKeyState(VK_CONTROL) & 0x8000) return PEAK_KEYMOD_CTRL;
-	if (peak_user32.GetKeyState(VK_MENU) & 0x8000) return PEAK_KEYMOD_ALT;
-	if (peak_user32.GetKeyState(VK_SHIFT) & 0x8000) return PEAK_KEYMOD_SHIFT;
-	if (peak_user32.GetKeyState(VK_CAPITAL) & 1) return PEAK_KEYMOD_CAPS;
+	if (peak_user32.GetKeyState(VK_CONTROL) & 0x8000)
+		return PEAK_KEYMOD_CTRL;
+	if (peak_user32.GetKeyState(VK_MENU) & 0x8000)
+		return PEAK_KEYMOD_ALT;
+	if (peak_user32.GetKeyState(VK_SHIFT) & 0x8000)
+		return PEAK_KEYMOD_SHIFT;
+	if (peak_user32.GetKeyState(VK_CAPITAL) & 1)
+		return PEAK_KEYMOD_CAPS;
 	return (PeakKeyMod)0;
 }
 
 static int
-peak_win32_buffer(struct peak_win32_win *w, uint32_t width, uint32_t height)
+peak_internal_win32_buffer(struct peak_win32_win *w, uint32_t width, uint32_t height)
 {
 	uint32_t *buffer;
 
-	buffer = calloc((size_t)width * height, sizeof *buffer);
-	if (!buffer)
+	if (!(buffer = calloc((size_t)width * height, sizeof(*buffer))))
 		return 0;
 	free(w->buffer);
 	w->buffer = buffer;
@@ -320,9 +484,10 @@ peak_internal_win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
 	struct peak_win32_win *w;
 	PeakEvent ev;
+	CREATESTRUCTA *cs;
 
 	if (msg == WM_NCCREATE) {
-		CREATESTRUCTA *cs = (CREATESTRUCTA *)lparam;
+		cs = (CREATESTRUCTA *)lparam;
 		peak_user32.SetPropA(hwnd, PEAK_WIN32_PROP, cs->lpCreateParams);
 	}
 
@@ -332,45 +497,46 @@ peak_internal_win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 
 	switch (msg) {
 	case WM_CLOSE:
-		memset(&ev, 0, sizeof ev);
+		memset(&ev, 0, sizeof(ev));
 		ev.type = PEAK_EVENT_WINDOW_CLOSE;
 		peak_q_push(&w->q, ev);
 		return 0;
 	case WM_SIZE: {
 		uint32_t width, height;
+
 		if (wparam == SIZE_MINIMIZED)
 			return 0;
 		width = (uint32_t)LOWORD(lparam);
 		height = (uint32_t)HIWORD(lparam);
 		if (!width || !height || (width == w->width && height == w->height))
 			return 0;
-		if (!peak_win32_buffer(w, width, height))
+		if (!peak_internal_win32_buffer(w, width, height))
 			return 0;
-		memset(&ev, 0, sizeof ev);
+		memset(&ev, 0, sizeof(ev));
 		ev.type = PEAK_EVENT_WINDOW_RESIZE;
 		ev.resize.width = w->width;
 		ev.resize.height = w->height;
 		peak_q_push(&w->q, ev);
 		return 0;
 	}
-	case WM_KEYDOWN:
-	case WM_KEYUP:
-	case WM_SYSKEYDOWN:
+	case WM_KEYDOWN: /* FALLTHROUGH */
+	case WM_KEYUP: /* FALLTHROUGH */
+	case WM_SYSKEYDOWN: /* FALLTHROUGH */
 	case WM_SYSKEYUP:
-		memset(&ev, 0, sizeof ev);
+		memset(&ev, 0, sizeof(ev));
 		ev.type = (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN) ? PEAK_EVENT_KEY_DOWN : PEAK_EVENT_KEY_UP;
 		ev.key.key = peak_internal_win32_key_map(wparam);
 		ev.key.mod = peak_internal_win32_mod_map();
 		peak_q_push(&w->q, ev);
 		return 0;
-	case WM_MOUSEMOVE:
-	case WM_LBUTTONDOWN:
-	case WM_LBUTTONUP:
-	case WM_RBUTTONDOWN:
-	case WM_RBUTTONUP:
-	case WM_MBUTTONDOWN:
+	case WM_MOUSEMOVE: /* FALLTHROUGH */
+	case WM_LBUTTONDOWN: /* FALLTHROUGH */
+	case WM_LBUTTONUP: /* FALLTHROUGH */
+	case WM_RBUTTONDOWN: /* FALLTHROUGH */
+	case WM_RBUTTONUP: /* FALLTHROUGH */
+	case WM_MBUTTONDOWN: /* FALLTHROUGH */
 	case WM_MBUTTONUP:
-		memset(&ev, 0, sizeof ev);
+		memset(&ev, 0, sizeof(ev));
 		ev.type = PEAK_EVENT_POINTER;
 		ev.pointer.x = (float)(short)LOWORD(lparam);
 		ev.pointer.y = (float)(short)HIWORD(lparam);
@@ -391,6 +557,7 @@ peak_internal_win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 		return 0;
 	case WM_PAINT: {
 		PAINTSTRUCT ps;
+
 		peak_user32.BeginPaint(hwnd, &ps);
 		peak_user32.EndPaint(hwnd, &ps);
 		return 0;
@@ -431,8 +598,8 @@ peak_platform_init(void)
 		}
 	}
 	if (!peak_win32.class_reg) {
-		memset(&wc, 0, sizeof wc);
-		wc.cbSize = sizeof wc;
+		memset(&wc, 0, sizeof(wc));
+		wc.cbSize = sizeof(wc);
 		wc.style = CS_OWNDC;
 		wc.lpfnWndProc = peak_internal_win32_wndproc;
 		wc.hInstance = GetModuleHandleA(NULL);
@@ -469,10 +636,9 @@ peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uin
 	if (!peak_user32.CreateWindowExA && !peak_platform_init())
 		return intern;
 
-	w = calloc(1, sizeof *w);
-	if (!w)
+	if (!(w = calloc(1, sizeof(*w))))
 		return intern;
-	if (!peak_win32_buffer(w, width, height)) {
+	if (!peak_internal_win32_buffer(w, width, height)) {
 		free(w);
 		return intern;
 	}
@@ -511,6 +677,7 @@ static void
 peak_platform_window_close(PeakWindowInternal *intern)
 {
 	struct peak_win32_win *w;
+
 	if (!intern || !intern->w)
 		return;
 	w = intern->w;
@@ -528,7 +695,9 @@ peak_platform_window_close(PeakWindowInternal *intern)
 static uint32_t *
 peak_platform_window_buffer(PeakWindowInternal *intern, size_t *width, size_t *height)
 {
-	struct peak_win32_win *w = intern ? intern->w : NULL;
+	struct peak_win32_win *w;
+
+	w = intern ? intern->w : NULL;
 	if (!w) {
 		*width = 0;
 		*height = 0;
@@ -542,13 +711,14 @@ peak_platform_window_buffer(PeakWindowInternal *intern, size_t *width, size_t *h
 static void
 peak_platform_window_present(PeakWindowInternal *intern)
 {
-	struct peak_win32_win *w = intern ? intern->w : NULL;
+	struct peak_win32_win *w;
 	BITMAPINFO bmi;
 
+	w = intern ? intern->w : NULL;
 	if (!w || !w->hwnd || !w->hdc || !w->buffer)
 		return;
 
-	memset(&bmi, 0, sizeof bmi);
+	memset(&bmi, 0, sizeof(bmi));
 	bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
 	bmi.bmiHeader.biWidth = (LONG)w->width;
 	bmi.bmiHeader.biHeight = -(LONG)w->height;
@@ -565,8 +735,9 @@ static bool
 peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 {
 	MSG msg;
-	struct peak_win32_win *w = intern ? intern->w : NULL;
+	struct peak_win32_win *w;
 
+	w = intern ? intern->w : NULL;
 	if (!w || !w->hwnd)
 		return 0;
 
@@ -577,6 +748,198 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 			return 1;
 	}
 	return peak_q_pop(&w->q, ev);
+}
+
+static int
+peak_internal_winmm_load(void)
+{
+	HMODULE handle;
+
+	if (peak_winmm.waveOutOpen)
+		return 1;
+	if (!(handle = LoadLibraryA(PEAK_WIN32_WINMM))) {
+		fputs("Failed to load winmm.dll. What system are you fucking using and abusing?", stderr);
+		return 0;
+	}
+#define X(name, ret, conv, args) peak_winmm.name = (ret (conv *) args)(void *)GetProcAddress(handle, #name);
+	PEAK_WINMM_API(X)
+#undef X
+#define X(name, ret, conv, args) || !peak_winmm.name
+	if (0 PEAK_WINMM_API(X)) {
+		fputs("Failed to load winmm symbols", stderr);
+		return 0;
+	}
+#undef X
+	return 1;
+}
+
+static void
+peak_internal_win32_audio_fill(int i)
+{
+	memset(peak_audio.pcm[i], 0, peak_audio.bytes);
+	if (peak_audio.fill)
+		peak_audio.fill(peak_audio.pcm[i], PEAK_AUDIO_FRAMES, peak_audio.userdata);
+	peak_winmm.waveOutWrite(peak_audio.out, &peak_audio.hdr[i], sizeof(WAVEHDR));
+}
+
+static DWORD WINAPI
+peak_internal_win32_audio_thread(LPVOID arg)
+{
+	int i, did;
+
+	(void)arg;
+	for (;;) {
+		did = 0;
+		if (!peak_audio.run)
+			break;
+		for (i = 0; i < PEAK_AUDIO_BUFFERS; i++) {
+			if (peak_audio.hdr[i].dwFlags & WHDR_DONE) {
+				peak_internal_win32_audio_fill(i);
+				did = 1;
+			}
+		}
+		if (did)
+			continue;
+		WaitForSingleObject(peak_audio.event, INFINITE);
+		ResetEvent(peak_audio.event);
+	}
+	return 0;
+}
+
+static int
+peak_platform_audio_start(uint32_t channels, uint32_t rate, void (*fill)(int16_t *out, size_t frames, void *userdata), void *userdata)
+{
+	WAVEFORMATEX fmt;
+	int i;
+
+	if (channels > 32)
+		return 0;
+	if (!peak_internal_winmm_load())
+		return 0;
+
+	memset(&fmt, 0, sizeof(fmt));
+	fmt.wFormatTag = WAVE_FORMAT_PCM;
+	fmt.nChannels = (WORD)channels;
+	fmt.nSamplesPerSec = rate;
+	fmt.wBitsPerSample = 16;
+	fmt.nBlockAlign = (WORD)(channels * 2);
+	fmt.nAvgBytesPerSec = rate * fmt.nBlockAlign;
+
+	peak_audio.event = CreateEventA(NULL, TRUE, FALSE, NULL);
+	if (!peak_audio.event)
+		return 0;
+	if (peak_winmm.waveOutOpen(&peak_audio.out, WAVE_MAPPER, &fmt, (DWORD_PTR)peak_audio.event, 0, CALLBACK_EVENT) != MMSYSERR_NOERROR) {
+		CloseHandle(peak_audio.event);
+		peak_audio.event = NULL;
+		fputs("Failed to open waveOut device", stderr);
+		return 0;
+	}
+
+	peak_audio.channels = channels;
+	peak_audio.bytes = (uint32_t)channels * PEAK_AUDIO_FRAMES * sizeof(int16_t);
+	peak_audio.fill = fill;
+	peak_audio.userdata = userdata;
+	peak_audio.run = 1;
+
+	for (i = 0; i < PEAK_AUDIO_BUFFERS; i++) {
+		if (!(peak_audio.pcm[i] = calloc(1, peak_audio.bytes)))
+			goto fail;
+		memset(&peak_audio.hdr[i], 0, sizeof(peak_audio.hdr[i]));
+		peak_audio.hdr[i].lpData = (LPSTR)peak_audio.pcm[i];
+		peak_audio.hdr[i].dwBufferLength = peak_audio.bytes;
+		if (peak_winmm.waveOutPrepareHeader(peak_audio.out, &peak_audio.hdr[i], sizeof(WAVEHDR)) != MMSYSERR_NOERROR)
+			goto fail;
+		peak_audio.hdr[i].dwFlags |= WHDR_DONE;
+	}
+
+	for (i = 0; i < PEAK_AUDIO_BUFFERS; i++)
+		peak_internal_win32_audio_fill(i);
+
+	peak_audio.thread = CreateThread(NULL, 0, peak_internal_win32_audio_thread, NULL, 0, NULL);
+	if (!peak_audio.thread)
+		goto fail;
+	return 1;
+
+fail:
+	peak_platform_audio_stop();
+	return 0;
+}
+
+static uint64_t
+peak_platform_get_time(void)
+{
+	LARGE_INTEGER count, freq;
+	QueryPerformanceCounter(&count);
+	QueryPerformanceFrequency(&freq);
+	return (uint64_t)((count.QuadPart * 1000000000ull) / freq.QuadPart);
+}
+
+static void
+peak_platform_sleep_ns(int64_t ns)
+{
+	if (ns <= 0) return;
+	Sleep((DWORD)(ns / 1000000));
+}
+
+static const char **
+peak_platform_vulkan_get_extensions(uint32_t *count)
+{
+	static const char *exts[] = {
+		"VK_KHR_surface",
+		"VK_KHR_win32_surface",
+	};
+	if (count) *count = 2;
+	return exts;
+}
+
+static int
+peak_platform_vulkan_create_surface(PeakWindowInternal *intern, void *instance, const void *allocator, void *out_surface)
+{
+#ifdef PEAK_VULKAN
+	VkWin32SurfaceCreateInfoKHR ci;
+	if (!intern || !intern->w || !intern->w->hwnd) return 0;
+	memset(&ci, 0, sizeof ci);
+	ci.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+	ci.hwnd = intern->w->hwnd;
+	ci.hinstance = GetModuleHandleA(NULL);
+	return vkCreateWin32SurfaceKHR((VkInstance)instance, &ci, (const VkAllocationCallbacks *)allocator, (VkSurfaceKHR *)out_surface) == VK_SUCCESS;
+#else
+	(void)intern; (void)instance; (void)allocator; (void)out_surface;
+	return 0;
+#endif
+}
+
+static void
+peak_platform_audio_stop(void)
+{
+	int i;
+
+	peak_audio.run = 0;
+	if (peak_audio.event)
+		SetEvent(peak_audio.event);
+	if (peak_audio.thread) {
+		WaitForSingleObject(peak_audio.thread, INFINITE);
+		CloseHandle(peak_audio.thread);
+		peak_audio.thread = NULL;
+	}
+	if (peak_audio.out) {
+		peak_winmm.waveOutReset(peak_audio.out);
+		for (i = 0; i < PEAK_AUDIO_BUFFERS; i++) {
+			if (peak_audio.hdr[i].dwFlags & WHDR_PREPARED)
+				peak_winmm.waveOutUnprepareHeader(peak_audio.out, &peak_audio.hdr[i], sizeof(WAVEHDR));
+			free(peak_audio.pcm[i]);
+			peak_audio.pcm[i] = NULL;
+			memset(&peak_audio.hdr[i], 0, sizeof(peak_audio.hdr[i]));
+		}
+		peak_winmm.waveOutClose(peak_audio.out);
+		peak_audio.out = NULL;
+	}
+	if (peak_audio.event) {
+		CloseHandle(peak_audio.event);
+		peak_audio.event = NULL;
+	}
+	peak_audio.fill = NULL;
+	peak_audio.userdata = NULL;
 }
 /* --- End of p_win32.c --- */
 #elif defined(PEAK_LINUX)
@@ -590,10 +953,24 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 #include <X11/Xutil.h>
 #include <X11/keysym.h>
 #include <dlfcn.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#ifdef PEAK_VULKAN
+#define VK_USE_PLATFORM_XLIB_KHR
+#include <vulkan/vulkan.h>
+#endif
 
 #define PEAK_X11_LINUX "libX11.so.6"
+#define PEAK_PULSE_LINUX "libpulse-simple.so.0"
+#define PEAK_AUDIO_FRAMES 256
+
+#define PEAK_PULSE_API(X) \
+    X(pa_simple_new,   void *, (const char *, const char *, int, const char *, const char *, const void *, const void *, const void *, int *)) \
+    X(pa_simple_free,  void,   (void *)) \
+    X(pa_simple_write, int,    (void *, const void *, size_t, int *))
 
 #define PEAK_X11_API(X) \
 	X(XOpenDisplay,        Display *, (const char *)) \
@@ -620,9 +997,32 @@ typedef struct {
 } PeakX11Api;
 
 typedef struct {
+#define X(name, ret, args) ret (*name) args;
+	PEAK_PULSE_API(X)
+#undef X
+} PeakPulseApi;
+
+typedef struct {
+	int format;
+	uint32_t rate;
+	uint8_t channels;
+} PeakPaSampleSpec;
+
+typedef struct {
 	Display *display;
 	Atom wm_delete_window;
 } PeakLinux;
+
+typedef struct {
+	volatile int run;
+	int thread_on;
+	pthread_t thread;
+	void *stream;
+	int16_t *buf;
+	uint32_t channels;
+	void (*fill)(int16_t *out, size_t frames, void *userdata);
+	void *userdata;
+} PeakAudio;
 
 struct peak_window_internal_t {
 	Window window;
@@ -635,6 +1035,8 @@ struct peak_window_internal_t {
 
 static PeakLinux peak_linux;
 static PeakX11Api peak_x11;
+static PeakPulseApi peak_pulse;
+static PeakAudio peak_audio;
 
 static int
 peak_internal_x11_load(void *handle)
@@ -877,6 +1279,154 @@ peak_platform_epoll(PeakWindowInternal *w, PeakEvent *ev)
 	}
 	return 0;
 }
+
+static int
+peak_internal_pulse_load(void)
+{
+	void *handle;
+
+	if (peak_pulse.pa_simple_new)
+		return 1;
+	if (!(handle = dlopen(PEAK_PULSE_LINUX, RTLD_LOCAL | RTLD_NOW))) {
+		fputs("Failed to load PulseAudio library. What system are you fucking using and abusing?", stderr);
+		return 0;
+	}
+#define X(name, ret, args) peak_pulse.name = (ret (*) args)dlsym(handle, #name);
+	PEAK_PULSE_API(X)
+#undef X
+#define X(name, ret, args) || !peak_pulse.name
+	if (0 PEAK_PULSE_API(X)) {
+		fputs("Failed to load PulseAudio symbols", stderr);
+		return 0;
+	}
+#undef X
+	return 1;
+}
+
+static void *
+peak_internal_audio_thread(void *arg)
+{
+	size_t n;
+	int error;
+
+	(void)arg;
+	n = (size_t)peak_audio.channels * PEAK_AUDIO_FRAMES;
+	while (peak_audio.run) {
+		memset(peak_audio.buf, 0, n * sizeof(int16_t));
+		if (peak_audio.fill)
+			peak_audio.fill(peak_audio.buf, PEAK_AUDIO_FRAMES, peak_audio.userdata);
+		if (peak_pulse.pa_simple_write(peak_audio.stream, peak_audio.buf, n * sizeof(int16_t), &error) < 0)
+			break;
+	}
+	return NULL;
+}
+
+static int
+peak_platform_audio_start(uint32_t channels, uint32_t rate, void (*fill)(int16_t *out, size_t frames, void *userdata), void *userdata)
+{
+	PeakPaSampleSpec ss;
+	int error;
+
+	if (channels > 32)
+		return 0;
+	if (!peak_internal_pulse_load())
+		return 0;
+
+	ss.format = 3; /* PA_SAMPLE_S16LE */
+	ss.rate = rate;
+	ss.channels = (uint8_t)channels;
+	peak_audio.stream = peak_pulse.pa_simple_new(NULL, "Peak", 1, NULL, "playback", &ss, NULL, NULL, &error);
+	if (!peak_audio.stream) {
+		fputs("Failed to open PulseAudio stream", stderr);
+		return 0;
+	}
+	if (!(peak_audio.buf = calloc((size_t)channels * PEAK_AUDIO_FRAMES, sizeof(int16_t)))) {
+		peak_pulse.pa_simple_free(peak_audio.stream);
+		peak_audio.stream = NULL;
+		return 0;
+	}
+	peak_audio.fill = fill;
+	peak_audio.userdata = userdata;
+	peak_audio.channels = channels;
+	peak_audio.run = 1;
+	if (pthread_create(&peak_audio.thread, NULL, peak_internal_audio_thread, NULL) != 0) {
+		peak_audio.thread_on = 0;
+		peak_audio.run = 0;
+		free(peak_audio.buf);
+		peak_audio.buf = NULL;
+		peak_pulse.pa_simple_free(peak_audio.stream);
+		peak_audio.stream = NULL;
+		return 0;
+	}
+	peak_audio.thread_on = 1;
+	return 1;
+}
+
+static uint64_t
+peak_platform_get_time(void)
+{
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (uint64_t)ts.tv_sec * NANOS_PER_SEC + (uint64_t)ts.tv_nsec;
+}
+
+static void
+peak_platform_sleep_ns(int64_t ns)
+{
+	struct timespec ts;
+	if (ns <= 0) return;
+	ts.tv_sec = ns / 1000000000ll;
+	ts.tv_nsec = ns % 1000000000ll;
+	nanosleep(&ts, NULL);
+}
+
+static const char **
+peak_platform_vulkan_get_extensions(uint32_t *count)
+{
+	static const char *exts[] = {
+		"VK_KHR_surface",
+		"VK_KHR_xlib_surface",
+	};
+	if (count) *count = 2;
+	return exts;
+}
+
+static int
+peak_platform_vulkan_create_surface(PeakWindowInternal *w, void *instance, const void *allocator, void *out_surface)
+{
+#ifdef PEAK_VULKAN
+	VkXlibSurfaceCreateInfoKHR ci;
+	if (!w || !peak_linux.display || !w->window) return 0;
+	memset(&ci, 0, sizeof ci);
+	ci.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
+	ci.dpy = peak_linux.display;
+	ci.window = w->window;
+	return vkCreateXlibSurfaceKHR((VkInstance)instance, &ci, (const VkAllocationCallbacks *)allocator, (VkSurfaceKHR *)out_surface) == VK_SUCCESS;
+#else
+	(void)w; (void)instance; (void)allocator; (void)out_surface;
+	return 0;
+#endif
+}
+
+static void
+peak_platform_audio_stop(void)
+{
+	if (!peak_audio.run && !peak_audio.stream)
+		return;
+	peak_audio.run = 0;
+	if (peak_audio.thread_on) {
+		pthread_join(peak_audio.thread, NULL);
+		peak_audio.thread_on = 0;
+	}
+	if (peak_audio.stream) {
+		peak_pulse.pa_simple_free(peak_audio.stream);
+		peak_audio.stream = NULL;
+	}
+	free(peak_audio.buf);
+	peak_audio.buf = NULL;
+	peak_audio.fill = NULL;
+	peak_audio.userdata = NULL;
+}
 /* --- End of p_linux.c --- */
 #elif defined(PEAK_WEB)
 /* --- Start of p_emscripten.c --- */
@@ -1068,10 +1618,129 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 	struct peak_web_win *w = intern ? intern->w : NULL;
 	return w ? peak_q_pop(&w->q, ev) : 0;
 }
+
+#define PEAK_AUDIO_FRAMES 1024
+
+static struct {
+	int run;
+	uint32_t channels;
+	int16_t *buf;
+	void (*fill)(int16_t *out, size_t frames, void *userdata);
+	void *userdata;
+} peak_web_audio;
+
+void EMSCRIPTEN_KEEPALIVE
+peak_internal_web_audio_fill(int16_t *out, int frames)
+{
+	size_t n;
+
+	if (!peak_web_audio.run || !out || frames <= 0)
+		return;
+	n = (size_t)frames * peak_web_audio.channels;
+	memset(out, 0, n * sizeof(int16_t));
+	if (peak_web_audio.fill)
+		peak_web_audio.fill(out, (size_t)frames, peak_web_audio.userdata);
+}
+
+EM_JS(int, peak_web_audio_dom_start, (int channels, int rate, int frames, uintptr_t ptr), {
+	var AC = window.AudioContext || window.webkitAudioContext;
+	var ctx, proc, i, c, heap, off, ch;
+	if (!AC || Module._peak_web_audio)
+		return 0;
+	ctx = new AC({ sampleRate: rate });
+	if (ctx.sampleRate !== rate) {
+		ctx.close();
+		return 0;
+	}
+	proc = ctx.createScriptProcessor(frames, 0, channels);
+	proc.onaudioprocess = function(e) {
+		Module._peak_internal_web_audio_fill(ptr, frames);
+		heap = Module.HEAP16;
+		off = ptr >> 1;
+		for (c = 0; c < channels; c++) {
+			ch = e.outputBuffer.getChannelData(c);
+			for (i = 0; i < frames; i++)
+				ch[i] = heap[off + i * channels + c] / 32768.0;
+		}
+	};
+	proc.connect(ctx.destination);
+	ctx.resume();
+	Module._peak_web_audio = { ctx: ctx, proc: proc };
+	return 1;
+});
+
+EM_JS(void, peak_web_audio_dom_stop, (void), {
+	var a = Module._peak_web_audio;
+	if (!a)
+		return;
+	a.proc.disconnect();
+	a.ctx.close();
+	Module._peak_web_audio = null;
+});
+
+static int
+peak_platform_audio_start(uint32_t channels, uint32_t rate, void (*fill)(int16_t *out, size_t frames, void *userdata), void *userdata)
+{
+	if (channels > 32)
+		return 0;
+	if (!(peak_web_audio.buf = calloc((size_t)channels * PEAK_AUDIO_FRAMES, sizeof(int16_t))))
+		return 0;
+	peak_web_audio.fill = fill;
+	peak_web_audio.userdata = userdata;
+	peak_web_audio.channels = channels;
+	peak_web_audio.run = 1;
+	if (!peak_web_audio_dom_start((int)channels, (int)rate, PEAK_AUDIO_FRAMES, (uintptr_t)peak_web_audio.buf)) {
+		free(peak_web_audio.buf);
+		peak_web_audio.buf = NULL;
+		peak_web_audio.run = 0;
+		peak_web_audio.fill = NULL;
+		return 0;
+	}
+	return 1;
+}
+
+static uint64_t
+peak_platform_get_time(void)
+{
+	return (uint64_t)(emscripten_get_now() * 1000000.0);
+}
+
+static void
+peak_platform_sleep_ns(int64_t ns)
+{
+	if (ns <= 0) return;
+	emscripten_sleep((unsigned)(ns / 1000000));
+}
+
+static const char **
+peak_platform_vulkan_get_extensions(uint32_t *count)
+{
+	if (count) *count = 0;
+	return NULL;
+}
+
+static int
+peak_platform_vulkan_create_surface(PeakWindowInternal *w, void *instance, const void *allocator, void *out_surface)
+{
+	(void)w; (void)instance; (void)allocator; (void)out_surface;
+	return 0;
+}
+
+static void
+peak_platform_audio_stop(void)
+{
+	peak_web_audio.run = 0;
+	peak_web_audio_dom_stop();
+	free(peak_web_audio.buf);
+	peak_web_audio.buf = NULL;
+	peak_web_audio.fill = NULL;
+	peak_web_audio.userdata = NULL;
+}
 /* --- End of p_emscripten.c --- */
 #endif
 
-/* We define PeakWindow only when we know the type of peak_window_internal_t */
+/* NOTE(vasco): We define PeakWindow only when
+ * we know the type of peak_window_internal_t */
 struct PeakWindow { 
     PeakWindowInternal internal;
     int (*tick)(struct PeakWindow *win, void *userdata);
@@ -1080,11 +1749,170 @@ struct PeakWindow {
     uint32_t width;
     uint32_t height;
     uint32_t bufsize;
+    uint16_t *audio; // LRLRLR
     int running;
 };
 
 
+/* --- Start of p_log.c --- */
+/*
+ * Logging!
+ */
+
+#include <stdio.h>
+#include <stdarg.h>
+#include <string.h>
+#include <stdlib.h>
+
+#define PEAK_MAX_PRINTF 1024
+#define PEAK_MAX_ALLOCS 512
+
+typedef struct {
+    void *ptr;
+    size_t size;
+    const char *file;
+    const char *func;
+    int line;
+} PeakDebugMemoryInfo;
+
+static uint64_t peak_alloc_count = 0;
+static PeakDebugMemoryInfo peak_ptr_array[PEAK_MAX_ALLOCS];
+
+void
+peak_log_printf(PeakLogLevel level, const char *src, ...)
+{
+    char out[PEAK_MAX_PRINTF];
+    va_list ap;
+    int len;
+    size_t offset = P_PREFIX_LEN + 1;
+
+    if (level < 0 || level >= P_COUNT_LOG_LEVEL)
+        level = P_LOG_LEVEL_ERROR;
+    memcpy(out, p_prefix[level], P_PREFIX_LEN);
+    out[P_PREFIX_LEN] = ' ';
+    va_start(ap, src);
+    len = vsnprintf(out + offset, PEAK_MAX_PRINTF - offset, src, ap);
+    va_end(ap);
+    if (len < 0) len = 0;
+    if (offset + (size_t)len >= PEAK_MAX_PRINTF)
+        len = (int)(PEAK_MAX_PRINTF - offset - 1);
+    out[offset + (size_t)len] = '\n';
+    fwrite(out, 1, offset + (size_t)len + 1, (level <= P_LOG_LEVEL_ERROR) ? stderr : stdout);
+}
+
+void *
+peak_debug_malloc_impl(size_t size, const char *file, int line, const char *func)
+{
+    void *ptr = malloc(size);
+    printf("[ALLOC] %p (%zu bytes) -> %s:%d %s()\n", ptr, size, file, line, func);
+
+    if (ptr) {
+        if (peak_alloc_count < PEAK_MAX_ALLOCS) {
+            peak_ptr_array[peak_alloc_count++] = (PeakDebugMemoryInfo){
+                .ptr = ptr,
+                .size = size,
+                .file = file,
+                .func = func,
+                .line = line
+            };
+        } else {
+            fprintf(stderr, "[ERROR] Debug allocator tracking capacity (%d) exceeded!\n", PEAK_MAX_ALLOCS);
+        }
+    }
+    return ptr;
+}
+
+void
+peak_debug_free_impl(void *ptr, const char *file, int line, const char *func)
+{
+    printf("[FREE]  %p -> %s:%d %s()\n", ptr, file, line, func);
+
+    if (!ptr) return;
+
+    bool found = false;
+    uint64_t index = 0;
+
+    for (index = 0; index < peak_alloc_count; ++index) {
+        if (peak_ptr_array[index].ptr == ptr) {
+            found = true;
+            break;
+        }
+    }
+
+    if (found) {
+        for (uint64_t j = index; j < peak_alloc_count - 1; ++j) {
+            peak_ptr_array[j] = peak_ptr_array[j + 1];
+        }
+        peak_alloc_count--;
+    } else {
+        fprintf(stderr, "[WARNING] Attempted to free untracked/double-freed pointer %p at %s:%d %s()\n",
+                ptr, file, line, func);
+    }
+
+    free(ptr);
+}
+
+void *
+peak_debug_realloc_impl(void *ptr, size_t size, const char *file, int line, const char *func)
+{
+    if (!ptr) {
+        return peak_debug_malloc_impl(size, file, line, func);
+    }
+    if (size == 0) {
+        peak_debug_free_impl(ptr, file, line, func);
+        return NULL;
+    }
+
+    uintptr_t old_addr = (uintptr_t)ptr;
+    void *new_ptr = realloc(ptr, size);
+    printf("[REALLOC] %p -> %p (%zu bytes) -> %s:%d %s()\n", (void *)old_addr, new_ptr, size, file, line, func);
+
+    if (new_ptr) {
+        bool found = false;
+        for (uint64_t i = 0; i < peak_alloc_count; ++i) {
+            if (peak_ptr_array[i].ptr == (void *)old_addr) {
+                peak_ptr_array[i].ptr = new_ptr;
+                peak_ptr_array[i].size = size;
+                peak_ptr_array[i].file = file;
+                peak_ptr_array[i].line = line;
+                peak_ptr_array[i].func = func;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            if (peak_alloc_count < PEAK_MAX_ALLOCS) {
+                peak_ptr_array[peak_alloc_count++] = (PeakDebugMemoryInfo){
+                    .ptr = new_ptr,
+                    .size = size,
+                    .file = file,
+                    .func = func,
+                    .line = line
+                };
+            }
+        }
+    }
+    return new_ptr;
+}
+
+void
+peak_debug_memory_report(void)
+{
+    printf("\n==================== MEMORY REPORT ====================\n");
+    printf("Remaining unfreed allocations: %lu\n", (unsigned long)peak_alloc_count);
+
+    for (uint64_t i = 0; i < peak_alloc_count; ++i) {
+        PeakDebugMemoryInfo *info = &peak_ptr_array[i];
+        printf("[LEAK] %p (%zu bytes) allocated at %s:%d in %s()\n",
+               info->ptr, info->size, info->file, info->line, info->func);
+    }
+    printf("=======================================================\n");
+}
+/* --- End of p_log.c --- */
 /* --- Start of peak.c --- */
+#include <stdio.h>
+#include <stdlib.h>
+
 static uint32_t *
 peak_window_sync(PeakWindow *win, size_t *width, size_t *height)
 {
@@ -1107,6 +1935,7 @@ peak_init(void)
 void
 peak_quit(void)
 {
+    peak_audio_stop();
     peak_platform_quit();
 }
 
@@ -1202,6 +2031,82 @@ peak_window_run(PeakWindow *win, int (*peak_tick)(PeakWindow *win, void *userdat
 #else
     while (win->running && win->tick(win, win->userdata));
 #endif
+}
+
+int
+peak_audio_start(uint32_t channels, uint32_t rate, void (*fill)(int16_t *out, size_t frames, void *userdata), void *userdata)
+{
+    if (!fill || !channels || !rate)
+        return 0;
+    peak_audio_stop();
+    return peak_platform_audio_start(channels, rate, fill, userdata);
+}
+
+void
+peak_audio_stop(void)
+{
+    peak_platform_audio_stop();
+}
+
+uint64_t
+peak_get_time(void)
+{
+    return peak_platform_get_time();
+}
+
+void
+peak_sleep_ns(int64_t ns)
+{
+    peak_platform_sleep_ns(ns);
+}
+
+int
+peak_file_exists(const char *path)
+{
+    FILE *f;
+    if (!path) return 0;
+    f = fopen(path, "rb");
+    if (!f) return 0;
+    fclose(f);
+    return 1;
+}
+
+void *
+peak_file_alloc(const char *path, unsigned long *buf_size)
+{
+    FILE *f;
+    long n;
+    void *p;
+    if (!path) return NULL;
+    f = fopen(path, "rb");
+    if (!f) return NULL;
+    if (fseek(f, 0, SEEK_END) != 0) { fclose(f); return NULL; }
+    n = ftell(f);
+    if (n < 0) { fclose(f); return NULL; }
+    rewind(f);
+    p = malloc((size_t)n + (n == 0));
+    if (!p) { fclose(f); return NULL; }
+    if (n && fread(p, 1, (size_t)n, f) != (size_t)n) {
+        free(p);
+        fclose(f);
+        return NULL;
+    }
+    fclose(f);
+    if (buf_size) *buf_size = (unsigned long)n;
+    return p;
+}
+
+const char **
+peak_vulkan_get_extensions(uint32_t *count)
+{
+    return peak_platform_vulkan_get_extensions(count);
+}
+
+int
+peak_vulkan_create_surface(PeakWindow *win, void *instance, const void *allocator, void *out_surface)
+{
+    if (!win || !instance || !out_surface) return 0;
+    return peak_platform_vulkan_create_surface(&win->internal, instance, allocator, out_surface);
 }
 /* --- End of peak.c --- */
 

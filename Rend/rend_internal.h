@@ -5,16 +5,21 @@
 
 
 #if defined(REND_DEBUG)
+#ifndef P_LOG_DEBUG_ENABLED
 #define P_LOG_DEBUG_ENABLED 1
-#define RASSERT(a, s) assert((a) && s) 
+#endif
+#define RASSERT_N(_1, _2, N, ...) N
+#define RASSERT(...) RASSERT_N(__VA_ARGS__, RASSERT2, RASSERT1)(__VA_ARGS__)
+#define RASSERT1(a) assert(a)
+#define RASSERT2(a, s) assert((a) && (s))
 #else
-#define RASSERT(a,s) ((void*)0)
+#define RASSERT(...) ((void)0)
 #endif
 
 #if defined(REND_DEBUG_MEMORY)
-#define rmalloc(size)  p_debug_malloc_impl((size), __FILE__, __LINE__, __func__)
-#define rrealloc(ptr, size) p_debug_realloc_impl((ptr), (size), __FILE__, __LINE__, __func__)
-#define rfree(ptr)     p_debug_free_impl((ptr), __FILE__, __LINE__, __func__)
+#define rmalloc(size)  peak_debug_malloc_impl((size), __FILE__, __LINE__, __func__)
+#define rrealloc(ptr, size) peak_debug_realloc_impl((ptr), (size), __FILE__, __LINE__, __func__)
+#define rfree(ptr)     peak_debug_free_impl((ptr), __FILE__, __LINE__, __func__)
 #else
 #define rmalloc malloc
 #define rrealloc(ptr, size) realloc((ptr), (size))
@@ -33,7 +38,6 @@
 
 #define REND__WARN(...) PWARN("[REND] "__VA_ARGS__);
 
-#include "podium.h"
 #include "rend.h"
 
 #include <stdint.h>
@@ -67,7 +71,7 @@ typedef struct rend_pipeline_config_t {
 } Rend__PipelineConfig;
 
 typedef struct {
-    RendContextHandle (*renderer_create)();
+    RendContextHandle (*renderer_create)(PeakWindow *window, RendBindingInfo *bind_info);
 
     void (*renderer_destroy)(RendContextHandle);
 
@@ -121,7 +125,7 @@ struct rend_renderer_t {
 
     struct rend_pipeline_t *pipeline_head;
     RendContextHandle context; // backend specific internal data
-    P_Window *window;
+    PeakWindow *window;
     uint64_t frame_count;
 
     RendBindingInfo bind_info;

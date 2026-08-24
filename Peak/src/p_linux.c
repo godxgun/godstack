@@ -7,10 +7,24 @@
 #include <X11/Xutil.h>
 #include <X11/keysym.h>
 #include <dlfcn.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#ifdef PEAK_VULKAN
+#define VK_USE_PLATFORM_XLIB_KHR
+#include <vulkan/vulkan.h>
+#endif
 
 #define PEAK_X11_LINUX "libX11.so.6"
+#define PEAK_PULSE_LINUX "libpulse-simple.so.0"
+#define PEAK_AUDIO_FRAMES 256
+
+#define PEAK_PULSE_API(X) \
+    X(pa_simple_new,   void *, (const char *, const char *, int, const char *, const char *, const void *, const void *, const void *, int *)) \
+    X(pa_simple_free,  void,   (void *)) \
+    X(pa_simple_write, int,    (void *, const void *, size_t, int *))
 
 #define PEAK_X11_API(X) \
 	X(XOpenDisplay,        Display *, (const char *)) \
@@ -37,9 +51,32 @@ typedef struct {
 } PeakX11Api;
 
 typedef struct {
+#define X(name, ret, args) ret (*name) args;
+	PEAK_PULSE_API(X)
+#undef X
+} PeakPulseApi;
+
+typedef struct {
+	int format;
+	uint32_t rate;
+	uint8_t channels;
+} PeakPaSampleSpec;
+
+typedef struct {
 	Display *display;
 	Atom wm_delete_window;
 } PeakLinux;
+
+typedef struct {
+	volatile int run;
+	int thread_on;
+	pthread_t thread;
+	void *stream;
+	int16_t *buf;
+	uint32_t channels;
+	void (*fill)(int16_t *out, size_t frames, void *userdata);
+	void *userdata;
+} PeakAudio;
 
 struct peak_window_internal_t {
 	Window window;
@@ -52,6 +89,8 @@ struct peak_window_internal_t {
 
 static PeakLinux peak_linux;
 static PeakX11Api peak_x11;
+static PeakPulseApi peak_pulse;
+static PeakAudio peak_audio;
 
 static int
 peak_internal_x11_load(void *handle)
@@ -293,4 +332,152 @@ peak_platform_epoll(PeakWindowInternal *w, PeakEvent *ev)
 		}
 	}
 	return 0;
+}
+
+static int
+peak_internal_pulse_load(void)
+{
+	void *handle;
+
+	if (peak_pulse.pa_simple_new)
+		return 1;
+	if (!(handle = dlopen(PEAK_PULSE_LINUX, RTLD_LOCAL | RTLD_NOW))) {
+		fputs("Failed to load PulseAudio library. What system are you fucking using and abusing?", stderr);
+		return 0;
+	}
+#define X(name, ret, args) peak_pulse.name = (ret (*) args)dlsym(handle, #name);
+	PEAK_PULSE_API(X)
+#undef X
+#define X(name, ret, args) || !peak_pulse.name
+	if (0 PEAK_PULSE_API(X)) {
+		fputs("Failed to load PulseAudio symbols", stderr);
+		return 0;
+	}
+#undef X
+	return 1;
+}
+
+static void *
+peak_internal_audio_thread(void *arg)
+{
+	size_t n;
+	int error;
+
+	(void)arg;
+	n = (size_t)peak_audio.channels * PEAK_AUDIO_FRAMES;
+	while (peak_audio.run) {
+		memset(peak_audio.buf, 0, n * sizeof(int16_t));
+		if (peak_audio.fill)
+			peak_audio.fill(peak_audio.buf, PEAK_AUDIO_FRAMES, peak_audio.userdata);
+		if (peak_pulse.pa_simple_write(peak_audio.stream, peak_audio.buf, n * sizeof(int16_t), &error) < 0)
+			break;
+	}
+	return NULL;
+}
+
+static int
+peak_platform_audio_start(uint32_t channels, uint32_t rate, void (*fill)(int16_t *out, size_t frames, void *userdata), void *userdata)
+{
+	PeakPaSampleSpec ss;
+	int error;
+
+	if (channels > 32)
+		return 0;
+	if (!peak_internal_pulse_load())
+		return 0;
+
+	ss.format = 3; /* PA_SAMPLE_S16LE */
+	ss.rate = rate;
+	ss.channels = (uint8_t)channels;
+	peak_audio.stream = peak_pulse.pa_simple_new(NULL, "Peak", 1, NULL, "playback", &ss, NULL, NULL, &error);
+	if (!peak_audio.stream) {
+		fputs("Failed to open PulseAudio stream", stderr);
+		return 0;
+	}
+	if (!(peak_audio.buf = calloc((size_t)channels * PEAK_AUDIO_FRAMES, sizeof(int16_t)))) {
+		peak_pulse.pa_simple_free(peak_audio.stream);
+		peak_audio.stream = NULL;
+		return 0;
+	}
+	peak_audio.fill = fill;
+	peak_audio.userdata = userdata;
+	peak_audio.channels = channels;
+	peak_audio.run = 1;
+	if (pthread_create(&peak_audio.thread, NULL, peak_internal_audio_thread, NULL) != 0) {
+		peak_audio.thread_on = 0;
+		peak_audio.run = 0;
+		free(peak_audio.buf);
+		peak_audio.buf = NULL;
+		peak_pulse.pa_simple_free(peak_audio.stream);
+		peak_audio.stream = NULL;
+		return 0;
+	}
+	peak_audio.thread_on = 1;
+	return 1;
+}
+
+static uint64_t
+peak_platform_get_time(void)
+{
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (uint64_t)ts.tv_sec * NANOS_PER_SEC + (uint64_t)ts.tv_nsec;
+}
+
+static void
+peak_platform_sleep_ns(int64_t ns)
+{
+	struct timespec ts;
+	if (ns <= 0) return;
+	ts.tv_sec = ns / 1000000000ll;
+	ts.tv_nsec = ns % 1000000000ll;
+	nanosleep(&ts, NULL);
+}
+
+static const char **
+peak_platform_vulkan_get_extensions(uint32_t *count)
+{
+	static const char *exts[] = {
+		"VK_KHR_surface",
+		"VK_KHR_xlib_surface",
+	};
+	if (count) *count = 2;
+	return exts;
+}
+
+static int
+peak_platform_vulkan_create_surface(PeakWindowInternal *w, void *instance, const void *allocator, void *out_surface)
+{
+#ifdef PEAK_VULKAN
+	VkXlibSurfaceCreateInfoKHR ci;
+	if (!w || !peak_linux.display || !w->window) return 0;
+	memset(&ci, 0, sizeof ci);
+	ci.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
+	ci.dpy = peak_linux.display;
+	ci.window = w->window;
+	return vkCreateXlibSurfaceKHR((VkInstance)instance, &ci, (const VkAllocationCallbacks *)allocator, (VkSurfaceKHR *)out_surface) == VK_SUCCESS;
+#else
+	(void)w; (void)instance; (void)allocator; (void)out_surface;
+	return 0;
+#endif
+}
+
+static void
+peak_platform_audio_stop(void)
+{
+	if (!peak_audio.run && !peak_audio.stream)
+		return;
+	peak_audio.run = 0;
+	if (peak_audio.thread_on) {
+		pthread_join(peak_audio.thread, NULL);
+		peak_audio.thread_on = 0;
+	}
+	if (peak_audio.stream) {
+		peak_pulse.pa_simple_free(peak_audio.stream);
+		peak_audio.stream = NULL;
+	}
+	free(peak_audio.buf);
+	peak_audio.buf = NULL;
+	peak_audio.fill = NULL;
+	peak_audio.userdata = NULL;
 }

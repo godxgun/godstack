@@ -1,23 +1,19 @@
 #include <string.h>
 
 #ifdef DEBUG_MEMORY
-#define malloc(size)  p_debug_malloc_impl((size), __FILE__, __LINE__, __func__)
-#define realloc(ptr, size) p_debug_realloc_impl((ptr), (size), __FILE__, __LINE__, __func__)
-#define free(ptr)     p_debug_free_impl((ptr), __FILE__, __LINE__, __func__)
+#define malloc(size)  peak_debug_malloc_impl((size), __FILE__, __LINE__, __func__)
+#define realloc(ptr, size) peak_debug_realloc_impl((ptr), (size), __FILE__, __LINE__, __func__)
+#define free(ptr)     peak_debug_free_impl((ptr), __FILE__, __LINE__, __func__)
 #endif
 
-#include "../rend.h"
-#include "../rend.c"
+#define PEAK_IMPLEMENTATION
+#include "../Rend/rend.h"
+#include "../Rend/rend.c"
 #include <stddef.h>
 
-#define PODIUM_IMPLEMENTATION
-#define P_MODULE_MATH
-#define P_MODULE_VULKAN
-#include "podium.h"
-
 float delta = 0;
-P_Window win;
-P_Event ev;
+PeakWindow win;
+PeakEvent ev;
 
 bool vsync = true;
 
@@ -52,9 +48,23 @@ float cool_beans(uint32_t *seed) {
     return (float) *seed / 4294967295.0;
 }
 
+static uint8_t *
+load_spv(const char *a, const char *b, unsigned long *size)
+{
+    uint8_t *p = peak_file_alloc(a, size);
+    if (p) return p;
+    return peak_file_alloc(b, size);
+}
+
 int main() {
 
-    if (!p_window_open(&win, 800, 600, "demo")) {
+    if (!peak_init()) {
+        PFATAL("Failed to init Peak!");
+        return 1;
+    }
+
+    win = peak_window_open("demo", 800, 600, 0);
+    if (!win.running) {
         PFATAL("Failed to open a window!");
         return 1;
     }
@@ -62,18 +72,24 @@ int main() {
     // bindless setup
     RendBindingInfo bind_info = {0};
     RendRenderer renderer = rend_renderer_create(&win, REND_BACKEND_AUTO, NULL, vsync, &bind_info);
+    if (!renderer) {
+        PFATAL("Failed to create renderer!");
+        peak_window_close(&win);
+        peak_quit();
+        return 1;
+    }
 
     unsigned long particles_bytes = 0;
-    uint8_t *particles_shader = p_file_alloc("particle.spv", &particles_bytes);
+    uint8_t *particles_shader = load_spv("particle.spv", "demos/compute/particle.spv", &particles_bytes);
 
     unsigned long sand_bytes = 0;
-    uint8_t *sand_shader = p_file_alloc("sand.spv", &sand_bytes);
+    uint8_t *sand_shader = load_spv("sand.spv", "demos/compute/sand.spv", &sand_bytes);
 
     unsigned long vert_size = 0;
-    uint8_t *vert = p_file_alloc("vert.spv", &vert_size);
+    uint8_t *vert = load_spv("vert.spv", "demos/compute/vert.spv", &vert_size);
 
     unsigned long frag_size = 0;
-    uint8_t *frag = p_file_alloc("frag.spv", &frag_size);
+    uint8_t *frag = load_spv("frag.spv", "demos/compute/frag.spv", &frag_size);
 
     uint32_t seed = 0xC0FFEE;
 
@@ -125,11 +141,11 @@ int main() {
     uint32_t mode = 2;
     while (mode > 0) {
 
-        uint64_t start = p_get_time();
+        uint64_t start = peak_get_time();
 
-        P_Event ev;
-        while (p_window_poll_event(&win, &ev)) {
-            if (ev.type == P_EVENT_WINDOW_CLOSE) {
+        PeakEvent ev;
+        while (peak_window_epoll(&win, &ev)) {
+            if (ev.type == PEAK_EVENT_WINDOW_CLOSE) {
                 mode -= 1;
                 break;
             }
@@ -189,9 +205,9 @@ int main() {
             rend_renderer_frame_end(renderer, NULL);
         } 
 
-        uint64_t delta_ns = p_get_time() - start;
+        uint64_t delta_ns = peak_get_time() - start;
         if (delta_ns < dt_ns) {
-            p_sleep_ns(dt_ns - delta_ns);
+            peak_sleep_ns(dt_ns - delta_ns);
         }
     }
 
@@ -205,10 +221,11 @@ int main() {
     rend_renderer_destroy(renderer);
     rend_quit();
 
-    p_window_close(&win);
+    peak_window_close(&win);
+    peak_quit();
 
 #if DEBUG_MEMORY
-    p_debug_memory_report();
+    peak_debug_memory_report();
 #endif
     return 0;
 }

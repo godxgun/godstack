@@ -1,3 +1,6 @@
+#include <stdio.h>
+#include <stdlib.h>
+
 static uint32_t *
 peak_window_sync(PeakWindow *win, size_t *width, size_t *height)
 {
@@ -20,6 +23,7 @@ peak_init(void)
 void
 peak_quit(void)
 {
+    peak_audio_stop();
     peak_platform_quit();
 }
 
@@ -115,4 +119,80 @@ peak_window_run(PeakWindow *win, int (*peak_tick)(PeakWindow *win, void *userdat
 #else
     while (win->running && win->tick(win, win->userdata));
 #endif
+}
+
+int
+peak_audio_start(uint32_t channels, uint32_t rate, void (*fill)(int16_t *out, size_t frames, void *userdata), void *userdata)
+{
+    if (!fill || !channels || !rate)
+        return 0;
+    peak_audio_stop();
+    return peak_platform_audio_start(channels, rate, fill, userdata);
+}
+
+void
+peak_audio_stop(void)
+{
+    peak_platform_audio_stop();
+}
+
+uint64_t
+peak_get_time(void)
+{
+    return peak_platform_get_time();
+}
+
+void
+peak_sleep_ns(int64_t ns)
+{
+    peak_platform_sleep_ns(ns);
+}
+
+int
+peak_file_exists(const char *path)
+{
+    FILE *f;
+    if (!path) return 0;
+    f = fopen(path, "rb");
+    if (!f) return 0;
+    fclose(f);
+    return 1;
+}
+
+void *
+peak_file_alloc(const char *path, unsigned long *buf_size)
+{
+    FILE *f;
+    long n;
+    void *p;
+    if (!path) return NULL;
+    f = fopen(path, "rb");
+    if (!f) return NULL;
+    if (fseek(f, 0, SEEK_END) != 0) { fclose(f); return NULL; }
+    n = ftell(f);
+    if (n < 0) { fclose(f); return NULL; }
+    rewind(f);
+    p = malloc((size_t)n + (n == 0));
+    if (!p) { fclose(f); return NULL; }
+    if (n && fread(p, 1, (size_t)n, f) != (size_t)n) {
+        free(p);
+        fclose(f);
+        return NULL;
+    }
+    fclose(f);
+    if (buf_size) *buf_size = (unsigned long)n;
+    return p;
+}
+
+const char **
+peak_vulkan_get_extensions(uint32_t *count)
+{
+    return peak_platform_vulkan_get_extensions(count);
+}
+
+int
+peak_vulkan_create_surface(PeakWindow *win, void *instance, const void *allocator, void *out_surface)
+{
+    if (!win || !instance || !out_surface) return 0;
+    return peak_platform_vulkan_create_surface(&win->internal, instance, allocator, out_surface);
 }

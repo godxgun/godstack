@@ -10,7 +10,7 @@
 
 
 static bool
-rend_vk_device_create(VkSurfaceKHR surface, RendSpecs specs, RendVkDevice *out_device, uint32_t (*score_devices)(RendVkDevice *, RendSpecs, char **))
+rend_vk_device_create(VkSurfaceKHR surface, RendSpecs specs, RendVkDevice *out_device, uint32_t (*score_devices)(RendVkDevice *, RendSpecs, const char **, uint32_t))
 {
     assert(out_device);
 
@@ -24,8 +24,7 @@ rend_vk_device_create(VkSurfaceKHR surface, RendSpecs specs, RendVkDevice *out_d
     VkPhysicalDevice physical_devices[device_count];
     CHECK_VK_RESULT(vkEnumeratePhysicalDevices(vk_instance, &device_count, physical_devices));
 
-    char **extension_names_darray = NULL;
-    p_darray_push(extension_names_darray, VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+    const char *extension_names[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 
     uint32_t best_score = 1; // 1 so that devices that do not meet specs get ignored
     RendVkDevice best_device = {0};
@@ -42,7 +41,7 @@ rend_vk_device_create(VkSurfaceKHR surface, RendSpecs specs, RendVkDevice *out_d
         vkGetPhysicalDeviceMemoryProperties(physical_devices[i], &scoring.memory);
 
         /* score device */
-        uint32_t dev_score = score_devices(&scoring, specs, extension_names_darray);
+        uint32_t dev_score = score_devices(&scoring, specs, extension_names, 1);
         PDEBUG("%-20.20s  %5d", scoring.properties.deviceName, dev_score);
         if (dev_score >= best_score) {
             if (best_device.swapchain_support.format) {
@@ -63,9 +62,6 @@ rend_vk_device_create(VkSurfaceKHR surface, RendSpecs specs, RendVkDevice *out_d
         }
 
     }
-
-    /* free extensions array after scoring */
-    p_darray_destroy(extension_names_darray);
 
     if (best_score > 1) {
         PDEBUG("Driver version %d.%d.%d", VK_VERSION_MAJOR(best_device.properties.driverVersion), VK_VERSION_MINOR(best_device.properties.driverVersion), VK_VERSION_PATCH(best_device.properties.driverVersion));
@@ -105,7 +101,7 @@ rend_vk_device_create(VkSurfaceKHR surface, RendSpecs specs, RendVkDevice *out_d
 
     VkDeviceQueueCreateInfo q_create_info[index_count];
 
-    f32 queue_priority[2] = {1.0f, 1.0f};
+    float queue_priority[2] = {1.0f, 1.0f};
     for (uint32_t i = 0; i < index_count; i++) {
         q_create_info[i].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         q_create_info[i].queueFamilyIndex = indices[i];
@@ -267,7 +263,7 @@ rend_vk_device_detect_depth_format(RendVkDevice *device)
 }
 
 static uint32_t
-rend_vk_device_score_default(RendVkDevice *device, RendSpecs minimum_specs, char **required_extensions)
+rend_vk_device_score_default(RendVkDevice *device, RendSpecs minimum_specs, const char **required_extensions, uint32_t required_extension_count)
 {
     /* NOTE: When we score the device we will also check for specs. Not meeting a spec
      * leads to 0 score and continue. We will assume device already contains some information 
@@ -346,10 +342,8 @@ rend_vk_device_score_default(RendVkDevice *device, RendSpecs minimum_specs, char
             available_extentions = rmalloc(available_extentions_count * sizeof(*available_extentions));
             CHECK_VK_RESULT(vkEnumerateDeviceExtensionProperties(device->physical_device, VK_NULL_HANDLE, &available_extentions_count, available_extentions));
 
-            uint32_t required_extention_count = p_darray_len(required_extensions);
-
             bool overall_found = true;
-            for (uint32_t i = 0; i < required_extention_count; ++i) {
+            for (uint32_t i = 0; i < required_extension_count; ++i) {
                 bool found = false;
                 for (uint32_t j = 0; j < available_extentions_count; ++j) {
                     if (strcmp(required_extensions[i], available_extentions[j].extensionName) == 0) {

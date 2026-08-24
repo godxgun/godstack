@@ -82,8 +82,8 @@ static RendVkDevice vk_device = {0};
 static int32_t      rend_vk_memory_find_index(VkPhysicalDevice device, uint32_t type_filter, VkMemoryPropertyFlags property_flags);
 
 /* rend_vk_device.c */
-static bool     rend_vk_device_create(VkSurfaceKHR surface, RendSpecs specs, RendVkDevice *out_device, uint32_t (*score_devices)(RendVkDevice *, RendSpecs, char **));
-static uint32_t rend_vk_device_score_default(RendVkDevice *device, RendSpecs minimum_specs, char **required_extensions);
+static bool     rend_vk_device_create(VkSurfaceKHR surface, RendSpecs specs, RendVkDevice *out_device, uint32_t (*score_devices)(RendVkDevice *, RendSpecs, const char **, uint32_t));
+static uint32_t rend_vk_device_score_default(RendVkDevice *device, RendSpecs minimum_specs, const char **required_extensions, uint32_t required_extension_count);
 static void     rend_vk_physical_device_query_swapchain_support(RendVkDevice *device);
 static bool     rend_vk_device_detect_depth_format(RendVkDevice *device);
 static void     rend_vk_device_destroy(RendVkDevice *device);

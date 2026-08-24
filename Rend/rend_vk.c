@@ -59,7 +59,7 @@ typedef struct RendVk14Context {
 
     RendVkDevice device; // SPEC: All objects created or allocated from a VkDevice are private to that device, and must not be used on other devices.
 
-    P_Window *window;
+    PeakWindow *window;
     VkSurfaceKHR surface;
     RendVkPipeline pipelines[REND_VK_MAX_PIPELINES];
     RendVkFrameResources frame_resources[REND_MAX_FRAMES_IN_FLIGHT]; 
@@ -97,12 +97,12 @@ typedef struct RendVk14Context {
 extern bool rend_vk_init();
 extern void rend_vk_quit();
 
-extern RendContextHandle rend_vk_renderer_create(P_Window *window);
+extern RendContextHandle rend_vk_renderer_create(PeakWindow *window, RendBindingInfo *bind_info);
 extern void rend_vk_renderer_destroy(RendContextHandle handle);
 extern bool rend_vk_renderer_frame_begin(RendContextHandle handle);
 extern void rend_vk_renderer_frame_end(RendContextHandle handle, float *delta);
 
-static inline void rend_vk__renderer_render_pass_begin_internal(RendContextHandle handle, float r, float g, float b, float a, uint64_t view_handle, uint64_t depth_attachment_view_handle, uint32_t offset_x, uint32_t offset_y, uint32_t width, uint32_t height);
+static inline void rend_vk__renderer_render_pass_begin_internal(RendRenderer renderer, float r, float g, float b, float a, uint64_t view_handle, uint64_t depth_attachment_view_handle, uint32_t offset_x, uint32_t offset_y, uint32_t width, uint32_t height);
 
 extern void rend_vk_renderer_render_pass_begin(RendRenderer renderer, float r, float g, float b, float a);
 extern void rend_vk_renderer_render_pass_begin_texture(RendRenderer renderer, RendTexture *texture);
@@ -167,25 +167,29 @@ rend_vk_init()
     vk_app_info.pEngineName = "REND Renderer";
     vk_app_info.engineVersion = VK_MAKE_VERSION(REND_MAJOR, REND_MINOR, REND_PATCH);
 
-    const char **extensions_darray = (const char **)p_vulkan_get_extensions();
-    p_darray_push(extensions_darray, VK_KHR_SURFACE_EXTENSION_NAME);
+    uint32_t peak_ext_count = 0;
+    const char **peak_exts = peak_vulkan_get_extensions(&peak_ext_count);
+    const char *extensions[8];
+    uint32_t ext_count = 0;
+    uint32_t ei;
+    for (ei = 0; ei < peak_ext_count && ext_count < 8; ei++)
+        extensions[ext_count++] = peak_exts[ei];
 
 #ifdef REND_DEBUG
-    p_darray_push(extensions_darray, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-    // p_darray_push(extensions_darray, VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME);
+    if (ext_count < 8)
+        extensions[ext_count++] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
     PDEBUG("Vulkan Extensions: ");
-    for (int i = 0; i < p_darray_len(extensions_darray); i++)
-        PDEBUG("%s", extensions_darray[i]);
+    for (ei = 0; ei < ext_count; ei++)
+        PDEBUG("%s", extensions[ei]);
 #endif
 
-    const char **required_validation_layers = NULL;
-
 #ifdef REND_DEBUG
-    p_darray_push(required_validation_layers, "VK_LAYER_KHRONOS_validation");
+    const char *required_validation_layers[] = { "VK_LAYER_KHRONOS_validation" };
+    uint32_t layer_count = 1;
 
     PDEBUG("Required Validation Layers: ");
-    for (uint32_t i = 0; i < p_darray_len(required_validation_layers); i++) {
-        PDEBUG(" - %s", required_validation_layers[i]);
+    for (ei = 0; ei < layer_count; ei++) {
+        PDEBUG(" - %s", required_validation_layers[ei]);
     }
 
     VkValidationFeatureEnableEXT enabled_validation_features[] = {
@@ -203,11 +207,11 @@ rend_vk_init()
 
     VkInstanceCreateInfo vk_create_info = { VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
     vk_create_info.pApplicationInfo = &vk_app_info;
-    vk_create_info.ppEnabledExtensionNames = extensions_darray;
-    vk_create_info.enabledExtensionCount = p_darray_len(extensions_darray);
+    vk_create_info.ppEnabledExtensionNames = extensions;
+    vk_create_info.enabledExtensionCount = ext_count;
     vk_create_info.pApplicationInfo = &vk_app_info;
 #ifdef REND_DEBUG
-    vk_create_info.enabledLayerCount = p_darray_len(required_validation_layers);
+    vk_create_info.enabledLayerCount = layer_count;
     vk_create_info.ppEnabledLayerNames = required_validation_layers;
     vk_create_info.pNext = &validation_features;
 #else
@@ -219,10 +223,6 @@ rend_vk_init()
     CHECK_VK_RESULT(res);
 
     PDEBUG("Vulkan instance created!");
-    p_darray_destroy(extensions_darray);
-#ifdef REND_DEBUG
-    p_darray_destroy(required_validation_layers);
-#endif
 
 #ifdef REND_DEBUG
     uint32_t log_severity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
@@ -265,7 +265,7 @@ rend_vk_quit()
 }
 
 extern RendContextHandle
-rend_vk_renderer_create(P_Window *window)
+rend_vk_renderer_create(PeakWindow *window, RendBindingInfo *bind_info)
 {
     RendVk14Context *ctx = rmalloc(sizeof(*ctx));
     if (!ctx) {
@@ -274,9 +274,10 @@ rend_vk_renderer_create(P_Window *window)
     }
 
     memset(ctx, 0, sizeof *ctx);
+    ctx->window = window;
 
     /* get surface from window */
-    if (!p_vulkan_create_surface(window, vk_instance, vk_allocator, &ctx->surface)) {
+    if (!peak_vulkan_create_surface(window, vk_instance, vk_allocator, &ctx->surface)) {
         PERROR("Failed to create vulkan surface!");
         rfree(ctx);
         return NULL;
@@ -395,7 +396,9 @@ rend_vk_renderer_create(P_Window *window)
      * Descriptor Pool
      */
     {
-        RendBindingInfo bind_info = renderer->bind_info;
+        RendBindingInfo bind_info_local = {0};
+        if (bind_info) bind_info_local = *bind_info;
+        RendBindingInfo bind_info = bind_info_local;
 
         uint32_t total_ubos = 0;
         for (uint32_t i = 0; i < bind_info.ubo_binding_count; ++i) {
@@ -575,61 +578,76 @@ rend_vk_renderer_destroy(RendContextHandle handle)
 extern bool
 rend_vk_renderer_frame_begin(RendContextHandle handle)
 {
+    RendVk14Context *ctx;
+    VkDevice dev;
+    uint32_t retries;
+
     RASSERT(handle, "Invalid handle.");
 
-    RendVk14Context *ctx = (RendVk14Context *) handle;
+    ctx = (RendVk14Context *) handle;
+    dev = vk_device.logical_device;
 
-    /* check if swapchain needs recreation */
-    if (ctx->require_swapchain_recreation) {
-        PDEBUG("[REND] Awaiting device...");
-        vkDeviceWaitIdle(vk_device.logical_device);
-        PDEBUG("[REND] Recreating swapchain...");
-        rend_vk_swapchain_destroy(ctx, &ctx->swapchain);
-        rend_vk_swapchain_create(ctx, &ctx->swapchain);
-        ctx->require_swapchain_recreation = false;
-    }
+    for (retries = 0; retries < 4; retries++) {
+        uint64_t frame_res_index;
+        uint64_t wait_value;
+        VkResult acquire_image;
+        RendVkFrameResources frame_resource;
+        VkSemaphoreWaitInfo timeline_wait_info;
 
-    VkDevice dev = vk_device.logical_device;
+        if (ctx->require_swapchain_recreation) {
+            if (ctx->window && (ctx->window->width == 0 || ctx->window->height == 0))
+                return false;
+            PDEBUG("[REND] Awaiting device...");
+            vkDeviceWaitIdle(vk_device.logical_device);
+            PDEBUG("[REND] Recreating swapchain...");
+            rend_vk_swapchain_destroy(ctx, &ctx->swapchain);
+            rend_vk_swapchain_create(ctx, &ctx->swapchain);
+            ctx->require_swapchain_recreation = false;
+        }
 
-    /* wait on timeline semaphore */
-    const uint64_t frame_res_index = ctx->frame % ctx->max_frames_in_flight;
-    ctx->frame_index = frame_res_index;
+        if (ctx->max_frames_in_flight == 0)
+            return false;
 
-    const uint64_t signal_value = ctx->next_signal_value++;
-    const uint64_t wait_value = signal_value - ctx->max_frames_in_flight;
-    ctx->signal_value = signal_value;
+        /* wait on timeline semaphore */
+        frame_res_index = ctx->frame % ctx->max_frames_in_flight;
+        ctx->frame_index = frame_res_index;
 
-    VkSemaphoreWaitInfo timeline_wait_info = {
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
-        .semaphoreCount = 1,
-        .pSemaphores = &ctx->timeline_semaphore,
-        .pValues = &wait_value
-    };
+        wait_value = ctx->next_signal_value - ctx->max_frames_in_flight;
 
-    vkWaitSemaphores(vk_device.logical_device, &timeline_wait_info, UINT64_MAX);
+        timeline_wait_info = (VkSemaphoreWaitInfo) {
+            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+            .semaphoreCount = 1,
+            .pSemaphores = &ctx->timeline_semaphore,
+            .pValues = &wait_value
+        };
 
-    RendVkFrameResources frame_resource = ctx->frame_resources[frame_res_index];
-    vkResetCommandPool(dev, frame_resource.command_pool, 0);
+        vkWaitSemaphores(vk_device.logical_device, &timeline_wait_info, UINT64_MAX);
 
-    /* acquire next image */
-    VkResult acquire_image = vkAcquireNextImageKHR(
-            vk_device.logical_device,
-            ctx->swapchain.handle,
-            UINT64_MAX,
-            frame_resource.image_acquired_semaphore,
-            VK_NULL_HANDLE, 
-            &ctx->image_index);
+        frame_resource = ctx->frame_resources[frame_res_index];
+        vkResetCommandPool(dev, frame_resource.command_pool, 0);
 
-    if (acquire_image == VK_ERROR_OUT_OF_DATE_KHR) {
-        /* out of date images, may need recreating */
-        ctx->require_swapchain_recreation = true;
-        ctx->frame++;
-        return false;
-    } else if (acquire_image == VK_SUBOPTIMAL_KHR) {
-        /* requires recreation but CAN CONTINUE RENDERING */
-        ctx->require_swapchain_recreation = true;
-    }
+        /* acquire next image */
+        acquire_image = vkAcquireNextImageKHR(
+                vk_device.logical_device,
+                ctx->swapchain.handle,
+                UINT64_MAX,
+                frame_resource.image_acquired_semaphore,
+                VK_NULL_HANDLE,
+                &ctx->image_index);
 
+        if (acquire_image == VK_ERROR_OUT_OF_DATE_KHR) {
+            ctx->require_swapchain_recreation = true;
+            continue;
+        }
+        if (acquire_image == VK_SUBOPTIMAL_KHR) {
+            ctx->require_swapchain_recreation = true;
+        } else if (acquire_image != VK_SUCCESS) {
+            return false;
+        }
+
+        ctx->signal_value = ctx->next_signal_value++;
+
+        {
     VkCommandBufferBeginInfo cmd_begin_info = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
@@ -702,21 +720,20 @@ rend_vk_renderer_frame_begin(RendContextHandle handle)
     dep_info.pImageMemoryBarriers = layout_barriers;
 
     vkCmdPipelineBarrier2(frame_resource.command_buffer, &dep_info);
+        }
 
-    ctx->in_frame = true;
-    return true;
+        ctx->in_frame = true;
+        return true;
+    }
+
+    return false;
 }
 
 extern void
-rend_vk_renderer_frame_end(RendRenderer renderer, float *delta)
+rend_vk_renderer_frame_end(RendContextHandle handle, float *delta)
 {
-
-    RASSERT(renderer && (uintptr_t)renderer != 0xffffffff00000000 && "Invalid renderer. (Possible stack corruption.)");
-    RASSERT(renderer->context, "Uninitialized renderer.");
-    RASSERT(renderer->in_frame, "Must be called inside a frame.");
-    RASSERT(!renderer->in_pass, "Must not be called inside a render pass.");
-
-    RendVk14Context *ctx = (RendVk14Context *)renderer->context;
+    RendVk14Context *ctx = (RendVk14Context *)handle;
+    RASSERT(ctx, "Uninitialized renderer.");
 
     RendVkFrameResources res = ctx->frame_resources[ctx->frame_index];
 
@@ -1909,11 +1926,23 @@ rend_vk_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain)
     RASSERT(swapchain && "No swapchain provided.");
 
     VkSurfaceCapabilitiesKHR surface_caps;
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk_device.physical_device, ctx->surface, &surface_caps);
-    uint32_t width = surface_caps.currentExtent.width;
-    uint32_t height = surface_caps.currentExtent.height;
+    uint32_t width;
+    uint32_t height;
+    VkExtent2D swapchain_extent;
 
-    VkExtent2D swapchain_extent = {width, height};
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk_device.physical_device, ctx->surface, &surface_caps);
+    width = surface_caps.currentExtent.width;
+    height = surface_caps.currentExtent.height;
+
+    /* 0xffffffff means the surface size is defined by the swapchain extent */
+    if (width == 0xffffffffu || height == 0xffffffffu) {
+        width = ctx->window ? ctx->window->width : 0;
+        height = ctx->window ? ctx->window->height : 0;
+    }
+    if (width == 0) width = 1;
+    if (height == 0) height = 1;
+
+    swapchain_extent = (VkExtent2D){width, height};
 
     ctx->max_frames_in_flight = REND_MIN_FRAMES_IN_FLIGHT;
 
@@ -1921,8 +1950,15 @@ rend_vk_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain)
         ctx->max_frames_in_flight = surface_caps.minImageCount;
     }
 
-    if (surface_caps.maxImageCount < ctx->max_frames_in_flight) {
+    /* maxImageCount == 0 means there is no maximum */
+    if (surface_caps.maxImageCount > 0 && surface_caps.maxImageCount < ctx->max_frames_in_flight) {
         ctx->max_frames_in_flight = surface_caps.maxImageCount;
+    }
+    if (ctx->max_frames_in_flight > REND_MAX_FRAMES_IN_FLIGHT) {
+        ctx->max_frames_in_flight = REND_MAX_FRAMES_IN_FLIGHT;
+    }
+    if (ctx->max_frames_in_flight == 0) {
+        ctx->max_frames_in_flight = 1;
     }
 
     bool found = false;

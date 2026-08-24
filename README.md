@@ -16,6 +16,7 @@ Use at your own risk.
 | ------ | ------------------------------------------ |
 | Peak   | Single-header platform library that automatically links the write system libraries. |
 | Draw   | Simple RGBA software raster                |
+| Math   | Math for games. Speed over precision.|
 | Poof   | Build software without going insane.       |
 | Rend   | Modern graphics API layer.                 |
 | Cool   | Render HTML by calling functions.          |
@@ -30,12 +31,3 @@ because it works.
 
 Documentation can be found on [godgun.net](https://godgun.net/docs) (results may vary).
 We recommend just reading the header files. It's all there.
-
-## Archive 
-
-Archived projects are incomplete with no intentions of being completed
-or just have been succeeded.
-
-| Name   | Description                                |
-| ------ | ------------------------------------------ |
-| Podium | Platform layer & kitchen sink. Underrated. |

@@ -436,7 +436,7 @@ function updateMemoryViews() {
   HEAPU32 = new Uint32Array(b);
   
   HEAPF64 = new Float64Array(b);
-  HEAP64 = new BigInt64Array(b);
+  
   
 }
 
@@ -833,44 +833,6 @@ async function createWasm() {
   var __abort_js = () =>
       abort('native code called abort()');
 
-  var _emscripten_get_now = () => performance.now();
-  
-  var _emscripten_date_now = () => Date.now();
-  
-  var nowIsMonotonic = 1;
-  
-  var checkWasiClock = (clock_id) => clock_id >= 0 && clock_id <= 3;
-  
-  var INT53_MAX = 9007199254740992;
-  
-  var INT53_MIN = -9007199254740992;
-  var bigintToI53Checked = (num) => (num < INT53_MIN || num > INT53_MAX) ? NaN : Number(num);
-  
-  /** not-@type {!BigInt64Array} */
-  var HEAP64;
-  function _clock_time_get(clk_id, ignored_precision, ptime) {
-    ignored_precision = bigintToI53Checked(ignored_precision);
-  
-  
-      if (!checkWasiClock(clk_id)) {
-        return 28;
-      }
-      var now;
-      // all wasi clocks but realtime are monotonic
-      if (clk_id === 0) {
-        now = _emscripten_date_now();
-      } else if (nowIsMonotonic) {
-        now = _emscripten_get_now();
-      } else {
-        return 52;
-      }
-      // "now" is in ms, and wasi times are in ns.
-      var nsec = Math.round(now * 1000 * 1000);
-      HEAP64[((ptime)>>3)] = BigInt(nsec);
-      return 0;
-    ;
-  }
-
   
   var _emscripten_set_main_loop_timing = (mode, value) => {
       MainLoop.timingMode = mode;
@@ -927,6 +889,7 @@ async function createWasm() {
       return 0;
     };
   
+  var _emscripten_get_now = () => performance.now();
   
   
   var runtimeKeepaliveCounter = 0;
@@ -1174,7 +1137,6 @@ async function createWasm() {
       MainLoop.pause();
       MainLoop.func = null;
     };
-
 
   var getHeapMax = () =>
       // Stay one Wasm page short of 4GB: while e.g. Chrome is able to allocate
@@ -1605,6 +1567,10 @@ async function createWasm() {
       abort('fd_close called without SYSCALLS_REQUIRE_FILESYSTEM');
     };
 
+  var INT53_MAX = 9007199254740992;
+  
+  var INT53_MIN = -9007199254740992;
+  var bigintToI53Checked = (num) => (num < INT53_MIN || num > INT53_MAX) ? NaN : Number(num);
   function _fd_seek(fd, offset, whence, newOffset) {
     offset = bigintToI53Checked(offset);
   
@@ -1683,6 +1649,7 @@ async function createWasm() {
       stringToUTF8(str, ret, size);
       return ret;
     };
+
 
 
 
@@ -1851,6 +1818,7 @@ Module['FS_createPreloadedFile'] = FS.createPreloadedFile;
   'getCallstack',
   'convertPCtoSourceLocation',
   'getEnvStrings',
+  'checkWasiClock',
   'wasiRightsToMuslOFlags',
   'wasiOFlagsToMuslOFlags',
   'initRandomFill',
@@ -1985,7 +1953,6 @@ missingLibrarySymbols.forEach(missingLibrarySymbol)
   'restoreOldWindowedStyle',
   'UNWIND_CACHE',
   'ExitStatus',
-  'checkWasiClock',
   'flush_NO_FILESYSTEM',
   'emSetImmediate',
   'emClearImmediate_deps',
@@ -2174,13 +2141,16 @@ function checkIncomingModuleAPI() {
 }
 function peak_web_dom_open(id,w,h) { var name = UTF8ToString(id); var c = document.getElementById(name); if (!c) { c = document.createElement('canvas'); c.id = name; document.body.appendChild(c); } c.width = w; c.height = h; c.tabIndex = 0; c.focus(); }
 function peak_web_dom_present(id,w,h,pixels) { var c = document.getElementById(UTF8ToString(id)); if (!c) return; var ctx = c.getContext('2d'); if (c.width !== w || c.height !== h) { c.width = w; c.height = h; } var img = ctx.createImageData(w, h); img.data.set(HEAPU8.subarray(pixels, pixels + w * h * 4)); ctx.putImageData(img, 0, 0); }
+function peak_web_audio_dom_start(channels,rate,frames,ptr) { var AC = window.AudioContext || window.webkitAudioContext; var ctx, proc, i, c, heap, off, ch; if (!AC || Module._peak_web_audio) return 0; ctx = new AC({ sampleRate: rate }); if (ctx.sampleRate !== rate) { ctx.close(); return 0; } proc = ctx.createScriptProcessor(frames, 0, channels); proc.onaudioprocess = function(e) { Module._peak_internal_web_audio_fill(ptr, frames); heap = Module.HEAP16; off = ptr >> 1; for (c = 0; c < channels; c++) { ch = e.outputBuffer.getChannelData(c); for (i = 0; i < frames; i++) ch[i] = heap[off + i * channels + c] / 32768.0; } }; proc.connect(ctx.destination); ctx.resume(); Module._peak_web_audio = { ctx: ctx, proc: proc }; return 1; }
+function peak_web_audio_dom_stop() { var a = Module._peak_web_audio; if (!a) return; a.proc.disconnect(); a.ctx.close(); Module._peak_web_audio = null; }
 
 // Imports from the Wasm binary.
+var _peak_internal_web_audio_fill = Module['_peak_internal_web_audio_fill'] = makeInvalidEarlyAccess('_peak_internal_web_audio_fill');
 var _main = Module['_main'] = makeInvalidEarlyAccess('_main');
 var _fflush = makeInvalidEarlyAccess('_fflush');
+var _strerror = makeInvalidEarlyAccess('_strerror');
 var _emscripten_stack_get_end = makeInvalidEarlyAccess('_emscripten_stack_get_end');
 var _emscripten_stack_get_base = makeInvalidEarlyAccess('_emscripten_stack_get_base');
-var _strerror = makeInvalidEarlyAccess('_strerror');
 var _malloc = makeInvalidEarlyAccess('_malloc');
 var _emscripten_stack_init = makeInvalidEarlyAccess('_emscripten_stack_init');
 var _emscripten_stack_get_free = makeInvalidEarlyAccess('_emscripten_stack_get_free');
@@ -2193,11 +2163,12 @@ var wasmMemory = makeInvalidEarlyAccess('wasmMemory');
 var wasmTable = makeInvalidEarlyAccess('wasmTable');
 
 function assignWasmExports(wasmExports) {
+  assert(typeof wasmExports['peak_internal_web_audio_fill'] != 'undefined', 'missing Wasm export: peak_internal_web_audio_fill');
   assert(typeof wasmExports['__main_argc_argv'] != 'undefined', 'missing Wasm export: __main_argc_argv');
   assert(typeof wasmExports['fflush'] != 'undefined', 'missing Wasm export: fflush');
+  assert(typeof wasmExports['strerror'] != 'undefined', 'missing Wasm export: strerror');
   assert(typeof wasmExports['emscripten_stack_get_end'] != 'undefined', 'missing Wasm export: emscripten_stack_get_end');
   assert(typeof wasmExports['emscripten_stack_get_base'] != 'undefined', 'missing Wasm export: emscripten_stack_get_base');
-  assert(typeof wasmExports['strerror'] != 'undefined', 'missing Wasm export: strerror');
   assert(typeof wasmExports['malloc'] != 'undefined', 'missing Wasm export: malloc');
   assert(typeof wasmExports['emscripten_stack_init'] != 'undefined', 'missing Wasm export: emscripten_stack_init');
   assert(typeof wasmExports['emscripten_stack_get_free'] != 'undefined', 'missing Wasm export: emscripten_stack_get_free');
@@ -2206,11 +2177,12 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['emscripten_stack_get_current'] != 'undefined', 'missing Wasm export: emscripten_stack_get_current');
   assert(typeof wasmExports['memory'] != 'undefined', 'missing Wasm export: memory');
   assert(typeof wasmExports['__indirect_function_table'] != 'undefined', 'missing Wasm export: __indirect_function_table');
+  _peak_internal_web_audio_fill = Module['_peak_internal_web_audio_fill'] = createExportWrapper('peak_internal_web_audio_fill', wasmExports['peak_internal_web_audio_fill'], 2);
   _main = Module['_main'] = createExportWrapper('__main_argc_argv', wasmExports['__main_argc_argv'], 2);
   _fflush = createExportWrapper('fflush', wasmExports['fflush'], 1);
+  _strerror = createExportWrapper('strerror', wasmExports['strerror'], 1);
   _emscripten_stack_get_end = wasmExports['emscripten_stack_get_end'];
   _emscripten_stack_get_base = wasmExports['emscripten_stack_get_base'];
-  _strerror = createExportWrapper('strerror', wasmExports['strerror'], 1);
   _malloc = createExportWrapper('malloc', wasmExports['malloc'], 1);
   _emscripten_stack_init = wasmExports['emscripten_stack_init'];
   _emscripten_stack_get_free = wasmExports['emscripten_stack_get_free'];
@@ -2227,11 +2199,7 @@ var wasmImports = {
   /** @export */
   _abort_js: __abort_js,
   /** @export */
-  clock_time_get: _clock_time_get,
-  /** @export */
   emscripten_cancel_main_loop: _emscripten_cancel_main_loop,
-  /** @export */
-  emscripten_get_now: _emscripten_get_now,
   /** @export */
   emscripten_resize_heap: _emscripten_resize_heap,
   /** @export */
@@ -2252,6 +2220,8 @@ var wasmImports = {
   fd_seek: _fd_seek,
   /** @export */
   fd_write: _fd_write,
+  /** @export */
+  peak_web_audio_dom_stop,
   /** @export */
   peak_web_dom_open
 };

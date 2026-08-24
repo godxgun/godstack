@@ -186,3 +186,121 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 	struct peak_web_win *w = intern ? intern->w : NULL;
 	return w ? peak_q_pop(&w->q, ev) : 0;
 }
+
+#define PEAK_AUDIO_FRAMES 1024
+
+static struct {
+	int run;
+	uint32_t channels;
+	int16_t *buf;
+	void (*fill)(int16_t *out, size_t frames, void *userdata);
+	void *userdata;
+} peak_web_audio;
+
+void EMSCRIPTEN_KEEPALIVE
+peak_internal_web_audio_fill(int16_t *out, int frames)
+{
+	size_t n;
+
+	if (!peak_web_audio.run || !out || frames <= 0)
+		return;
+	n = (size_t)frames * peak_web_audio.channels;
+	memset(out, 0, n * sizeof(int16_t));
+	if (peak_web_audio.fill)
+		peak_web_audio.fill(out, (size_t)frames, peak_web_audio.userdata);
+}
+
+EM_JS(int, peak_web_audio_dom_start, (int channels, int rate, int frames, uintptr_t ptr), {
+	var AC = window.AudioContext || window.webkitAudioContext;
+	var ctx, proc, i, c, heap, off, ch;
+	if (!AC || Module._peak_web_audio)
+		return 0;
+	ctx = new AC({ sampleRate: rate });
+	if (ctx.sampleRate !== rate) {
+		ctx.close();
+		return 0;
+	}
+	proc = ctx.createScriptProcessor(frames, 0, channels);
+	proc.onaudioprocess = function(e) {
+		Module._peak_internal_web_audio_fill(ptr, frames);
+		heap = Module.HEAP16;
+		off = ptr >> 1;
+		for (c = 0; c < channels; c++) {
+			ch = e.outputBuffer.getChannelData(c);
+			for (i = 0; i < frames; i++)
+				ch[i] = heap[off + i * channels + c] / 32768.0;
+		}
+	};
+	proc.connect(ctx.destination);
+	ctx.resume();
+	Module._peak_web_audio = { ctx: ctx, proc: proc };
+	return 1;
+});
+
+EM_JS(void, peak_web_audio_dom_stop, (void), {
+	var a = Module._peak_web_audio;
+	if (!a)
+		return;
+	a.proc.disconnect();
+	a.ctx.close();
+	Module._peak_web_audio = null;
+});
+
+static int
+peak_platform_audio_start(uint32_t channels, uint32_t rate, void (*fill)(int16_t *out, size_t frames, void *userdata), void *userdata)
+{
+	if (channels > 32)
+		return 0;
+	if (!(peak_web_audio.buf = calloc((size_t)channels * PEAK_AUDIO_FRAMES, sizeof(int16_t))))
+		return 0;
+	peak_web_audio.fill = fill;
+	peak_web_audio.userdata = userdata;
+	peak_web_audio.channels = channels;
+	peak_web_audio.run = 1;
+	if (!peak_web_audio_dom_start((int)channels, (int)rate, PEAK_AUDIO_FRAMES, (uintptr_t)peak_web_audio.buf)) {
+		free(peak_web_audio.buf);
+		peak_web_audio.buf = NULL;
+		peak_web_audio.run = 0;
+		peak_web_audio.fill = NULL;
+		return 0;
+	}
+	return 1;
+}
+
+static uint64_t
+peak_platform_get_time(void)
+{
+	return (uint64_t)(emscripten_get_now() * 1000000.0);
+}
+
+static void
+peak_platform_sleep_ns(int64_t ns)
+{
+	if (ns <= 0) return;
+	emscripten_sleep((unsigned)(ns / 1000000));
+}
+
+static const char **
+peak_platform_vulkan_get_extensions(uint32_t *count)
+{
+	if (count) *count = 0;
+	return NULL;
+}
+
+static int
+peak_platform_vulkan_create_surface(PeakWindowInternal *w, void *instance, const void *allocator, void *out_surface)
+{
+	(void)w; (void)instance; (void)allocator; (void)out_surface;
+	return 0;
+}
+
+static void
+peak_platform_audio_stop(void)
+{
+	peak_web_audio.run = 0;
+	peak_web_audio_dom_stop();
+	free(peak_web_audio.buf);
+	peak_web_audio.buf = NULL;
+	peak_web_audio.fill = NULL;
+	peak_web_audio.userdata = NULL;
+}

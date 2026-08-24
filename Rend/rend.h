@@ -6,7 +6,7 @@
  * - Pushes data to the GPU in a highly configurable and STABLE fashion.
  * - Is not responsible for initializing windows.
  * - Is not responsible for compiling shaders.
- * - Depends on PODIUM to be cross-platform.
+ * - Depends on Peak to be cross-platform.
  *
  * =========================================================================== */
 
@@ -15,11 +15,15 @@
 
 #define REND_MAJOR 1  // breaking API changes
 #define REND_MINOR 0  // non-breaking features
-#define REND_PATCH 1  // non-breaking patches and bug fixes
+#define REND_PATCH 3  // non-breaking patches and bug fixes
                     
-#define P_MODULE_VULKAN
-#define P_MODULE_MATH
-#include "podium.h"
+#ifndef PEAK_VULKAN
+#define PEAK_VULKAN
+#endif
+#if defined(REND_DEBUG) && !defined(P_LOG_DEBUG_ENABLED)
+#define P_LOG_DEBUG_ENABLED 1
+#endif
+#include "peak.h"
 
 typedef struct rend_renderer_t* RendRenderer; // renderer target handle
 typedef struct rend_pipeline_t* RendPipeline; // represents a baked shader + gpu pipeline state (blend mode, depth, vertex format)
@@ -79,7 +83,7 @@ typedef struct {
 extern void rend_quit(void); // Will free ALL resources created by the library such as RendRenderer, RendPipeline, RendBuffer and RendTexture.
 
 /* Renderer */
-extern RendRenderer rend_renderer_create(P_Window*, RendBackendType backend, void* device, bool vsync, RendBindingInfo *bind_info); // Create Renderer that renders to a target window with 
+extern RendRenderer rend_renderer_create(PeakWindow*, RendBackendType backend, void* device, bool vsync, RendBindingInfo *bind_info); // Create Renderer that renders to a target window with 
 extern void         rend_renderer_destroy(RendRenderer renderer); // Destroy renderer. Unless you need to freely create and destroy renderers, you can rely on rend_quit to clean up.
 extern bool         rend_renderer_frame_begin(RendRenderer renderer); // May fail. Acquires backbuffer and starts recording commands!
 extern void         rend_renderer_frame_end(RendRenderer renderer, float *delta); // Stops recording commands and presents the contents to the screen.
@@ -278,12 +282,14 @@ enum RendBufferType_t {
  * 0.11.2 - @vasco - cool beans
  * 1.0.0 - @vasco -  finished API release
  * 1.0.1 - @vasco - render pass that targets textures 
+ * 1.0.2 - @vasco - Peak instead of Podium
+ * 1.0.3 - @vasco - frame_begin no longer sticks in_frame or burns timeline on OUT_OF_DATE
  *
  * 1.0.0 finished API release
  *
  * -------------------------------------------
  *
- * 1.1.0 shader hot realoading plugin (need to add settings managament and dll loading to Podium)
+ * 1.1.0 shader hot reloading plugin (need settings management and dll loading in Peak)
  */
 
 /*

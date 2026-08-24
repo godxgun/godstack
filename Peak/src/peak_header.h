@@ -10,8 +10,8 @@
 #define PEAK_H
 
 #define PEAK_MAJOR "0"
-#define PEAK_MINOR "1"
-#define PEAK_PATCH "1"
+#define PEAK_MINOR "5"
+#define PEAK_PATCH "2"
 
 /* CHANGE LOG 
  * 0.0.0 - @vasco - prototyping
@@ -21,7 +21,12 @@
  * 0.2.0 - @vasco - multiple windows, major-ish API changes.
  * 0.3.0 - @vasco - web via emscripten
  * 0.4.0 - @vasco - win32
+ * 0.5.0 - @vasco - audio start/stop, s16le pull callback
+ * 0.5.1 - @vasco - log, file, time, vulkan extensions
+ * 0.5.2 - @vasco - vulkan surface from window
  */
+
+#define NANOS_PER_SEC 1000000000ull
 
 #include <assert.h>
 #include <stdint.h>
@@ -73,6 +78,62 @@
     #define PEAK static inline
 #else
     #define PEAK extern
+#endif
+
+typedef enum PeakLogLevel {
+    P_LOG_LEVEL_FATAL = 0,
+    P_LOG_LEVEL_ERROR,
+    P_LOG_LEVEL_WARN,
+    P_LOG_LEVEL_INFO,
+    P_LOG_LEVEL_DEBUG,
+    P_LOG_LEVEL_TRACE,
+    P_COUNT_LOG_LEVEL
+} PeakLogLevel;
+
+#define P_PREFIX_LEN 7
+static const char *p_prefix[P_COUNT_LOG_LEVEL] = {
+    [P_LOG_LEVEL_FATAL] = "[FATAL]",
+    [P_LOG_LEVEL_ERROR] = "[ERROR]",
+    [P_LOG_LEVEL_WARN]  = "[WARNI]",
+    [P_LOG_LEVEL_INFO]  = "[INFOR]",
+    [P_LOG_LEVEL_DEBUG] = "[DEBUG]",
+    [P_LOG_LEVEL_TRACE] = "[TRACE]",
+};
+
+#ifndef P_LOG_WARN_ENABLED
+#define P_LOG_WARN_ENABLED 1
+#endif
+#ifndef P_LOG_INFO_ENABLED
+#define P_LOG_INFO_ENABLED 1
+#endif
+#ifndef P_LOG_DEBUG_ENABLED
+#define P_LOG_DEBUG_ENABLED 0
+#endif
+#ifndef P_LOG_TRACE_ENABLED
+#define P_LOG_TRACE_ENABLED 0
+#endif
+
+#define PFATAL(message, ...) peak_log_printf(P_LOG_LEVEL_FATAL, message, ##__VA_ARGS__)
+#define PERROR(message, ...) peak_log_printf(P_LOG_LEVEL_ERROR, message, ##__VA_ARGS__)
+#if P_LOG_WARN_ENABLED == 1
+#define PWARN(message, ...)  peak_log_printf(P_LOG_LEVEL_WARN, message, ##__VA_ARGS__)
+#else
+#define PWARN(message, ...)
+#endif
+#if P_LOG_INFO_ENABLED == 1
+#define PINFO(message, ...)  peak_log_printf(P_LOG_LEVEL_INFO, message, ##__VA_ARGS__)
+#else
+#define PINFO(message, ...)
+#endif
+#if P_LOG_DEBUG_ENABLED == 1
+#define PDEBUG(message, ...) peak_log_printf(P_LOG_LEVEL_DEBUG, message, ##__VA_ARGS__)
+#else
+#define PDEBUG(message, ...)
+#endif
+#if P_LOG_TRACE_ENABLED == 1
+#define PTRACE(message, ...) peak_log_printf(P_LOG_LEVEL_TRACE, message, ##__VA_ARGS__)
+#else
+#define PTRACE(message, ...)
 #endif
 
 typedef enum {
@@ -130,22 +191,49 @@ typedef struct {
 typedef struct peak_window_internal_t PeakWindowInternal;
 typedef struct PeakWindow PeakWindow;  
 
-/* Public API */
+/* Initialize the platform. */
 PEAK int  peak_init(void); // Initialize platform context and load necessary DLLs.
 PEAK void peak_quit(void); // Close platform context.
+
+/* Do sexy stuff with the windows. */
 PEAK PeakWindow peak_window_open(const char *name, uint32_t width, uint32_t height, uint32_t flags); // Open a window.
 PEAK void       peak_window_close(PeakWindow *window); // Close a window.
 PEAK void       peak_window_run(PeakWindow *win, int (*peak_tick)(PeakWindow *win, void *userdata), void *userdata); // Hijacking the main loop makes life easier on platforms like web
 PEAK int        peak_window_epoll(PeakWindow *win, PeakEvent *ev); // Poll a window for events.
 PEAK uint32_t*  peak_window_backbuffer(PeakWindow *win, size_t *width, size_t *height); // Get the windows backbuffer.
-PEAK void       peak_window_clear(PeakWindow *win, float r, float g, float b, float a);
-PEAK void       peak_window_present(PeakWindow *win);
+PEAK void       peak_window_clear(PeakWindow *win, float r, float g, float b, float a); // Clear window to color.
+PEAK void       peak_window_present(PeakWindow *win); // Present window backbuffer.
+
+/* Play some tunes. */
+PEAK int peak_audio_start(uint32_t channels, uint32_t rate, void (*fill)(int16_t *out, size_t frames, void *userdata), void *userdata); // Device pulls interleaved s16le
+PEAK void peak_audio_stop(void); // Stop audio.
+                        
+/* Time */
+PEAK uint64_t peak_get_time(void); // Get time in nanoseconds.
+PEAK void peak_sleep_ns(int64_t ns); // Sleep for nanoseconds!!!
+
+/* File */
+PEAK int peak_file_exists(const char *path); // Does this file exist?
+PEAK void *peak_file_alloc(const char *path, unsigned long *buf_size); // Allocate an entire file.
+
+/* Graphics API bull... */
+PEAK const char **peak_vulkan_get_extensions(uint32_t *count); // Get vulkan extensions.
+PEAK int peak_vulkan_create_surface(PeakWindow *win, void *instance, const void *allocator, void *out_surface); // Create a vulkan surface for a window. Needs PEAK_VULKAN.
+
+/* Debug your amazing code. */
+PEAK void peak_log_printf(PeakLogLevel level, const char *src, ...); // Printf with log level.
+PEAK void *peak_debug_malloc_impl(size_t size, const char *file, int line, const char *func); // Malloc for debuggin.
+PEAK void peak_debug_free_impl(void *ptr, const char *file, int line, const char *func); // Free for debugging.
+PEAK void *peak_debug_realloc_impl(void *ptr, size_t size, const char *file, int line, const char *func); // Realloc for debugging.
+PEAK void peak_debug_memory_report(void); // Report memory.
 
 #endif // PEAK_H
 
 #ifdef PEAK_IMPLEMENTATION 
 #undef PEAK_IMPLEMENTATION
 
+/* NOTE(vasco): Some platforms require an event queue 
+ * while others have it built in. */
 #if defined(PEAK_WIN32) || defined(PEAK_WEB)
 #define PEAK_Q 64
 
@@ -182,7 +270,8 @@ peak_q_pop(PeakQ *q, PeakEvent *ev)
 #include "p_emscripten.c" // <REPLACE>
 #endif
 
-/* We define PeakWindow only when we know the type of peak_window_internal_t */
+/* NOTE(vasco): We define PeakWindow only when
+ * we know the type of peak_window_internal_t */
 struct PeakWindow { 
     PeakWindowInternal internal;
     int (*tick)(struct PeakWindow *win, void *userdata);
@@ -191,10 +280,12 @@ struct PeakWindow {
     uint32_t width;
     uint32_t height;
     uint32_t bufsize;
+    uint16_t *audio; // LRLRLR
     int running;
 };
 
 
+#include "p_log.c" // <REPLACE>
 #include "peak.c" // <REPLACE>
 
 #endif // PEAK_IMPLEMENTATION

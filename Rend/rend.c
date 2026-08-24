@@ -75,7 +75,7 @@ rend_quit()
 }
 
 extern RendRenderer
-rend_renderer_create(P_Window *target, RendBackendType backend, void* device, bool vsync, RendBindingInfo *bind_info)
+rend_renderer_create(PeakWindow *target, RendBackendType backend, void* device, bool vsync, RendBindingInfo *bind_info)
 {
 
     RendRenderer rend = rmalloc(sizeof *rend);
@@ -93,7 +93,7 @@ rend_renderer_create(P_Window *target, RendBackendType backend, void* device, bo
     rend->window = target;
     rend->pipeline_head = 0;
 
-    rend->context = rend_vtables[rend->backend].renderer_create();
+    rend->context = rend_vtables[rend->backend].renderer_create(target, bind_info);
     if (rend->context) {
         return rend;
     }
@@ -124,13 +124,16 @@ rend_renderer_destroy(RendRenderer renderer)
 extern bool
 rend_renderer_frame_begin(RendRenderer renderer)
 {
+    bool ok;
+
     RASSERT(renderer && (uintptr_t)renderer != 0xffffffff00000000 && "Invalid renderer. (Possible stack corruption.)");
     RASSERT(renderer->context, "Uninitialized renderer.");
     RASSERT(!renderer->in_frame, "Must not be called inside a frame.");
     RASSERT(!renderer->in_pass, "Must not be called inside a render pass.");
 
-    renderer->in_frame = 1;
-    return rend_vtables[renderer->backend].renderer_frame_begin(renderer->context);
+    ok = rend_vtables[renderer->backend].renderer_frame_begin(renderer->context);
+    renderer->in_frame = ok ? 1 : 0;
+    return ok;
 }
 
 extern void
