@@ -107,19 +107,10 @@ typedef struct RendVkHostArena {
 	size_t curr_offset;
 } RendVkHostArena;
 
-#define REND_VK_HOST_ARENA_SIZE (1ull * 1024ull * 1024ull)
-#define REND_VK_CMD_ARENA_SIZE  (1ull * 1024ull * 1024ull)
 #define REND_VK_HOST_DEFAULT_ALIGNMENT (2 * sizeof(void *))
 
 static bool rend_vk_is_power_of_two(uintptr_t x);
 static uintptr_t rend_vk_align_forward(uintptr_t ptr, size_t align);
-static void rend_vk_host_arena_init(void);
-static void rend_vk_host_arena_destroy(void);
-static void rend_vk_host_arena_init_buf(RendVkHostArena *a, void *backing_buffer, size_t backing_buffer_length);
-static void *rend_vk_host_arena_alloc_align(RendVkHostArena *a, size_t size, size_t align);
-static void rend_vk_host_arena_free(RendVkHostArena *a, void *ptr);
-static void *rend_vk_host_arena_resize_align(RendVkHostArena *a, void *old_memory, size_t old_size, size_t new_size, size_t align);
-static void rend_vk_host_arena_free_all(RendVkHostArena *a);
 
 static void *rend_vk_allocator_alloc(void *pUserData, size_t size, size_t alignment, VkSystemAllocationScope allocationScope);
 static void *rend_vk_allocator_realloc(void *pUserData, void *pOriginal, size_t size, size_t alignment, VkSystemAllocationScope allocationScope);
@@ -127,13 +118,8 @@ static void rend_vk_allocator_free(void *pUserData, void *pMemory);
 static void rend_vk_allocator_internal_notification(void *pUserData, size_t size, VkInternalAllocationType allocationType, VkSystemAllocationScope allocationScope);
 static void rend_vk_allocator_free_notification(void *pUserData, size_t size, VkInternalAllocationType allocationType, VkSystemAllocationScope allocationScope);
 
-static RendVkHostArena vk_host_arena;
-static RendVkHostArena vk_cmd_arena;
-static size_t vk_cmd_live;
-static int vk_host_arena_lock;
-
 static VkAllocationCallbacks rend_vk_allocator = {
-	.pUserData = &vk_host_arena,
+	.pUserData = NULL,
 	.pfnAllocation = rend_vk_allocator_alloc,
 	.pfnReallocation = rend_vk_allocator_realloc,
 	.pfnFree = rend_vk_allocator_free,
@@ -238,185 +224,6 @@ rend_vk_align_forward(uintptr_t ptr, size_t align)
 	return p;
 }
 
-static void
-rend_vk_host_lock(void)
-{
-	while (__sync_lock_test_and_set(&vk_host_arena_lock, 1))
-		;
-}
-
-static void
-rend_vk_host_unlock(void)
-{
-	__sync_lock_release(&vk_host_arena_lock);
-}
-
-static void
-rend_vk_host_arena_init_buf(RendVkHostArena *a, void *backing_buffer, size_t backing_buffer_length)
-{
-	a->buf = (unsigned char *)backing_buffer;
-	a->buf_len = backing_buffer_length;
-	a->curr_offset = 0;
-	a->prev_offset = 0;
-}
-
-static void *
-rend_vk_host_arena_alloc_align(RendVkHostArena *a, size_t size, size_t align)
-{
-	uintptr_t curr_ptr;
-	uintptr_t offset;
-	void *ptr;
-
-	curr_ptr = (uintptr_t)a->buf + (uintptr_t)a->curr_offset;
-	offset = rend_vk_align_forward(curr_ptr, align);
-	offset -= (uintptr_t)a->buf;
-
-	if (offset + size <= a->buf_len) {
-		ptr = &a->buf[offset];
-		a->prev_offset = offset;
-		a->curr_offset = offset + size;
-		memset(ptr, 0, size);
-		return ptr;
-	}
-	return NULL;
-}
-
-static void
-rend_vk_host_arena_free(RendVkHostArena *a, void *ptr)
-{
-	(void)a;
-	(void)ptr;
-}
-
-static void *
-rend_vk_host_arena_resize_align(RendVkHostArena *a, void *old_memory, size_t old_size, size_t new_size, size_t align)
-{
-	unsigned char *old_mem;
-	void *new_memory;
-	size_t copy_size;
-
-	old_mem = (unsigned char *)old_memory;
-
-	assert(rend_vk_is_power_of_two(align));
-
-	if (old_mem == NULL || old_size == 0) {
-		return rend_vk_host_arena_alloc_align(a, new_size, align);
-	} else if (a->buf <= old_mem && old_mem < a->buf + a->buf_len) {
-		if (a->buf + a->prev_offset == old_mem) {
-			if (a->prev_offset + new_size > a->buf_len) {
-				return NULL;
-			}
-			a->curr_offset = a->prev_offset + new_size;
-			if (new_size > old_size) {
-				memset(&a->buf[a->prev_offset + old_size], 0, new_size - old_size);
-			}
-			return old_memory;
-		} else {
-			new_memory = rend_vk_host_arena_alloc_align(a, new_size, align);
-			if (!new_memory) {
-				return NULL;
-			}
-			copy_size = old_size < new_size ? old_size : new_size;
-			memmove(new_memory, old_memory, copy_size);
-			return new_memory;
-		}
-	} else {
-		assert(0 && "Memory is out of bounds of the buffer in this arena");
-		return NULL;
-	}
-}
-
-static void
-rend_vk_host_arena_free_all(RendVkHostArena *a)
-{
-	a->curr_offset = 0;
-	a->prev_offset = 0;
-}
-
-static void
-rend_vk_host_arena_create(RendVkHostArena *a, size_t size)
-{
-	void *backing;
-
-	backing = malloc(size);
-	assert(backing && "Vulkan host arena backing buffer");
-	rend_vk_host_arena_init_buf(a, backing, size);
-}
-
-static void
-rend_vk_host_arena_release(RendVkHostArena *a)
-{
-	if (!a->buf) {
-		return;
-	}
-	free(a->buf);
-	a->buf = NULL;
-	a->buf_len = 0;
-	rend_vk_host_arena_free_all(a);
-}
-
-static void
-rend_vk_host_arena_init(void)
-{
-	if (vk_host_arena.buf) {
-		return;
-	}
-	rend_vk_host_arena_create(&vk_host_arena, REND_VK_HOST_ARENA_SIZE);
-	rend_vk_host_arena_create(&vk_cmd_arena, REND_VK_CMD_ARENA_SIZE);
-	vk_cmd_live = 0;
-}
-
-static void
-rend_vk_host_arena_destroy(void)
-{
-	rend_vk_host_arena_release(&vk_host_arena);
-	rend_vk_host_arena_release(&vk_cmd_arena);
-	vk_cmd_live = 0;
-}
-
-static int
-rend_vk_host_arena_contains(const RendVkHostArena *a, const void *p)
-{
-	const unsigned char *c;
-
-	if (!a->buf || !p) {
-		return 0;
-	}
-	c = p;
-	return c >= a->buf && c < a->buf + a->buf_len;
-}
-
-static RendVkHostArena *
-rend_vk_host_arena_for_scope(VkSystemAllocationScope scope)
-{
-	if (scope == VK_SYSTEM_ALLOCATION_SCOPE_COMMAND) {
-		return &vk_cmd_arena;
-	}
-	return &vk_host_arena;
-}
-
-static RendVkHostArena *
-rend_vk_host_arena_for_ptr(void *p)
-{
-	if (rend_vk_host_arena_contains(&vk_cmd_arena, p)) {
-		return &vk_cmd_arena;
-	}
-	return &vk_host_arena;
-}
-
-static void
-rend_vk_cmd_release_one(void)
-{
-	if (vk_cmd_live == 0) {
-		return;
-	}
-	vk_cmd_live--;
-	if (vk_cmd_live == 0) {
-		rend_vk_host_arena_free_all(&vk_cmd_arena);
-		PTRACE("[VK_ARENA] command rewind");
-	}
-}
-
 static size_t
 rend_vk_host_header_pad(size_t alignment)
 {
@@ -426,13 +233,13 @@ rend_vk_host_header_pad(size_t alignment)
 static void *
 rend_vk_allocator_alloc(void *pUserData, size_t size, size_t alignment, VkSystemAllocationScope allocationScope)
 {
-	RendVkHostArena *arena;
 	size_t pad;
 	unsigned char *block;
 	unsigned char *user;
 	RendVkAllocatorHeader *header;
 
 	(void)pUserData;
+	(void)allocationScope;
 	if (size == 0) {
 		return NULL;
 	}
@@ -440,39 +247,26 @@ rend_vk_allocator_alloc(void *pUserData, size_t size, size_t alignment, VkSystem
 		alignment = REND_VK_HOST_DEFAULT_ALIGNMENT;
 	}
 
-	arena = rend_vk_host_arena_for_scope(allocationScope);
 	pad = rend_vk_host_header_pad(alignment);
-
-	rend_vk_host_lock();
-	block = rend_vk_host_arena_alloc_align(arena, pad + size, alignment);
-	if (block && arena == &vk_cmd_arena) {
-		vk_cmd_live++;
-	}
-	rend_vk_host_unlock();
-	if (!block) {
+	if (posix_memalign((void **)&block, alignment, pad + size) != 0) {
 		return NULL;
 	}
+	memset(block, 0, pad + size);
 
 	user = block + pad;
 	header = (RendVkAllocatorHeader *)user - 1;
 	header->size = size;
 	header->pad = pad;
-
 	return user;
 }
 
 static void *
 rend_vk_allocator_realloc(void *pUserData, void *pOriginal, size_t size, size_t alignment, VkSystemAllocationScope allocationScope)
 {
-	RendVkHostArena *arena;
 	RendVkAllocatorHeader *header;
 	size_t old_size;
-	size_t old_pad;
-	size_t new_pad;
-	unsigned char *old_block;
-	unsigned char *new_block;
-	unsigned char *user;
-	void *result;
+	size_t copy;
+	void *fresh;
 
 	if (!pOriginal) {
 		return rend_vk_allocator_alloc(pUserData, size, alignment, allocationScope);
@@ -481,55 +275,30 @@ rend_vk_allocator_realloc(void *pUserData, void *pOriginal, size_t size, size_t 
 		rend_vk_allocator_free(pUserData, pOriginal);
 		return NULL;
 	}
-	if (alignment < REND_VK_HOST_DEFAULT_ALIGNMENT) {
-		alignment = REND_VK_HOST_DEFAULT_ALIGNMENT;
-	}
 
-	(void)pUserData;
-	arena = rend_vk_host_arena_for_ptr(pOriginal);
 	header = (RendVkAllocatorHeader *)pOriginal - 1;
 	old_size = header->size;
-	old_pad = header->pad;
-	old_block = (unsigned char *)pOriginal - old_pad;
-	new_pad = rend_vk_host_header_pad(alignment);
-
-	rend_vk_host_lock();
-	if (old_pad == new_pad) {
-		new_block = rend_vk_host_arena_resize_align(arena, old_block, old_pad + old_size, new_pad + size, alignment);
-	} else {
-		new_block = rend_vk_host_arena_alloc_align(arena, new_pad + size, alignment);
-		if (new_block) {
-			memmove(new_block + new_pad, pOriginal, old_size < size ? old_size : size);
-		}
-	}
-	rend_vk_host_unlock();
-	if (!new_block) {
+	fresh = rend_vk_allocator_alloc(pUserData, size, alignment, allocationScope);
+	if (!fresh) {
 		return NULL;
 	}
-
-	user = new_block + new_pad;
-	header = (RendVkAllocatorHeader *)user - 1;
-	header->size = size;
-	header->pad = new_pad;
-	result = user;
-
-	return result;
+	copy = old_size < size ? old_size : size;
+	memmove(fresh, pOriginal, copy);
+	rend_vk_allocator_free(pUserData, pOriginal);
+	return fresh;
 }
 
 static void
 rend_vk_allocator_free(void *pUserData, void *pMemory)
 {
+	RendVkAllocatorHeader *header;
+
 	(void)pUserData;
 	if (!pMemory) {
 		return;
 	}
-	rend_vk_host_lock();
-	if (rend_vk_host_arena_contains(&vk_cmd_arena, pMemory)) {
-		rend_vk_cmd_release_one();
-	} else {
-		rend_vk_host_arena_free(&vk_host_arena, pMemory);
-	}
-	rend_vk_host_unlock();
+	header = (RendVkAllocatorHeader *)pMemory - 1;
+	free((unsigned char *)pMemory - header->pad);
 }
 
 static void

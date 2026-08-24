@@ -15,7 +15,7 @@
 
 #define REND_MAJOR 1  // breaking API changes
 #define REND_MINOR 0  // non-breaking features
-#define REND_PATCH 6  // non-breaking patches and bug fixes
+#define REND_PATCH 9  // non-breaking patches and bug fixes
                     
 #ifndef PEAK_VULKAN
 #define PEAK_VULKAN
@@ -287,6 +287,9 @@ enum RendBufferType_t {
  * 1.0.4 - @vasco - vulkan backend collapsed; renderer create fails cleanly
  * 1.0.5 - @vasco - vulkan host linear arena
  * 1.0.6 - @vasco - texture destroy waits idle; offscreen end transitions after pass
+ * 1.0.7 - @vasco - resize recreates swapchain via oldSwapchain; surface extent before acquire
+ * 1.0.8 - @vasco - offscreen pass clears new images; texture destroy not during a frame
+ * 1.0.9 - @vasco - vulkan host alloc callbacks actually free (resize was exhausting 1MB arena)
  *
  * 1.0.0 finished API release
  *

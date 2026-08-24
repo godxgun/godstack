@@ -3,9 +3,13 @@
  * Instance, allocator, and device are process-global (see rend_vk_internal.c).
  *
  * * 1.0.3 - @vasco - backend functions take RendContextHandle
+ * * 1.0.7 - @vasco - resize: oldSwapchain recreate, surface extent, present OUT_OF_DATE
+ * * 1.0.8 - @vasco - offscreen CLEAR on new images; texture destroy not in-frame
  */
 
+#include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
 
@@ -26,6 +30,7 @@ typedef struct {
 	uint32_t image_count;
 	VkImage *images;
 	VkImageView *views;
+	VkSemaphore *present_semaphores;
 
 	RendVkImage depth_attachment;
 } RendVkSwapchain;
@@ -55,7 +60,6 @@ typedef struct RendVk14Context {
 	RendVkFrameResources frame_resources[REND_MAX_FRAMES_IN_FLIGHT];
 	RendVkSwapchain swapchain;
 	VkSemaphore timeline_semaphore;
-	VkSemaphore render_complete_semaphores[REND_MAX_FRAMES_IN_FLIGHT];
 
 	VkCommandPool upload_command_pool;
 	VkCommandPool graphics_command_pool;
@@ -87,8 +91,10 @@ static void rend_vk_texture_transition_layout(RendContextHandle handle, VkComman
 static VkCommandBuffer rend_vk_cmdbuffer_single_use_begin(VkCommandPool pool);
 static void rend_vk_cmdbuffer_single_use_end(VkCommandPool pool, VkCommandBuffer cmd, VkQueue q);
 static void rend_vk_pipeline_destroy(RendVkPipeline *pipeline);
-static void rend_vk_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain);
+static VkExtent2D rend_vk_surface_extent(RendVk14Context *ctx, const VkSurfaceCapabilitiesKHR *caps);
+static bool rend_vk_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain, VkSwapchainKHR old_swapchain);
 static void rend_vk_swapchain_destroy(RendVk14Context *ctx, RendVkSwapchain *swapchain);
+static bool rend_vk_swapchain_recreate(RendVk14Context *ctx);
 static VkShaderModule rend_vk_shader_module_create(const void *data, size_t size);
 static uint32_t rend_vk_get_heap_index(uint32_t memory_type_bits, uint32_t preferred_index);
 VKAPI_ATTR VkBool32 VKAPI_CALL rend_vk_debug_func(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity, VkDebugUtilsMessageTypeFlagsEXT message_types, const VkDebugUtilsMessengerCallbackDataEXT *callback_data, void *user_data);
@@ -103,8 +109,6 @@ rend_vk_init(void)
 	if (vk_instance) {
 		return true;
 	}
-
-	rend_vk_host_arena_init();
 
 	/* create instance if does not exist */
 	VkApplicationInfo vk_app_info = {VK_STRUCTURE_TYPE_APPLICATION_INFO};
@@ -204,7 +208,6 @@ rend_vk_quit(void)
 
 	vkDestroyInstance(vk_instance, vk_allocator);
 	vk_instance = 0;
-	rend_vk_host_arena_destroy();
 }
 
 RendContextHandle
@@ -255,7 +258,11 @@ rend_vk_renderer_create(PeakWindow *window, RendBindingInfo *bind_info)
 			vk_allocator);
 
 	/* create swapchain */
-	rend_vk_swapchain_create(ctx, &ctx->swapchain);
+	if (!rend_vk_swapchain_create(ctx, &ctx->swapchain, VK_NULL_HANDLE)) {
+		PERROR("Failed to create swapchain!");
+		rfree(ctx);
+		return NULL;
+	}
 
 	/* timeline semaphore */
 	VkSemaphoreTypeCreateInfo timeline_type_info = {VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO};
@@ -280,16 +287,6 @@ rend_vk_renderer_create(PeakWindow *window, RendBindingInfo *bind_info)
 					vk_allocator,
 					&ctx->frame_resources[u].image_acquired_semaphore) != VK_SUCCESS) {
 			PERROR("Unable to create semaphore for frame #%u!", u);
-			rfree(ctx);
-			return NULL;
-		}
-
-		if (vkCreateSemaphore(
-					vk_device.logical_device,
-					&frame_semaphore_info,
-					vk_allocator,
-					&ctx->render_complete_semaphores[u]) != VK_SUCCESS) {
-			PERROR("Unable to create render complete semaphore #%u!", u);
 			rfree(ctx);
 			return NULL;
 		}
@@ -486,7 +483,6 @@ rend_vk_renderer_destroy(RendContextHandle handle)
 	/* destroy per frame semaphores */
 	for (u = 0; u < REND_MAX_FRAMES_IN_FLIGHT; ++u) {
 		vkDestroySemaphore(dev, ctx->frame_resources[u].image_acquired_semaphore, vk_allocator);
-		vkDestroySemaphore(dev, ctx->render_complete_semaphores[u], vk_allocator);
 		vkDestroyCommandPool(dev, ctx->frame_resources[u].command_pool, vk_allocator);
 		ctx->frame_resources[u].image_acquired_semaphore = 0;
 		ctx->frame_resources[u].command_pool = 0;
@@ -540,14 +536,29 @@ rend_vk_renderer_frame_begin(RendContextHandle handle)
 		RendVkFrameResources frame_resource;
 		VkSemaphoreWaitInfo timeline_wait_info;
 
-		if (ctx->require_swapchain_recreation) {
-			if (ctx->window && (ctx->window->width == 0 || ctx->window->height == 0))
+		if (ctx->window && (ctx->window->width == 0 || ctx->window->height == 0))
+			return false;
+
+		{
+			VkSurfaceCapabilitiesKHR caps;
+			VkExtent2D extent;
+
+			if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk_device.physical_device, ctx->surface, &caps) != VK_SUCCESS)
 				return false;
+			if (caps.currentExtent.width == 0 || caps.currentExtent.height == 0)
+				return false;
+			extent = rend_vk_surface_extent(ctx, &caps);
+			if (extent.width != ctx->swapchain.extent.width ||
+					extent.height != ctx->swapchain.extent.height)
+				ctx->require_swapchain_recreation = true;
+		}
+
+		if (ctx->require_swapchain_recreation) {
 			PDEBUG("[REND] Awaiting device...");
 			vkDeviceWaitIdle(vk_device.logical_device);
 			PDEBUG("[REND] Recreating swapchain...");
-			rend_vk_swapchain_destroy(ctx, &ctx->swapchain);
-			rend_vk_swapchain_create(ctx, &ctx->swapchain);
+			if (!rend_vk_swapchain_recreate(ctx))
+				return false;
 			ctx->require_swapchain_recreation = false;
 		}
 
@@ -726,7 +737,7 @@ rend_vk_renderer_frame_end(RendContextHandle handle, float *delta)
 	VkSemaphoreSubmitInfo semaphore_signals[2] = {
 		[0] = {
 			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-			.semaphore = ctx->render_complete_semaphores[ctx->image_index],
+			.semaphore = ctx->swapchain.present_semaphores[ctx->image_index],
 			.stageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT
 		},
 		[1] = {
@@ -757,14 +768,20 @@ rend_vk_renderer_frame_end(RendContextHandle handle, float *delta)
 	VkPresentInfoKHR present_info = {
 		.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
 		.waitSemaphoreCount = 1,
-		.pWaitSemaphores = &ctx->render_complete_semaphores[ctx->image_index],
+		.pWaitSemaphores = &ctx->swapchain.present_semaphores[ctx->image_index],
 		.swapchainCount = 1,
 		.pSwapchains = &ctx->swapchain.handle,
 		.pImageIndices = &ctx->image_index,
 		.pResults = NULL,
 	};
 
-	vkQueuePresentKHR(vk_device.graphics_queue, &present_info);
+	{
+		VkResult present_res;
+
+		present_res = vkQueuePresentKHR(vk_device.graphics_queue, &present_info);
+		if (present_res == VK_ERROR_OUT_OF_DATE_KHR || present_res == VK_SUBOPTIMAL_KHR)
+			ctx->require_swapchain_recreation = true;
+	}
 
 	ctx->frame++;
 	ctx->in_frame = false;
@@ -853,16 +870,31 @@ rend_vk_renderer_render_pass_begin_texture(RendContextHandle handle, RendTexture
 {
 	RendVk14Context *ctx = (RendVk14Context *)handle;
 
-	rend_vk_texture_transition_layout(handle, ctx->frame_resources[ctx->frame_index].command_buffer, texture, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	rend_vk__renderer_render_pass_begin_internal(
-			handle,
-			0, 0, 0, 0,
-			(uint64_t)texture->view,
-			(uint64_t)ctx->swapchain.depth_attachment.view,
-			0, 0,
-			texture->width, texture->height,
-			VK_ATTACHMENT_LOAD_OP_LOAD
-	);
+	{
+		uint32_t width;
+		uint32_t height;
+		VkAttachmentLoadOp load;
+
+		load = (texture->layout == VK_IMAGE_LAYOUT_UNDEFINED)
+			? VK_ATTACHMENT_LOAD_OP_CLEAR
+			: VK_ATTACHMENT_LOAD_OP_LOAD;
+		rend_vk_texture_transition_layout(handle, ctx->frame_resources[ctx->frame_index].command_buffer, texture, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+		width = texture->width;
+		height = texture->height;
+		if (width > ctx->swapchain.extent.width)
+			width = ctx->swapchain.extent.width;
+		if (height > ctx->swapchain.extent.height)
+			height = ctx->swapchain.extent.height;
+		rend_vk__renderer_render_pass_begin_internal(
+				handle,
+				0, 0, 0, 0,
+				(uint64_t)texture->view,
+				(uint64_t)ctx->swapchain.depth_attachment.view,
+				0, 0,
+				width, height,
+				load
+		);
+	}
 }
 
 void
@@ -1135,9 +1167,13 @@ rend_vk_texture_create(RendContextHandle handle, uint32_t width, uint32_t height
 void
 rend_vk_texture_destroy(RendContextHandle handle, RendTexture *tex)
 {
-	RASSERT(handle && tex);
+	RendVk14Context *ctx;
 
-	/* same as buffer_destroy: in-flight CBs may still refer to this image */
+	RASSERT(handle && tex);
+	ctx = (RendVk14Context *)handle;
+	RASSERT(!ctx->in_frame, "must not destroy textures during a frame");
+
+	/* in-flight CBs may still refer to this image */
 	vkDeviceWaitIdle(vk_device.logical_device);
 
 	if (tex->view) {
@@ -1694,31 +1730,44 @@ rend_vk_pipeline_destroy(RendVkPipeline *pipeline)
 	}
 }
 
-static void
-rend_vk_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain)
+static VkExtent2D
+rend_vk_surface_extent(RendVk14Context *ctx, const VkSurfaceCapabilitiesKHR *caps)
+{
+	VkExtent2D extent;
+	VkExtent2D min;
+	VkExtent2D max;
+
+	extent.width = caps->currentExtent.width;
+	extent.height = caps->currentExtent.height;
+	if (extent.width == 0xffffffffu || extent.height == 0xffffffffu) {
+		extent.width = ctx->window ? ctx->window->width : 1;
+		extent.height = ctx->window ? ctx->window->height : 1;
+	}
+	min = caps->minImageExtent;
+	max = caps->maxImageExtent;
+	if (extent.width < min.width) extent.width = min.width;
+	if (extent.height < min.height) extent.height = min.height;
+	if (max.width && extent.width > max.width) extent.width = max.width;
+	if (max.height && extent.height > max.height) extent.height = max.height;
+	if (extent.width == 0) extent.width = 1;
+	if (extent.height == 0) extent.height = 1;
+	return extent;
+}
+
+static bool
+rend_vk_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain, VkSwapchainKHR old_swapchain)
 {
 	uint32_t i;
 	RASSERT(ctx && "No context provided.");
 	RASSERT(swapchain && "No swapchain provided.");
 
 	VkSurfaceCapabilitiesKHR surface_caps;
-	uint32_t width;
-	uint32_t height;
 	VkExtent2D swapchain_extent;
+	VkResult sc_res;
+	uint32_t queue_family_indices[2];
 
 	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk_device.physical_device, ctx->surface, &surface_caps);
-	width = surface_caps.currentExtent.width;
-	height = surface_caps.currentExtent.height;
-
-	/* 0xffffffff means the surface size is defined by the swapchain extent */
-	if (width == 0xffffffffu || height == 0xffffffffu) {
-		width = ctx->window ? ctx->window->width : 0;
-		height = ctx->window ? ctx->window->height : 0;
-	}
-	if (width == 0) width = 1;
-	if (height == 0) height = 1;
-
-	swapchain_extent = (VkExtent2D){width, height};
+	swapchain_extent = rend_vk_surface_extent(ctx, &surface_caps);
 
 	ctx->max_frames_in_flight = REND_MIN_FRAMES_IN_FLIGHT;
 
@@ -1790,13 +1839,6 @@ rend_vk_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain)
 	PDEBUG("Present mode %s was chosen!", present_mode_names[present_mode]);
 #endif
 
-	VkExtent2D min = surface_caps.minImageExtent;
-	VkExtent2D max = surface_caps.maxImageExtent;
-	swapchain_extent.width = (swapchain_extent.width < min.width) ? min.width : swapchain_extent.width;
-	swapchain_extent.width = (swapchain_extent.width > max.width) ? max.width : swapchain_extent.width;
-	swapchain_extent.height = (swapchain_extent.height < min.height) ? min.height : swapchain_extent.height;
-	swapchain_extent.height = (swapchain_extent.height > max.height) ? max.height : swapchain_extent.height;
-
 	uint32_t img_count = surface_caps.minImageCount + 1;
 	if (surface_caps.maxImageCount > 0 && img_count > surface_caps.maxImageCount) {
 		img_count = surface_caps.maxImageCount;
@@ -1813,10 +1855,11 @@ rend_vk_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain)
 
 	/* index sharing */
 	if (vk_device.graphics_family_index != vk_device.present_family_index) {
-		uint32_t queueFamilyIndices[] = {vk_device.graphics_family_index, vk_device.present_family_index};
+		queue_family_indices[0] = vk_device.graphics_family_index;
+		queue_family_indices[1] = vk_device.present_family_index;
 		swapchain_create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
 		swapchain_create_info.queueFamilyIndexCount = 2;
-		swapchain_create_info.pQueueFamilyIndices = queueFamilyIndices;
+		swapchain_create_info.pQueueFamilyIndices = queue_family_indices;
 	} else {
 		swapchain_create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		swapchain_create_info.queueFamilyIndexCount = 0;
@@ -1827,10 +1870,12 @@ rend_vk_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain)
 	swapchain_create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 	swapchain_create_info.presentMode = present_mode;
 	swapchain_create_info.clipped = VK_TRUE;
-	swapchain_create_info.oldSwapchain = 0;
+	swapchain_create_info.oldSwapchain = old_swapchain;
 
-	if (vkCreateSwapchainKHR(vk_device.logical_device, &swapchain_create_info, vk_allocator, &swapchain->handle) != VK_SUCCESS) {
-		REND__CRASH("Swapchain creation failed, you are probably trying to create two renderers for the same surface!");
+	sc_res = vkCreateSwapchainKHR(vk_device.logical_device, &swapchain_create_info, vk_allocator, &swapchain->handle);
+	if (sc_res != VK_SUCCESS) {
+		PERROR("vkCreateSwapchainKHR failed (%d)", (int)sc_res);
+		return false;
 	}
 
 	swapchain->image_count = 0;
@@ -1842,12 +1887,16 @@ rend_vk_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain)
 	if (!swapchain->views) {
 		swapchain->views = rmalloc(swapchain->image_count * sizeof(*swapchain->views));
 	}
+	if (!swapchain->present_semaphores) {
+		swapchain->present_semaphores = rmalloc(swapchain->image_count * sizeof(*swapchain->present_semaphores));
+	}
 
 	CHECK_VK_RESULT( vkGetSwapchainImagesKHR(vk_device.logical_device, swapchain->handle, &swapchain->image_count, swapchain->images));
 
 	for (i = 0; i < swapchain->image_count; i++) {
-
+		VkSemaphoreCreateInfo sem_info;
 		VkImageViewCreateInfo view_info = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+
 		view_info.image = swapchain->images[i];
 		view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
 		view_info.format = swapchain->format.format;
@@ -1858,6 +1907,12 @@ rend_vk_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain)
 		view_info.subresourceRange.layerCount = 1;
 
 		CHECK_VK_RESULT(vkCreateImageView(vk_device.logical_device, &view_info, vk_allocator, &swapchain->views[i]));
+
+		sem_info = (VkSemaphoreCreateInfo){ VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+		if (vkCreateSemaphore(vk_device.logical_device, &sem_info, vk_allocator, &swapchain->present_semaphores[i]) != VK_SUCCESS) {
+			PERROR("Unable to create present semaphore #%u!", i);
+			return false;
+		}
 	}
 
 	/* depth resources */
@@ -1895,17 +1950,28 @@ rend_vk_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain)
 			);
 
 	swapchain->extent = swapchain_extent;
-
+	return true;
 }
 
 static void
 rend_vk_swapchain_destroy(RendVk14Context *ctx, RendVkSwapchain *swapchain)
 {
 	uint32_t i;
+
+	(void)ctx;
 	if (!swapchain || swapchain->handle == VK_NULL_HANDLE) return;
 	RASSERT(vk_device.logical_device);
 
 	rend_vk_image_destroy(&swapchain->depth_attachment);
+
+	if (swapchain->present_semaphores) {
+		for (i = 0; i < swapchain->image_count; i++) {
+			if (swapchain->present_semaphores[i])
+				vkDestroySemaphore(vk_device.logical_device, swapchain->present_semaphores[i], vk_allocator);
+		}
+		rfree(swapchain->present_semaphores);
+		swapchain->present_semaphores = 0;
+	}
 
 	if (swapchain->views) {
 		for (i = 0; i < swapchain->image_count; i++) {
@@ -1923,6 +1989,21 @@ rend_vk_swapchain_destroy(RendVk14Context *ctx, RendVkSwapchain *swapchain)
 	swapchain->image_count = 0;
 	vkDestroySwapchainKHR(vk_device.logical_device, swapchain->handle, vk_allocator);
 	swapchain->handle = VK_NULL_HANDLE;
+}
+
+static bool
+rend_vk_swapchain_recreate(RendVk14Context *ctx)
+{
+	RendVkSwapchain old;
+	RendVkSwapchain created;
+
+	old = ctx->swapchain;
+	memset(&created, 0, sizeof created);
+	if (!rend_vk_swapchain_create(ctx, &created, old.handle))
+		return false;
+	rend_vk_swapchain_destroy(ctx, &old);
+	ctx->swapchain = created;
+	return true;
 }
 
 static VkShaderModule
