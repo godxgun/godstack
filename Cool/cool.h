@@ -66,20 +66,23 @@
 
 #define COOL_MAJOR 0  // breaking API changes
 #define COOL_MINOR 0  // non-breaking features
-#define COOL_PATCH 0  // non-breaking patches and bug fixes
+#define COOL_PATCH 1  // non-breaking patches and bug fixes
 
 /* CHANGE LOG
  * 0.0.0 - @vasco - server-side HTML from C functions
+ * 0.0.1 - COOL_OUTPUT override, cool_html_txt scans *s;
+ *         drop unused URL table, stub cool_html / cool_htmlf, cool_sv_write
  */
 
 #define COOLDEF static inline
+#ifndef COOL_OUTPUT
 #define COOL_OUTPUT stdout
+#endif
 
 #include <stdarg.h>
 #include <stdio.h>
 #include <stddef.h>
 #include <stdlib.h>
-#include <assert.h>
 
 typedef struct {
     char *cstr; // original cstring 
@@ -88,12 +91,9 @@ typedef struct {
 
 /* Macro to wrap string literal in a string view. Since we will be dealing with a lot of */
 #define COOL_SV(literal) ((Cool_StrView){ .cstr = (literal), .len = sizeof(literal) - 1 })
-COOLDEF void cool_sv_write(Cool_StrView sv); // Write string view to output.
-COOLDEF void cool_html(Cool_StrView sv); // SAFELY write HTML to a buffer. Handles escaping malicious sequences.
 COOLDEF void cool_html_raw(Cool_StrView sv); // Writes HTML to buffer without escaping sequences. Vulnerable to XSS. Use with caution.
 COOLDEF void cool_html_raw_cstr(const char *str, size_t len); // Writes unsafe HTML using C strings.
 COOLDEF void cool_html_txt(const char *str, size_t len); // Meant for inner text. Escapes '<', '>' and '&'.
-COOLDEF void cool_htmlf(const char *fmt, ...); // SAFELY write formatted string to buffer.
 COOLDEF void cool_htmlf_raw(const char *fmt, ...); // Writes formatting HTML string to buffer without escaping sequences. Vulnerable to XSS. Use with caution.
                                                                 
 #endif
@@ -101,53 +101,6 @@ COOLDEF void cool_htmlf_raw(const char *fmt, ...); // Writes formatting HTML str
 #define COOL_IMPLEMENTATION
 #ifdef COOL_IMPLEMENTATION
 #undef COOL_IMPLEMENTATION
-
-static const char* cool_url_escape_table[256] = {
-    "%00", "%01", "%02", "%03", "%04", "%05", "%06", "%07",
-    "%08", "%09", "%0a", "%0b", "%0c", "%0d", "%0e", "%0f",
-    "%10", "%11", "%12", "%13", "%14", "%15", "%16", "%17",
-    "%18", "%19", "%1a", "%1b", "%1c", "%1d", "%1e", "%1f",
-    "%20", NULL,  "%22", "%23", NULL,  "%25", "%26", "%27",
-    NULL,  NULL,  NULL,  "%2b", NULL,  NULL,  NULL,  NULL,
-    NULL,  NULL,  NULL,  NULL,  NULL,  NULL,  NULL,  NULL,
-    NULL,  NULL,  NULL,  NULL,  "%3c", "%3d", "%3e", "%3f",
-    NULL,  NULL,  NULL,  NULL,  NULL,  NULL,  NULL,  NULL,
-    NULL,  NULL,  NULL,  NULL,  NULL,  NULL,  NULL,  NULL,
-    NULL,  NULL,  NULL,  NULL,  NULL,  NULL,  NULL,  NULL,
-    NULL,  NULL,  NULL,  NULL,  "%5c", NULL,  "%5e", NULL,
-    "%60", NULL,  NULL,  NULL,  NULL,  NULL,  NULL,  NULL,
-    NULL,  NULL,  NULL,  NULL,  NULL,  NULL,  NULL,  NULL,
-    NULL,  NULL,  NULL,  NULL,  NULL,  NULL,  NULL,  NULL,
-    NULL,  NULL,  NULL,  "%7b", "%7c", "%7d", NULL,  "%7f",
-    "%80", "%81", "%82", "%83", "%84", "%85", "%86", "%87",
-    "%88", "%89", "%8a", "%8b", "%8c", "%8d", "%8e", "%8f",
-    "%90", "%91", "%92", "%93", "%94", "%95", "%96", "%97",
-    "%98", "%99", "%9a", "%9b", "%9c", "%9d", "%9e", "%9f",
-    "%a0", "%a1", "%a2", "%a3", "%a4", "%a5", "%a6", "%a7",
-    "%a8", "%a9", "%aa", "%ab", "%ac", "%ad", "%ae", "%af",
-    "%b0", "%b1", "%b2", "%b3", "%b4", "%b5", "%b6", "%b7",
-    "%b8", "%b9", "%ba", "%bb", "%bc", "%bd", "%be", "%bf",
-    "%c0", "%c1", "%c2", "%c3", "%c4", "%c5", "%c6", "%c7",
-    "%c8", "%c9", "%ca", "%cb", "%cc", "%cd", "%ce", "%cf",
-    "%d0", "%d1", "%d2", "%d3", "%d4", "%d5", "%d6", "%d7",
-    "%d8", "%d9", "%da", "%db", "%dc", "%dd", "%de", "%df",
-    "%e0", "%e1", "%e2", "%e3", "%e4", "%e5", "%e6", "%e7",
-    "%e8", "%e9", "%ea", "%eb", "%ec", "%ed", "%ee", "%ef",
-    "%f0", "%f1", "%f2", "%f3", "%f4", "%f5", "%f6", "%f7",
-    "%f8", "%f9", "%fa", "%fb", "%fc", "%fd", "%fe", "%ff"
-};
-
-COOLDEF void
-cool_sv_write(Cool_StrView sv)
-{
-    fwrite(sv.cstr, sizeof *sv.cstr, sv.len, COOL_OUTPUT);
-}
-
-COOLDEF void
-cool_html(Cool_StrView sv)
-{
-    assert(0 && "TODO");
-}
 
 COOLDEF void
 cool_html_raw(Cool_StrView sv)
@@ -166,7 +119,7 @@ cool_html_txt(const char *str, size_t len)
 {
     const char *s = str;
 	while (s && *s && len--) {
-        int c = *str;
+        int c = *s;
         if (c == '<' || c == '>' || c == '&') {
             cool_html_raw_cstr(str, s - str);
             switch (c) {
@@ -186,12 +139,6 @@ cool_html_txt(const char *str, size_t len)
     }
 
     if (s != str) cool_html_raw_cstr(str, s - str);
-}
-
-COOLDEF void
-cool_htmlf(const char *fmt, ...)
-{
-    assert(0 && "TODO");
 }
 
 COOLDEF void
