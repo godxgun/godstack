@@ -1,14 +1,14 @@
 #include <stdio.h>
 
 #define PEAK_IMPLEMENTATION
-#include "../Peak/peak.h"
-
+#include "../../Peak/peak.h"
 
 void print_window_resize(PeakEvent ev) {
     printf("window: %u %u\n", ev.resize.width, ev.resize.height);
 }
 
 void print_window_close(PeakEvent ev) {
+    (void)ev;
     printf("WINDOW CLOSE!!!!!!\nWOWWWOWAAAAAAAAAAAAAAAAAAAAAAAAh\n");
 }
 
@@ -32,44 +32,29 @@ print_event_func print_event[PEAK_EVENT_LAST] = {
     [PEAK_EVENT_KEY_UP] = print_key,
 };
 
+int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
 
-typedef struct {
-    char *msg;
-} AppData;
+    if (!peak_init()) return 1;
 
-static AppData data;
+    PeakWindow win = peak_window_open("Demo", 800, 600, 0);
+    peak_window_clear(&win, 0.5, 0.5, 0, 1);
 
-static int
-peak_run_func(PeakWindow *win, void *userdata) 
-{
-    AppData d = *(AppData*) userdata;
-    static PeakEvent ev; 
-    while (peak_window_epoll(win, &ev)) {
-        switch (ev.type) {
-            case PEAK_EVENT_NONE:
-                continue;
-            case PEAK_EVENT_WINDOW_CLOSE:
-                return 0;
-            default:
-                print_event[ev.type](ev);
-                continue;
+    PeakEvent ev;
+    while (win.running) {
+        while (peak_window_epoll(&win, &ev)) {
+            if (ev.type == PEAK_EVENT_NONE) continue;
+            print_event[ev.type](ev);
+            if (ev.type == PEAK_EVENT_WINDOW_CLOSE) {
+                win.running = 0;
+                break;
+            }
         }
-    }
-    printf("%s\n", d.msg);
-    return 1;
-}
+        if (!win.running) break;
 
-int
-main(int argc, char**argv) 
-{
-    data.msg = "Hello World";
-
-    if (!peak_init()) {
-        return 1;
     }
 
-    PeakWindow win = peak_window_open("demo", 400, 400, 0);
-    peak_window_run(&win, peak_run_func, &data);
     peak_window_close(&win);
     peak_quit();
     return 0;

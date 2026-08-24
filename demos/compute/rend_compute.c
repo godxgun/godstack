@@ -1,15 +1,12 @@
-#include <string.h>
-
-#ifdef DEBUG_MEMORY
-#define malloc(size)  peak_debug_malloc_impl((size), __FILE__, __LINE__, __func__)
-#define realloc(ptr, size) peak_debug_realloc_impl((ptr), (size), __FILE__, __LINE__, __func__)
-#define free(ptr)     peak_debug_free_impl((ptr), __FILE__, __LINE__, __func__)
-#endif
-
 #define PEAK_IMPLEMENTATION
 #include "../Rend/rend.h"
 #include "../Rend/rend.c"
 #include <stddef.h>
+#include <string.h>
+
+#define malloc(size)  peak_debug_malloc_impl((size), __FILE__, __LINE__, __func__)
+#define realloc(ptr, size) peak_debug_realloc_impl((ptr), (size), __FILE__, __LINE__, __func__)
+#define free(ptr)     peak_debug_free_impl((ptr), __FILE__, __LINE__, __func__)
 
 float delta = 0;
 PeakWindow win;
@@ -219,13 +216,11 @@ int main() {
     rend_buffer_destroy(&dst_buf);
 
     rend_renderer_destroy(renderer);
-    rend_quit();
+    // rend_quit();
 
     peak_window_close(&win);
     peak_quit();
 
-#if DEBUG_MEMORY
     peak_debug_memory_report();
-#endif
     return 0;
 }

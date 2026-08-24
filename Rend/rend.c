@@ -8,12 +8,10 @@
 #include "rend.h"
 #include "rend_internal.h"
 #include "rend_vk.c"
-#include "rend_vk_internal.h"
 
 /* clean up functions */
 
-static void rend__renderer_destroy_recursive(RendRenderer renderer);
-static void rend__pipeline_destroy_recursive(RendPipeline pipeline);
+static void rend__pipeline_free_list(RendPipeline pipeline);
 static bool rend__renderer_init_recursive(RendRenderer renderer, RendBackendType backend, bool auto_pick);
 
 static RendRenderer rend_renderers_head = NULL; 
@@ -65,40 +63,44 @@ RendVTable rend_vtables[] = {
 extern void
 rend_quit()
 {
-    rend__renderer_destroy_recursive(rend_renderers_head);
+    while (rend_renderers_head)
+        rend_renderer_destroy(rend_renderers_head);
 
     if (rend_backend_vk_initialized) {
         rend_vk_quit();
         rend_backend_vk_initialized = false;
     }
-
 }
 
 extern RendRenderer
 rend_renderer_create(PeakWindow *target, RendBackendType backend, void* device, bool vsync, RendBindingInfo *bind_info)
 {
-
     RendRenderer rend = rmalloc(sizeof *rend);
-    rend->next = rend_renderers_head;
-    rend->prev = NULL;
-    rend_renderers_head = rend;
-    if(rend->next) {
-        rend->next->prev = rend;
-    }
+    if (!rend) return NULL;
+    memset(rend, 0, sizeof *rend);
 
-    rend__renderer_init_recursive(rend, backend, false);
+    if (!rend__renderer_init_recursive(rend, backend, false)) {
+        rfree(rend);
+        return NULL;
+    }
 
     rend->vsync = vsync;
     rend->bind_info = *bind_info;
     rend->window = target;
-    rend->pipeline_head = 0;
 
     rend->context = rend_vtables[rend->backend].renderer_create(target, bind_info);
-    if (rend->context) {
-        return rend;
+    if (!rend->context) {
+        rfree(rend);
+        return NULL;
     }
 
-    return NULL;
+    rend->next = rend_renderers_head;
+    rend->prev = NULL;
+    rend_renderers_head = rend;
+    if (rend->next)
+        rend->next->prev = rend;
+
+    return rend;
 }
 
 extern void
@@ -107,10 +109,12 @@ rend_renderer_destroy(RendRenderer renderer)
     RASSERT(renderer && renderer->context, "Invalid renderer.");
     if (!renderer) return;
 
-    rend__pipeline_destroy_recursive(renderer->pipeline_head);
+    rend__pipeline_free_list(renderer->pipeline_head);
+    renderer->pipeline_head = NULL;
 
-    if (renderer->backend != 0) {
+    if (renderer->backend != 0 && renderer->context) {
         rend_vtables[renderer->backend].renderer_destroy(renderer->context);
+        renderer->context = NULL;
     }
 
     if (renderer->prev) renderer->prev->next = renderer->next;
@@ -118,6 +122,8 @@ rend_renderer_destroy(RendRenderer renderer)
 
     if (renderer->next) renderer->next->prev = renderer->prev;
 
+    renderer->next = NULL;
+    renderer->prev = NULL;
     rfree(renderer);
 }
 
@@ -153,21 +159,21 @@ extern void
 rend_renderer_render_pass_begin(RendRenderer renderer, float r, float g ,float b, float a)
 {
     renderer->in_pass = 1;
-    rend_vtables[renderer->backend].renderer_render_pass_begin(renderer, r, g, b, a);
+    rend_vtables[renderer->backend].renderer_render_pass_begin(renderer->context, r, g, b, a);
 }
 
 extern void
 rend_renderer_render_pass_begin_texture(RendRenderer renderer, RendTexture *texture)
 {
     renderer->in_pass = 1;
-    rend_vtables[renderer->backend].renderer_render_pass_begin_texture(renderer, texture);
+    rend_vtables[renderer->backend].renderer_render_pass_begin_texture(renderer->context, texture);
 }
 
 extern void
 rend_renderer_render_pass_end_texture(RendRenderer renderer, RendTexture *texture)
 {
     renderer->in_pass = 0;
-    rend_vtables[renderer->backend].renderer_render_pass_end_texture(renderer, texture);
+    rend_vtables[renderer->backend].renderer_render_pass_end_texture(renderer->context, texture);
 }
 
 
@@ -175,25 +181,25 @@ extern void
 rend_renderer_render_pass_end(RendRenderer renderer)
 {
     renderer->in_pass = 0;
-    rend_vtables[renderer->backend].renderer_render_pass_end(renderer);
+    rend_vtables[renderer->backend].renderer_render_pass_end(renderer->context);
 }
 
 
 extern void
 rend_descriptor_write_ubo(RendRenderer renderer, RendBuffer ubo, uint32_t binding, uint32_t slot)
 {
-    rend_vtables[renderer->backend].descriptor_write_buffer(renderer, ubo, binding, slot, 0, ubo.size, true);
+    rend_vtables[renderer->backend].descriptor_write_buffer(renderer->context, ubo, binding, slot, 0, ubo.size, true);
 }
 
 extern void
 rend_descriptor_write_ssbo(RendRenderer renderer, RendBuffer ssbo, uint32_t binding, uint32_t slot)
 {
-    rend_vtables[renderer->backend].descriptor_write_buffer(renderer, ssbo, binding, slot, 0, ssbo.size, false);
+    rend_vtables[renderer->backend].descriptor_write_buffer(renderer->context, ssbo, binding, slot, 0, ssbo.size, false);
 }
 
 extern RendBuffer
 rend_buffer_create(RendRenderer renderer, size_t size, RendBufferType type, bool gpu) {
-    RendBuffer buffer = rend_vtables[renderer->backend].buffer_create_lifetime(renderer, size, type, gpu, REND_LIFETIME_PERMANENT);
+    RendBuffer buffer = rend_vtables[renderer->backend].buffer_create_lifetime(renderer->context, size, type, gpu, REND_LIFETIME_PERMANENT);
     buffer.backend = renderer->backend;
     return buffer;
 }
@@ -211,9 +217,9 @@ rend_buffer_write(RendRenderer renderer, RendBuffer *buffer, const void *data, s
         memcpy(ptr + offset, data, size);
     } else {
         /* if the memory is bound to the device we must create and deallocate a transfer buffer */
-        RendBuffer transfer_buffer = rend_vtables[buffer->backend].buffer_create_lifetime(renderer, size, REND_BUFFER_TRANSFER, false, REND_LIFETIME_FRAME);
+        RendBuffer transfer_buffer = rend_vtables[buffer->backend].buffer_create_lifetime(renderer->context, size, REND_BUFFER_TRANSFER, false, REND_LIFETIME_FRAME);
         memcpy(transfer_buffer.mapped_memory, data, size);
-        rend_vtables[buffer->backend].buffer_copy(renderer, buffer, offset, &transfer_buffer, 0, size);
+        rend_vtables[buffer->backend].buffer_copy(renderer->context, buffer, offset, &transfer_buffer, 0, size);
         rend_vtables[buffer->backend].buffer_destroy(&transfer_buffer);
     }
 }
@@ -221,7 +227,7 @@ rend_buffer_write(RendRenderer renderer, RendBuffer *buffer, const void *data, s
 extern void
 rend_buffer_copy(RendRenderer renderer, RendBuffer *dest, size_t dest_offset, RendBuffer *src, size_t src_offset, size_t bytes)
 {
-    rend_vtables[renderer->backend].buffer_copy(renderer, dest, dest_offset, src, src_offset, bytes);
+    rend_vtables[renderer->backend].buffer_copy(renderer->context, dest, dest_offset, src, src_offset, bytes);
 }
 
 extern uint64_t
@@ -234,7 +240,7 @@ rend_buffer_address(RendBuffer *buffer)
 extern RendTexture
 rend_texture_create(RendRenderer renderer, uint32_t width, uint32_t height, uint32_t depth, uint32_t mip_levels, uint32_t layers, RendFormat format)
 {
-    RendTexture tex = rend_vtables[renderer->backend].texture_create(renderer, width, height, depth, mip_levels, layers, format);
+    RendTexture tex = rend_vtables[renderer->backend].texture_create(renderer->context, width, height, depth, mip_levels, layers, format);
     tex.backend = renderer->backend;
     return tex;
 }
@@ -242,14 +248,14 @@ rend_texture_create(RendRenderer renderer, uint32_t width, uint32_t height, uint
 extern RendTexture
 rend_texture_create_from_data(RendRenderer renderer, const void *data, uint32_t width, uint32_t height, RendFormat format)
 {
-    RendTexture tex = rend_vtables[renderer->backend].texture_create(renderer, width, height, 1, 1, 1, format);
+    RendTexture tex = rend_vtables[renderer->backend].texture_create(renderer->context, width, height, 1, 1, 1, format);
     tex.backend = renderer->backend;
 
     uint32_t size = width * height * rend_format_size[format];
 
-    RendBuffer staging_buffer = rend_vtables[renderer->backend].buffer_create_lifetime(renderer, size, REND_BUFFER_TRANSFER, false, REND_LIFETIME_FRAME);
+    RendBuffer staging_buffer = rend_vtables[renderer->backend].buffer_create_lifetime(renderer->context, size, REND_BUFFER_TRANSFER, false, REND_LIFETIME_FRAME);
     memcpy(staging_buffer.mapped_memory, data, size);
-    rend_vtables[renderer->backend].texture_copy_buffer(renderer, &tex, &staging_buffer);
+    rend_vtables[renderer->backend].texture_copy_buffer(renderer->context, &tex, &staging_buffer);
     rend_vtables[renderer->backend].buffer_destroy(&staging_buffer);
     return tex;
 }
@@ -257,9 +263,9 @@ rend_texture_create_from_data(RendRenderer renderer, const void *data, uint32_t 
 extern void
 rend_texture_copy_data(RendRenderer renderer, RendTexture *texture, const void *data, size_t size)
 {
-    RendBuffer staging_buffer = rend_vtables[renderer->backend].buffer_create_lifetime(renderer, size, REND_BUFFER_TRANSFER, false, REND_LIFETIME_FRAME);
+    RendBuffer staging_buffer = rend_vtables[renderer->backend].buffer_create_lifetime(renderer->context, size, REND_BUFFER_TRANSFER, false, REND_LIFETIME_FRAME);
     memcpy(staging_buffer.mapped_memory, data, size);
-    rend_vtables[renderer->backend].texture_copy_buffer(renderer, texture, &staging_buffer);
+    rend_vtables[renderer->backend].texture_copy_buffer(renderer->context, texture, &staging_buffer);
     rend_vtables[renderer->backend].buffer_destroy(&staging_buffer);
 }
 
@@ -267,13 +273,13 @@ rend_texture_copy_data(RendRenderer renderer, RendTexture *texture, const void *
 extern void 
 rend_texture_copy_buffer(RendRenderer renderer, RendTexture *texture, RendBuffer *buffer)
 {
-    rend_vtables[renderer->backend].texture_copy_buffer(renderer, texture, buffer);
+    rend_vtables[renderer->backend].texture_copy_buffer(renderer->context, texture, buffer);
 }
 
 extern void
 rend_texture_blit(RendRenderer renderer, RendTexture *src, RendTexture *dst, uint32_t src_x, uint32_t src_y, uint32_t src_w, uint32_t src_h, uint32_t dst_x, uint32_t dst_y, uint32_t dst_w, uint32_t dst_h)
 {
-    rend_vtables[renderer->backend].texture_blit(renderer, src, dst, src_x, src_y, src_w, src_h, dst_x, dst_y, dst_w, dst_h);
+    rend_vtables[renderer->backend].texture_blit(renderer->context, src, dst, src_x, src_y, src_w, src_h, dst_x, dst_y, dst_w, dst_h);
 }
 
 extern uint64_t 
@@ -285,7 +291,7 @@ rend_texture_id(RendTexture *texture)
 extern void 
 rend_texture_destroy(RendRenderer renderer, RendTexture *tex)
 {
-    rend_vtables[renderer->backend].texture_destroy(renderer, tex);
+    rend_vtables[renderer->backend].texture_destroy(renderer->context, tex);
 }
 
 extern void
@@ -341,7 +347,7 @@ rend_pipeline_create_graphics_spirv(RendRenderer renderer, uint8_t *vertex_bytes
         .color_format = color_format,
     };
 
-    if (rend_vtables[renderer->backend].pipeline_create(renderer, pipeline, config, REND__PIPELINE_GRAPHICS, vertex_bytes, vertex_size, frag_bytes, frag_size, NULL, 0)) {
+    if (rend_vtables[renderer->backend].pipeline_create(renderer->context, pipeline, config, REND__PIPELINE_GRAPHICS, vertex_bytes, vertex_size, frag_bytes, frag_size, NULL, 0)) {
         pipeline->backend = renderer->backend;
 
         pipeline->next = renderer->pipeline_head;
@@ -378,7 +384,7 @@ rend_pipeline_create_graphics_bindless_spirv(RendRenderer renderer, uint8_t *ver
         .color_format = color_format,
     };
 
-    if (rend_vtables[renderer->backend].pipeline_create(renderer, pipeline, config, REND__PIPELINE_GRAPHICS, vertex_bytes, vertex_size, frag_bytes, frag_size, NULL, 0)) {
+    if (rend_vtables[renderer->backend].pipeline_create(renderer->context, pipeline, config, REND__PIPELINE_GRAPHICS, vertex_bytes, vertex_size, frag_bytes, frag_size, NULL, 0)) {
         pipeline->backend = renderer->backend;
 
         pipeline->next = renderer->pipeline_head;
@@ -404,7 +410,7 @@ rend_pipeline_create_compute_spirv(RendRenderer renderer, const uint8_t *compute
         .push_constant_count = push_constant_count,
     };
 
-    if (rend_vtables[renderer->backend].pipeline_create(renderer, pipeline, config, REND__PIPELINE_COMPUTE, compute_bytes, compute_size, NULL, 0, NULL, 0)) {
+    if (rend_vtables[renderer->backend].pipeline_create(renderer->context, pipeline, config, REND__PIPELINE_COMPUTE, compute_bytes, compute_size, NULL, 0, NULL, 0)) {
         pipeline->backend = renderer->backend;
         pipeline->type = REND__PIPELINE_COMPUTE;
 
@@ -432,7 +438,7 @@ rend_pipeline_create_meshlet_spirv(RendRenderer renderer, uint8_t *meshlet_bytes
         .cull_mode = cull_mode,
         .depth_test_enable = depth_test_enable
     };
-    if (rend_vtables[renderer->backend].pipeline_create(renderer, pipeline, config, REND__PIPELINE_MESH, meshlet_bytes, meshlet_size, frag_bytes, frag_size, NULL, 0)) {
+    if (rend_vtables[renderer->backend].pipeline_create(renderer->context, pipeline, config, REND__PIPELINE_MESH, meshlet_bytes, meshlet_size, frag_bytes, frag_size, NULL, 0)) {
         pipeline->backend = renderer->backend;
         pipeline->type = REND__PIPELINE_MESH;
 
@@ -483,28 +489,28 @@ extern void
 rend_cmd_render_begin(RendRenderer renderer, float r, float g, float b, float a)
 {
     renderer->in_pass = 1;
-    rend_vtables[renderer->backend].renderer_render_pass_begin(renderer, r, g, b, a);
+    rend_vtables[renderer->backend].renderer_render_pass_begin(renderer->context, r, g, b, a);
 }
 
 extern void
 rend_cmd_render_begin_texture(RendRenderer renderer, RendTexture *texture)
 {
     renderer->in_pass = 1;
-    rend_vtables[renderer->backend].renderer_render_pass_begin_texture(renderer, texture);
+    rend_vtables[renderer->backend].renderer_render_pass_begin_texture(renderer->context, texture);
 }
 
 extern void
 rend_cmd_render_end(RendRenderer renderer)
 {
     renderer->in_pass = 0;
-    rend_vtables[renderer->backend].renderer_render_pass_end(renderer);
+    rend_vtables[renderer->backend].renderer_render_pass_end(renderer->context);
 }
 
 extern void
 rend_cmd_render_end_texture(RendRenderer renderer, RendTexture *texture)
 {
     renderer->in_pass = 0;
-    rend_vtables[renderer->backend].renderer_render_pass_end_texture(renderer, texture);
+    rend_vtables[renderer->backend].renderer_render_pass_end_texture(renderer->context, texture);
 }
 
 extern void
@@ -557,7 +563,7 @@ rend_cmd_blit(RendRenderer renderer, RendTexture *src, RendTexture *dst, uint32_
     RASSERT(renderer->in_frame && "Must be called while rendering a frame!");
     RASSERT(!renderer->in_pass && "Must be called outside a render pass!");
     renderer->in_pass = true;
-    rend_vtables[renderer->backend].texture_blit(renderer, src, dst, src_x, src_y, src_w, src_h, dst_x, dst_y, dst_w, dst_h);
+    rend_vtables[renderer->backend].texture_blit(renderer->context, src, dst, src_x, src_y, src_w, src_h, dst_x, dst_y, dst_w, dst_h);
 }
 
 static bool
@@ -597,24 +603,13 @@ rend__renderer_init_recursive(RendRenderer renderer, RendBackendType backend, bo
 }
 
 static void
-rend__renderer_destroy_recursive(RendRenderer renderer) 
+rend__pipeline_free_list(RendPipeline pipeline)
 {
-    if (renderer == NULL) return;
-
-    rend__renderer_destroy_recursive(renderer->next);
-
-    if (renderer->backend != 0) {
-        rend_vtables[renderer->backend].renderer_destroy(renderer);
+    while (pipeline) {
+        RendPipeline next = pipeline->next;
+        pipeline->next = NULL;
+        pipeline->prev = NULL;
+        rfree(pipeline);
+        pipeline = next;
     }
-
-    rend__pipeline_destroy_recursive(renderer->pipeline_head);
-    rfree(renderer);
-}
-
-static void
-rend__pipeline_destroy_recursive(RendPipeline pipeline) 
-{
-    if (pipeline == NULL) return;
-    rend__pipeline_destroy_recursive(pipeline->next);
-    rfree(pipeline);
 }

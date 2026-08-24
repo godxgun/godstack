@@ -15,7 +15,7 @@
 
 #define REND_MAJOR 1  // breaking API changes
 #define REND_MINOR 0  // non-breaking features
-#define REND_PATCH 3  // non-breaking patches and bug fixes
+#define REND_PATCH 4  // non-breaking patches and bug fixes
                     
 #ifndef PEAK_VULKAN
 #define PEAK_VULKAN
@@ -284,6 +284,7 @@ enum RendBufferType_t {
  * 1.0.1 - @vasco - render pass that targets textures 
  * 1.0.2 - @vasco - Peak instead of Podium
  * 1.0.3 - @vasco - frame_begin no longer sticks in_frame or burns timeline on OUT_OF_DATE
+ * 1.0.4 - @vasco - vulkan backend collapsed; renderer create fails cleanly
  *
  * 1.0.0 finished API release
  *

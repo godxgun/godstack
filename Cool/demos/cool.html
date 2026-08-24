@@ -1,0 +1,56 @@
+    <div class="api-card">
+        <h3 class="api-name">cool_sv_write</h3>
+        <code class="language-c">COOLDEF void cool_sv_write(Cool_StrView sv) </code>
+        <div class="api-description">
+            Write string view to output.
+
+        </div>
+    </div>
+    <div class="api-card">
+        <h3 class="api-name">cool_html</h3>
+        <code class="language-c">COOLDEF void cool_html(Cool_StrView sv) </code>
+        <div class="api-description">
+            SAFELY write HTML to a buffer. Handles escaping malicious sequences.
+
+        </div>
+    </div>
+    <div class="api-card">
+        <h3 class="api-name">cool_html_raw</h3>
+        <code class="language-c">COOLDEF void cool_html_raw(Cool_StrView sv) </code>
+        <div class="api-description">
+            Writes HTML to buffer without escaping sequences. Vulnerable to XSS. Use with caution.
+
+        </div>
+    </div>
+    <div class="api-card">
+        <h3 class="api-name">cool_html_raw_cstr</h3>
+        <code class="language-c">COOLDEF void cool_html_raw_cstr(const char *str, size_t len) </code>
+        <div class="api-description">
+            Writes unsafe HTML using C strings.
+
+        </div>
+    </div>
+    <div class="api-card">
+        <h3 class="api-name">cool_html_txt</h3>
+        <code class="language-c">COOLDEF void cool_html_txt(const char *str, size_t len) </code>
+        <div class="api-description">
+            Meant for inner text. Escapes '<', '>' and '&'.
+
+        </div>
+    </div>
+    <div class="api-card">
+        <h3 class="api-name">cool_htmlf</h3>
+        <code class="language-c">COOLDEF void cool_htmlf(const char *fmt, ...) </code>
+        <div class="api-description">
+            SAFELY write formatted string to buffer.
+
+        </div>
+    </div>
+    <div class="api-card">
+        <h3 class="api-name">cool_htmlf_raw</h3>
+        <code class="language-c">COOLDEF void cool_htmlf_raw(const char *fmt, ...) </code>
+        <div class="api-description">
+            Writes formatting HTML string to buffer without escaping sequences. Vulnerable to XSS. Use with caution.
+
+        </div>
+    </div>

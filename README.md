@@ -7,8 +7,8 @@
 ```
 
 Collection of modular and minimal libraries used by our games. These libraries are designed to be
-"vendored in" aka. copy-and-pasted into a project's folder. Some libraries may depend on each other.
-Each library should contain a license in the header.
+"vendored in" aka. copy-and-pasted into a project's folder. Some libraries may depend on each other,
+but most can be used in isolation. Each library should contain a license in the header.
 
 Use at your own risk.
 
@@ -21,11 +21,12 @@ Use at your own risk.
 | Rend   | Modern graphics API layer.                 |
 | Cool   | Render HTML by calling functions.          |
 
-## Maturity
+## Maturity & Versioning
 
-Rend and Peak are the most mature. Some libraries are still in development. Check the version
-included in each header file. Be encouraged and not discouraged if a library "isn't updated," it's probably 
-because it works.
+Most libraries include a version and a change log at the top of the file.
+This is helpful if you decide to update one of the libraries you are using in a project.
+Libraries that have reached or surpassed the 1.0.0 landmark are generally considered
+to be "completed."
 
 ## Documentation
 

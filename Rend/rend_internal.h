@@ -1,9 +1,6 @@
 #ifndef REND_INTERNAL_H
 #define REND_INTERNAL_H
 
-#include "rend_vk_internal.h"
-
-
 #if defined(REND_DEBUG)
 #ifndef P_LOG_DEBUG_ENABLED
 #define P_LOG_DEBUG_ENABLED 1
@@ -78,19 +75,19 @@ typedef struct {
     bool (*renderer_frame_begin)(RendContextHandle);
     void (*renderer_frame_end)(RendContextHandle, float *delta);
 
-    void (*descriptor_write_buffer)(RendRenderer renderer, RendBuffer ubo, uint32_t binding, uint32_t slot, uint32_t offset, uint32_t size, bool is_ubo);
-    void (*descriptor_write_texture)(void *ctx, RendTexture *texture, uint32_t binding, uint32_t slot);
+    void (*descriptor_write_buffer)(RendContextHandle handle, RendBuffer ubo, uint32_t binding, uint32_t slot, uint32_t offset, uint32_t size, bool is_ubo);
+    void (*descriptor_write_texture)(RendContextHandle handle, RendTexture *texture, uint32_t binding, uint32_t slot);
 
-    RendBuffer   (*buffer_create_lifetime)(RendRenderer renderer, size_t size, RendBufferType type, bool gpu, int lifetime);
+    RendBuffer   (*buffer_create_lifetime)(RendContextHandle handle, size_t size, RendBufferType type, bool gpu, int lifetime);
     void         (*buffer_destroy)(RendBuffer *buffer);
-    void         (*buffer_copy)(RendRenderer renderer, RendBuffer *dest, size_t dest_offset, RendBuffer *src, size_t src_offset, size_t bytes);
+    void         (*buffer_copy)(RendContextHandle handle, RendBuffer *dest, size_t dest_offset, RendBuffer *src, size_t src_offset, size_t bytes);
     
-    RendTexture  (*texture_create)(RendRenderer renderer, uint32_t width, uint32_t height, uint32_t depth, uint32_t mip_levels, uint32_t layers, RendFormat format);
-    void         (*texture_destroy)(RendRenderer renderer, RendTexture *tex);
-    void         (*texture_copy_buffer)(RendRenderer renderer, RendTexture *texture, RendBuffer *buffer);
-    void         (*texture_blit)(RendRenderer renderer, RendTexture *src, RendTexture *dst, uint32_t src_x, uint32_t src_y, uint32_t src_w, uint32_t src_h, uint32_t dst_x, uint32_t dst_y, uint32_t dst_w, uint32_t dst_h);
+    RendTexture  (*texture_create)(RendContextHandle handle, uint32_t width, uint32_t height, uint32_t depth, uint32_t mip_levels, uint32_t layers, RendFormat format);
+    void         (*texture_destroy)(RendContextHandle handle, RendTexture *tex);
+    void         (*texture_copy_buffer)(RendContextHandle handle, RendTexture *texture, RendBuffer *buffer);
+    void         (*texture_blit)(RendContextHandle handle, RendTexture *src, RendTexture *dst, uint32_t src_x, uint32_t src_y, uint32_t src_w, uint32_t src_h, uint32_t dst_x, uint32_t dst_y, uint32_t dst_w, uint32_t dst_h);
 
-    bool (*pipeline_create)(RendRenderer, RendPipeline, Rend__PipelineConfig, uint8_t type, const uint8_t *shader1, size_t bytes1, const uint8_t *shader2, size_t bytes2, const uint8_t *shader3, size_t bytes3);
+    bool (*pipeline_create)(RendContextHandle, RendPipeline, Rend__PipelineConfig, uint8_t type, const uint8_t *shader1, size_t bytes1, const uint8_t *shader2, size_t bytes2, const uint8_t *shader3, size_t bytes3);
     void (*pipeline_bind)(RendPipeline);
     void (*pipeline_push_constants)(RendPipeline pipeline, void *push_data, size_t size);
 
@@ -102,10 +99,10 @@ typedef struct {
     void (*pipeline_draw_indexed)(RendPipeline pipeline, uint32_t index_count, uint32_t first_index, int32_t vertex_offset, uint32_t instance_count);
     void (*pipeline_set_blend)(RendPipeline, bool);
 
-    void (*renderer_render_pass_begin)(RendRenderer renderer, float r, float g, float b, float a);
-    void (*renderer_render_pass_begin_texture)(RendRenderer, RendTexture*);
-    void (*renderer_render_pass_end)(RendRenderer renderer);
-    void (*renderer_render_pass_end_texture)(RendRenderer renderer, RendTexture*);
+    void (*renderer_render_pass_begin)(RendContextHandle handle, float r, float g, float b, float a);
+    void (*renderer_render_pass_begin_texture)(RendContextHandle, RendTexture*);
+    void (*renderer_render_pass_end)(RendContextHandle handle);
+    void (*renderer_render_pass_end_texture)(RendContextHandle handle, RendTexture*);
 } RendVTable;
 
 

@@ -1,0 +1,9 @@
+COOL void Api(char *name, char *func, char *desc) {
+    <div class="api-card">
+        <h3 class="api-name">{ name }</h3>
+        <code class="language-c">{ func } </code>
+        <div class="api-description">
+            { desc }
+        </div>
+    </div>
+}

@@ -44,11 +44,14 @@ add_rend_demo(Poof_Batch *batch, const char *src, const char *out, uint32_t opt,
     cc.optimization = opt;
     cc.output = out;
     poof_cmd_append(&cc.inputs, src);
-    poof_cmd_append(&cc.includes, ".", "Rend", "Peak", "demos", "demos/teapot");
+    poof_cmd_append(&cc.includes, ".", "Rend", "Peak");
     poof_cmd_append(&cc.defines, "PEAK_VULKAN");
+#if !defined(_WIN32)
+    poof_cmd_append(&cc.defines, "_POSIX_C_SOURCE=200809L");
+#endif
     if (define) poof_cmd_append(&cc.defines, define);
     poof_cmd_append(&cc.libs, "m");
-    poof_cmd_append(&cc.extra_flags, "-std=c99", "-Wall");
+    poof_cmd_append(&cc.extra_flags, "-std=c99", "-Wall", "-Werror");
     add_peak_config(&cc);
     poof_batch_append_cc(batch, &cc);
 }
@@ -65,12 +68,14 @@ build_peak_header(void)
 static bool
 build_peak_demos(void)
 {
+    poof_mkdir("demos/multiplatform");
+
     Poof_CC cc = {0};
     poof_cc_init(&cc, POOF_CC_GCC | POOF_CC_CLANG, POOF_TARGET_HOST);
     cc.debug_mode = true;
     cc.optimization = POOF_O0;
-    cc.output = "demos/demo";
-    poof_cc_append(&cc.inputs, "demos/demo.c");
+    cc.output = "demos/multiplatform/demo";
+    poof_cc_append(&cc.inputs, "demos/multiplatform/demo.c");
     poof_cc_append(&cc.extra_flags, "-std=c99", "-Wall", "-Wno-deprecated-declarations", "-pthread");
     poof_cc_append(&cc.libs, "m", "pthread");
     if (!poof_cc_run(&cc)) return false;
@@ -79,14 +84,14 @@ build_peak_demos(void)
     poof_cc_init(&cc, POOF_CC_GCC | POOF_CC_CLANG, POOF_TARGET_HOST);
     cc.debug_mode = true;
     cc.optimization = POOF_O0;
-    cc.output = "demos/demo_run";
-    poof_cc_append(&cc.inputs, "demos/demo_run.c");
+    cc.output = "demos/multiplatform/demo_run";
+    poof_cc_append(&cc.inputs, "demos/multiplatform/demo_run.c");
     poof_cc_append(&cc.extra_flags, "-std=c99", "-Wall", "-Wno-deprecated-declarations", "-pthread");
     poof_cc_append(&cc.libs, "m", "pthread");
     if (!poof_cc_run(&cc)) return false;
 
     Poof_Cmd cmd = {0};
-    poof_cmd_append(&cmd, "emcc", "demos/demo_run.c", "-o", "demos/demo.js",
+    poof_cmd_append(&cmd, "emcc", "demos/multiplatform/demo_run.c", "-o", "demos/multiplatform/demo.js",
         "-std=c99", "-Wall", "-Wno-deprecated-declarations",
         "-sALLOW_MEMORY_GROWTH=1", "-sENVIRONMENT=web");
     return poof_cmd_run(&cmd);
@@ -100,19 +105,19 @@ build_rend_demos(void)
 
     Poof_Batch batch = {0};
 
-    slangc_entry(&batch, "demos/rend_compute.slang", "particleMain", "compute", "demos/compute/particle.spv");
-    slangc_entry(&batch, "demos/rend_compute.slang", "sandMain", "compute", "demos/compute/sand.spv");
-    slangc_entry(&batch, "demos/rend_compute.slang", "vertMain", "vertex", "demos/compute/vert.spv");
-    slangc_entry(&batch, "demos/rend_compute.slang", "fragMain", "fragment", "demos/compute/frag.spv");
+    slangc_entry(&batch, "demos/compute/rend_compute.slang", "particleMain", "compute", "demos/compute/particle.spv");
+    slangc_entry(&batch, "demos/compute/rend_compute.slang", "sandMain", "compute", "demos/compute/sand.spv");
+    slangc_entry(&batch, "demos/compute/rend_compute.slang", "vertMain", "vertex", "demos/compute/vert.spv");
+    slangc_entry(&batch, "demos/compute/rend_compute.slang", "fragMain", "fragment", "demos/compute/frag.spv");
 
     slangc_entry(&batch, "demos/teapot/shaders/basic.slang", "vertMain", "vertex", "demos/teapot/basic.vert.spv");
     slangc_entry(&batch, "demos/teapot/shaders/basic.slang", "fragMain", "fragment", "demos/teapot/basic.frag.spv");
     slangc_entry(&batch, "demos/teapot/shaders/texture.slang", "vertMain", "vertex", "demos/teapot/texture.vert.spv");
     slangc_entry(&batch, "demos/teapot/shaders/texture.slang", "fragMain", "fragment", "demos/teapot/texture.frag.spv");
 
-    add_rend_demo(&batch, "demos/rend_compute.c", "demos/compute/rend_compute_demo", POOF_O0, "REND_DEBUG");
-    add_rend_demo(&batch, "demos/rend_compute.c", "demos/compute/rend_compute_fast", POOF_O3 | POOF_MSSE2, NULL);
-    add_rend_demo(&batch, "demos/rend_teapot.c", "demos/teapot/rend_teapot", POOF_O0, "REND_DEBUG");
+    add_rend_demo(&batch, "demos/compute/rend_compute.c", "demos/compute/rend_compute_demo", POOF_O0, "REND_DEBUG");
+    // add_rend_demo(&batch, "demos/compute/rend_compute.c", "demos/compute/rend_compute_fast", POOF_O3 | POOF_MSSE2, NULL);
+    add_rend_demo(&batch, "demos/teapot/rend_teapot.c", "demos/teapot/rend_teapot", POOF_O0, "REND_DEBUG");
 
     return poof_batch_run(&batch, "Rend Demos");
 }
