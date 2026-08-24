@@ -11,7 +11,6 @@ add_peak_config(Poof_CC *cc)
     poof_cmd_append(&cc->includes, "Peak");
 
 #if defined(_WIN32)
-    poof_cc_append_win32(cc, "-luser32", "-lgdi32");
     {
         const char *vulkan_sdk = getenv("VULKAN_SDK");
         if (vulkan_sdk) {
@@ -23,7 +22,7 @@ add_peak_config(Poof_CC *cc)
     }
     poof_cc_append_win32(cc, "-lvulkan-1");
 #else
-    poof_cc_append_linux(cc, "-pthread", "-ldl", "-lvulkan");
+    poof_cc_append_linux(cc, "-lvulkan");
 #endif
 }
 
@@ -46,9 +45,6 @@ add_rend_demo(Poof_Batch *batch, const char *src, const char *out, uint32_t opt,
     poof_cmd_append(&cc.inputs, src);
     poof_cmd_append(&cc.includes, ".", "Rend", "Peak");
     poof_cmd_append(&cc.defines, "PEAK_VULKAN");
-#if !defined(_WIN32)
-    poof_cmd_append(&cc.defines, "_POSIX_C_SOURCE=200809L");
-#endif
     if (define) poof_cmd_append(&cc.defines, define);
     poof_cmd_append(&cc.libs, "m");
     poof_cmd_append(&cc.extra_flags, "-std=c99", "-Wall", "-Werror");
@@ -66,29 +62,24 @@ build_peak_header(void)
 }
 
 static bool
-build_peak_demos(void)
+build_peak_native(const char *src, const char *out)
 {
-    poof_mkdir("demos/multiplatform");
-
     Poof_CC cc = {0};
     poof_cc_init(&cc, POOF_CC_GCC | POOF_CC_CLANG, POOF_TARGET_HOST);
     cc.debug_mode = true;
     cc.optimization = POOF_O0;
-    cc.output = "demos/multiplatform/demo";
-    poof_cc_append(&cc.inputs, "demos/multiplatform/demo.c");
-    poof_cc_append(&cc.extra_flags, "-std=c99", "-Wall", "-Wno-deprecated-declarations", "-pthread");
-    poof_cc_append(&cc.libs, "m", "pthread");
-    if (!poof_cc_run(&cc)) return false;
+    cc.output = out;
+    poof_cmd_append(&cc.inputs, src);
+    poof_cmd_append(&cc.extra_flags, "-std=c99", "-Wall", "-Wno-deprecated-declarations");
+    return poof_cc_run(&cc);
+}
 
-    poof_cc_free(&cc);
-    poof_cc_init(&cc, POOF_CC_GCC | POOF_CC_CLANG, POOF_TARGET_HOST);
-    cc.debug_mode = true;
-    cc.optimization = POOF_O0;
-    cc.output = "demos/multiplatform/demo_run";
-    poof_cc_append(&cc.inputs, "demos/multiplatform/demo_run.c");
-    poof_cc_append(&cc.extra_flags, "-std=c99", "-Wall", "-Wno-deprecated-declarations", "-pthread");
-    poof_cc_append(&cc.libs, "m", "pthread");
-    if (!poof_cc_run(&cc)) return false;
+static bool
+build_peak_demos(void)
+{
+    poof_mkdir("demos/multiplatform");
+    if (!build_peak_native("demos/multiplatform/demo.c", "demos/multiplatform/demo")) return false;
+    if (!build_peak_native("demos/multiplatform/demo_run.c", "demos/multiplatform/demo_run")) return false;
 
     Poof_Cmd cmd = {0};
     poof_cmd_append(&cmd, "emcc", "demos/multiplatform/demo_run.c", "-o", "demos/multiplatform/demo.js",

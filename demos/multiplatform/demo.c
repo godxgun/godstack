@@ -1,7 +1,7 @@
-#include <stdio.h>
-
 #define PEAK_IMPLEMENTATION
 #include "../../Peak/peak.h"
+
+#include <stdio.h>
 
 void print_window_resize(PeakEvent ev) {
     printf("window: %u %u\n", ev.resize.width, ev.resize.height);

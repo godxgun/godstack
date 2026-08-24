@@ -9,9 +9,16 @@
 #ifndef PEAK_H
 #define PEAK_H
 
+#if !defined(_WIN32) && !defined(_WIN64) && !defined(__APPLE__) && !defined(__MACH__) \
+ && !defined(__wasm__) && !defined(__wasm32__) && !defined(__wasm64__) && !defined(__EMSCRIPTEN__)
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+#endif
+
 #define PEAK_MAJOR "0"
 #define PEAK_MINOR "5"
-#define PEAK_PATCH "2"
+#define PEAK_PATCH "4"
 
 /* CHANGE LOG 
  * 0.0.0 - @vasco - prototyping
@@ -24,6 +31,8 @@
  * 0.5.0 - @vasco - audio start/stop, s16le pull callback
  * 0.5.1 - @vasco - log, file, time, vulkan extensions
  * 0.5.2 - @vasco - vulkan surface from window
+ * 0.5.3 - @vasco - skip XCloseDisplay after vulkan teardown
+ * 0.5.4 - @vasco - posix feature test macro before includes
  */
 
 #define NANOS_PER_SEC 1000000000ull
@@ -69,9 +78,6 @@
 
 #if defined(PEAK_LINUX) || defined(PEAK_BSD) || defined(PEAK_APPLE)
     #define PEAK_UNIX
-    #if !defined(PEAK_APPLE) && !defined(_POSIX_C_SOURCE)
-        #define _POSIX_C_SOURCE 200112L
-    #endif
 #endif
 
 #ifdef PEAK_WEB

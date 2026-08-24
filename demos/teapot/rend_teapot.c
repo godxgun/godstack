@@ -1,7 +1,7 @@
 #define PEAK_IMPLEMENTATION
-#include "teapot.h"
 #include "../Rend/rend.h"
 #include "../Rend/rend.c"
+#include "teapot.h"
 #include "../Math/math.h"
 #include <stddef.h>
 #include <stdlib.h>

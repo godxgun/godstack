@@ -15,7 +15,11 @@
 
 #define POOF_MAJOR 0
 #define POOF_MINOR 1
-#define POOF_PATCH 0
+#define POOF_PATCH 1
+
+/* CHANGE LOG
+ * 0.1.1 - @vasco - rebuild finds poof.h from more paths
+ */
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -794,9 +798,9 @@ extern void
 poof_go_rebuild_urself_impl(int argc, char **argv, const char *source_file)
 {
     const char *binary_file = argv[0];
-    const char *sources[] = { source_file, "Poof/poof.h" };
+    const char *sources[] = { source_file, "poof.h", "Poof/poof.h", "godstack/Poof/poof.h" };  // redundant I know, but conveninent hehe
 
-    if (!poof_needs_rebuild(binary_file, sources, 2)) {
+    if (!poof_needs_rebuild(binary_file, sources, 4)) {
         return;
     }
 
@@ -809,7 +813,7 @@ poof_go_rebuild_urself_impl(int argc, char **argv, const char *source_file)
     rename(binary_file, binary_old);
 
     Poof_Cmd cmd = {0};
-    poof_cmd_append(&cmd, "gcc", "-o", binary_file, source_file, "-IPodium", "-IPoof");
+    poof_cmd_append(&cmd, "gcc", "-o", binary_file, source_file);
 
     if (!poof_cmd_run(&cmd)) {
         poof_print(0xFF0000, "[POOF] Rebuild failed!\n");

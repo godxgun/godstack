@@ -104,6 +104,8 @@ rend_vk_init(void)
 		return true;
 	}
 
+	rend_vk_host_arena_init();
+
 	/* create instance if does not exist */
 	VkApplicationInfo vk_app_info = {VK_STRUCTURE_TYPE_APPLICATION_INFO};
 	vk_app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -202,6 +204,7 @@ rend_vk_quit(void)
 
 	vkDestroyInstance(vk_instance, vk_allocator);
 	vk_instance = 0;
+	rend_vk_host_arena_destroy();
 }
 
 RendContextHandle
