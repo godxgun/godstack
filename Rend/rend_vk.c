@@ -878,8 +878,8 @@ void
 rend_vk_renderer_render_pass_end_texture(RendContextHandle handle, RendTexture *texture)
 {
 	RendVk14Context *ctx = (RendVk14Context *)handle;
-	rend_vk_texture_transition_layout(handle, ctx->frame_resources[ctx->frame_index].command_buffer, texture, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
 	rend_vk_renderer_render_pass_end(handle);
+	rend_vk_texture_transition_layout(handle, ctx->frame_resources[ctx->frame_index].command_buffer, texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 void
@@ -1137,10 +1137,8 @@ rend_vk_texture_destroy(RendContextHandle handle, RendTexture *tex)
 {
 	RASSERT(handle && tex);
 
-	if (tex->handle) {
-		vkDestroyImage(vk_device.logical_device, (VkImage)tex->handle, vk_allocator);
-		tex->handle = 0;
-	}
+	/* same as buffer_destroy: in-flight CBs may still refer to this image */
+	vkDeviceWaitIdle(vk_device.logical_device);
 
 	if (tex->view) {
 		vkDestroyImageView(vk_device.logical_device, (VkImageView)tex->view, vk_allocator);
@@ -1150,6 +1148,11 @@ rend_vk_texture_destroy(RendContextHandle handle, RendTexture *tex)
 	if (tex->sampler) {
 		vkDestroySampler(vk_device.logical_device, (VkSampler)tex->sampler, vk_allocator);
 		tex->sampler = 0;
+	}
+
+	if (tex->handle) {
+		vkDestroyImage(vk_device.logical_device, (VkImage)tex->handle, vk_allocator);
+		tex->handle = 0;
 	}
 
 	/* memset(tex, 0xBABE, sizeof(*tex)); */
