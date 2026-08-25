@@ -100,6 +100,14 @@ peak_window_epoll(PeakWindow *win, PeakEvent *ev)
     return got;
 }
 
+int
+peak_window_fd(PeakWindow *win)
+{
+    if (!win)
+        return -1;
+    return peak_platform_fd(&win->internal);
+}
+
 uint32_t *
 peak_window_backbuffer(PeakWindow *win, size_t *width, size_t *height)
 {

@@ -24,12 +24,15 @@
 #define TERM_H
 
 #define TERM_MAJOR 0
-#define TERM_MINOR 2
-#define TERM_PATCH 0
+#define TERM_MINOR 3
+#define TERM_PATCH 2
 
 /* CHANGE LOG
  * 0.1.0 - @vasco - extract from vt: feed, grid, live CSI
  * 0.2.0 - @vasco - term_feed_ascii: clean CR/LF/printable, no state machine
+ * 0.3.0 - @vasco - alt screen, scroll region, IL/DL/DCH/ECH, SGR 256/RGB, DSR/DA
+ * 0.3.1 - @vasco - resize copies rows; alt switch resets scroll region
+ * 0.3.2 - @vasco - CSI 18 t, DECRQM, XTVERSION; larger reply
  */
 
 #include <assert.h>
@@ -69,6 +72,8 @@
 #define TERM_MODE_ECHO      (1u << 4)
 #define TERM_MODE_PRINT     (1u << 5)
 #define TERM_MODE_UTF8      (1u << 6)
+#define TERM_MODE_HIDE      (1u << 7)
+#define TERM_WRAPNEXT       1u
 
 #define TERM_ESC_START      1u
 #define TERM_ESC_CSI        2u
@@ -139,6 +144,7 @@ typedef struct Term {
     TermScreen screen;
     TermScreen alt;
     TermCursor cursor;
+    TermCursor saved;
     TermColors colors;
     TermCsi csi;
     TermStr str;
@@ -150,6 +156,9 @@ typedef struct Term {
     uint32_t utf8_min;
     uint32_t last_ch;
     uint8_t utf8_rem;
+    char reply[256];
+    uint32_t reply_n;
+    char str_buf[128];
 } Term;
 
 int  term_init(Term *t, uint32_t cols, uint32_t rows, const TermColors *colors);

@@ -18,7 +18,7 @@
 
 #define PEAK_MAJOR "0"
 #define PEAK_MINOR "5"
-#define PEAK_PATCH "5"
+#define PEAK_PATCH "7"
 
 /* CHANGE LOG 
  * 0.0.0 - @vasco - prototyping
@@ -34,6 +34,8 @@
  * 0.5.3 - @vasco - skip XCloseDisplay after vulkan teardown
  * 0.5.4 - @vasco - posix feature test macro before includes
  * 0.5.5 - @vasco - include peak.c; no PEAK_IMPLEMENTATION
+ * 0.5.6 - @vasco - digits, tab, backspace, delete; key.code from XLookupString
+ * 0.5.7 - @vasco - peak_window_fd; X11 ConnectionNumber
  */
 
 #define NANOS_PER_SEC 1000000000ull
@@ -159,6 +161,9 @@ typedef enum {
     PEAK_KEY_UNKNOWN = 0,
     PEAK_KEY_UP, PEAK_KEY_DOWN, PEAK_KEY_LEFT, PEAK_KEY_RIGHT,
     PEAK_KEY_SPACE, PEAK_KEY_ESCAPE, PEAK_KEY_ENTER,
+    PEAK_KEY_BACKSPACE, PEAK_KEY_TAB, PEAK_KEY_DELETE,
+    PEAK_KEY_0, PEAK_KEY_1, PEAK_KEY_2, PEAK_KEY_3, PEAK_KEY_4,
+    PEAK_KEY_5, PEAK_KEY_6, PEAK_KEY_7, PEAK_KEY_8, PEAK_KEY_9,
     PEAK_KEY_A, PEAK_KEY_B, PEAK_KEY_C, PEAK_KEY_D, PEAK_KEY_E, PEAK_KEY_F, PEAK_KEY_G, PEAK_KEY_H, PEAK_KEY_I,
     PEAK_KEY_J, PEAK_KEY_K, PEAK_KEY_L, PEAK_KEY_M, PEAK_KEY_N, PEAK_KEY_O, PEAK_KEY_P, PEAK_KEY_Q, PEAK_KEY_R,
     PEAK_KEY_S, PEAK_KEY_T, PEAK_KEY_U, PEAK_KEY_V, PEAK_KEY_W, PEAK_KEY_X, PEAK_KEY_Y, PEAK_KEY_Z,
@@ -192,7 +197,7 @@ typedef enum {
 typedef struct {
     PeakEventType type;
     union {
-        struct { PeakKeyCode key; PeakKeyMod mod; } key;
+        struct { PeakKeyCode key; PeakKeyMod mod; uint32_t code; } key;
         struct { uint32_t width, height; } resize;
         struct { PeakPointerState state; PeakPointerType type; float x, y; } pointer;
     };
@@ -224,6 +229,7 @@ PEAK PeakWindow peak_window_open(const char *name, uint32_t width, uint32_t heig
 PEAK void       peak_window_close(PeakWindow *window); // Close a window.
 PEAK void       peak_window_run(PeakWindow *win, int (*peak_tick)(PeakWindow *win, void *userdata), void *userdata); // Hijacking the main loop makes life easier on platforms like web
 PEAK int        peak_window_epoll(PeakWindow *win, PeakEvent *ev); // Poll a window for events.
+PEAK int        peak_window_fd(PeakWindow *win); // Display connection fd, or -1.
 PEAK uint32_t*  peak_window_backbuffer(PeakWindow *win, size_t *width, size_t *height); // Get the windows backbuffer.
 PEAK void       peak_window_clear(PeakWindow *win, float r, float g, float b, float a); // Clear window to color.
 PEAK void       peak_window_present(PeakWindow *win); // Present window backbuffer.

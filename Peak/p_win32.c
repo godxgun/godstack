@@ -121,6 +121,7 @@ static void peak_platform_window_close(PeakWindowInternal *intern);
 static uint32_t *peak_platform_window_buffer(PeakWindowInternal *intern, size_t *width, size_t *height);
 static void peak_platform_window_present(PeakWindowInternal *intern);
 static bool peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev);
+static int peak_platform_fd(PeakWindowInternal *intern);
 static int peak_internal_winmm_load(void);
 static void peak_internal_win32_audio_fill(int i);
 static DWORD WINAPI peak_internal_win32_audio_thread(LPVOID arg);
@@ -162,6 +163,8 @@ peak_internal_win32_key_map(WPARAM vk)
 {
 	if (vk >= 'A' && vk <= 'Z')
 		return (PeakKeyCode)(PEAK_KEY_A + (int)(vk - 'A'));
+	if (vk >= '0' && vk <= '9')
+		return (PeakKeyCode)(PEAK_KEY_0 + (int)(vk - '0'));
 	switch (vk) {
 	case VK_UP:
 		return PEAK_KEY_UP;
@@ -177,6 +180,12 @@ peak_internal_win32_key_map(WPARAM vk)
 		return PEAK_KEY_ESCAPE;
 	case VK_RETURN:
 		return PEAK_KEY_ENTER;
+	case VK_BACK:
+		return PEAK_KEY_BACKSPACE;
+	case VK_TAB:
+		return PEAK_KEY_TAB;
+	case VK_DELETE:
+		return PEAK_KEY_DELETE;
 	default:
 		return PEAK_KEY_UNKNOWN;
 	}
@@ -479,6 +488,13 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 			return 1;
 	}
 	return peak_q_pop(&w->q, ev);
+}
+
+static int
+peak_platform_fd(PeakWindowInternal *intern)
+{
+	(void)intern;
+	return -1;
 }
 
 static int

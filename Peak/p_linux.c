@@ -38,6 +38,7 @@
 	X(XDestroyWindow,      int, (Display *, Window)) \
 	X(XCheckIfEvent,       Bool, (Display *, XEvent *, Bool (*)(Display *, XEvent *, XPointer), XPointer)) \
 	X(XLookupKeysym,       KeySym, (XKeyEvent *, int)) \
+	X(XLookupString,       int, (XKeyEvent *, char *, int, KeySym *, XComposeStatus *)) \
 	X(XPutImage,           int, (Display *, Drawable, GC, XImage *, int, int, int, int, unsigned int, unsigned int))
 
 typedef struct {
@@ -108,6 +109,8 @@ peak_internal_x11_key_map(KeySym sym)
 		return (PeakKeyCode)(PEAK_KEY_A + (int)(sym - XK_a));
 	if (sym >= XK_A && sym <= XK_Z)
 		return (PeakKeyCode)(PEAK_KEY_A + (int)(sym - XK_A));
+	if (sym >= XK_0 && sym <= XK_9)
+		return (PeakKeyCode)(PEAK_KEY_0 + (int)(sym - XK_0));
 	switch (sym) {
 	case XK_Up: return PEAK_KEY_UP;
 	case XK_Down: return PEAK_KEY_DOWN;
@@ -116,6 +119,9 @@ peak_internal_x11_key_map(KeySym sym)
 	case XK_space: return PEAK_KEY_SPACE;
 	case XK_Escape: return PEAK_KEY_ESCAPE;
 	case XK_Return: return PEAK_KEY_ENTER;
+	case XK_BackSpace: return PEAK_KEY_BACKSPACE;
+	case XK_Tab: return PEAK_KEY_TAB;
+	case XK_Delete: return PEAK_KEY_DELETE;
 	default: return PEAK_KEY_UNKNOWN;
 	}
 }
@@ -310,11 +316,19 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 			}
 			continue;
 		case KeyPress:
-		case KeyRelease:
+		case KeyRelease: {
+			char buf[8];
+			KeySym ks = 0;
+			int n;
+
+			memset(buf, 0, sizeof buf);
+			n = peak_x11.XLookupString(&xev.xkey, buf, (int)sizeof buf, &ks, NULL);
 			ev->type = (xev.type == KeyPress) ? PEAK_EVENT_KEY_DOWN : PEAK_EVENT_KEY_UP;
-			ev->key.key = peak_internal_x11_key_map(peak_x11.XLookupKeysym(&xev.xkey, 0));
+			ev->key.key = peak_internal_x11_key_map(ks ? ks : peak_x11.XLookupKeysym(&xev.xkey, 0));
 			ev->key.mod = peak_internal_x11_mod_map(xev.xkey.state);
+			ev->key.code = (n > 0) ? (uint32_t)(unsigned char)buf[0] : 0;
 			return 1;
+		}
 		case ButtonPress:
 		case ButtonRelease:
 			ev->type = PEAK_EVENT_POINTER;
@@ -349,6 +363,15 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 		}
 	}
 	return 0;
+}
+
+static int
+peak_platform_fd(PeakWindowInternal *intern)
+{
+	(void)intern;
+	if (!peak_linux.display)
+		return -1;
+	return ConnectionNumber(peak_linux.display);
 }
 
 static int

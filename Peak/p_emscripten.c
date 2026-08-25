@@ -59,6 +59,12 @@ peak_web_key_map(const char *code)
 	if (!strcmp(code, "Space")) return PEAK_KEY_SPACE;
 	if (!strcmp(code, "Escape")) return PEAK_KEY_ESCAPE;
 	if (!strcmp(code, "Enter")) return PEAK_KEY_ENTER;
+	if (!strcmp(code, "Backspace")) return PEAK_KEY_BACKSPACE;
+	if (!strcmp(code, "Tab")) return PEAK_KEY_TAB;
+	if (!strcmp(code, "Delete")) return PEAK_KEY_DELETE;
+	if (code[0] == 'D' && code[1] == 'i' && code[2] == 'g' && code[3] == 'i' && code[4] == 't' &&
+	    code[5] >= '0' && code[5] <= '9' && code[6] == 0)
+		return (PeakKeyCode)(PEAK_KEY_0 + (code[5] - '0'));
 	return PEAK_KEY_UNKNOWN;
 }
 
@@ -182,6 +188,13 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 {
 	struct peak_web_win *w = intern ? intern->w : NULL;
 	return w ? peak_q_pop(&w->q, ev) : 0;
+}
+
+static int
+peak_platform_fd(PeakWindowInternal *intern)
+{
+	(void)intern;
+	return -1;
 }
 
 #define PEAK_AUDIO_FRAMES 1024
