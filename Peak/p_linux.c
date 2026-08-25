@@ -74,7 +74,7 @@ typedef struct {
 	void *userdata;
 } PeakAudio;
 
-struct peak_window_internal_t {
+struct peak_linux_win {
 	Window window;
 	GC gfx_ctx;
 	XImage *ximage;
@@ -138,7 +138,7 @@ peak_internal_x11_window_match(Display *dpy, XEvent *ev, XPointer arg)
 }
 
 static int
-peak_linux_buffer(PeakWindowInternal *w, uint32_t width, uint32_t height)
+peak_linux_buffer(struct peak_linux_win *w, uint32_t width, uint32_t height)
 {
 	int screen;
 
@@ -206,38 +206,48 @@ peak_platform_quit(void)
 static PeakWindowInternal
 peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uint32_t flags)
 {
-	PeakWindowInternal w = {0};
+	PeakWindowInternal intern = {0};
+	struct peak_linux_win *w;
 	int screen;
 
 	(void)flags;
 	if (!peak_linux.display && !peak_platform_init())
-		return w;
+		return intern;
+
+	w = calloc(1, sizeof *w);
+	if (!w)
+		return intern;
 
 	screen = DefaultScreen(peak_linux.display);
-	w.window = peak_x11.XCreateSimpleWindow(peak_linux.display,
+	w->window = peak_x11.XCreateSimpleWindow(peak_linux.display,
 		RootWindow(peak_linux.display, screen), 0, 0, width, height, 0,
 		BlackPixel(peak_linux.display, screen), BlackPixel(peak_linux.display, screen));
-	peak_x11.XStoreName(peak_linux.display, w.window, name);
-	peak_x11.XSetWMProtocols(peak_linux.display, w.window, &peak_linux.wm_delete_window, 1);
-	peak_x11.XSelectInput(peak_linux.display, w.window,
+	peak_x11.XStoreName(peak_linux.display, w->window, name);
+	peak_x11.XSetWMProtocols(peak_linux.display, w->window, &peak_linux.wm_delete_window, 1);
+	peak_x11.XSelectInput(peak_linux.display, w->window,
 		KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask |
 		PointerMotionMask | StructureNotifyMask);
-	w.gfx_ctx = peak_x11.XCreateGC(peak_linux.display, w.window, 0, NULL);
+	w->gfx_ctx = peak_x11.XCreateGC(peak_linux.display, w->window, 0, NULL);
 
-	if (!peak_linux_buffer(&w, width, height)) {
-		peak_x11.XFreeGC(peak_linux.display, w.gfx_ctx);
-		peak_x11.XDestroyWindow(peak_linux.display, w.window);
-		return (PeakWindowInternal){0};
+	if (!peak_linux_buffer(w, width, height)) {
+		peak_x11.XFreeGC(peak_linux.display, w->gfx_ctx);
+		peak_x11.XDestroyWindow(peak_linux.display, w->window);
+		free(w);
+		return intern;
 	}
 
-	peak_x11.XMapRaised(peak_linux.display, w.window);
+	peak_x11.XMapRaised(peak_linux.display, w->window);
 	peak_x11.XFlush(peak_linux.display);
-	return w;
+	intern.w = w;
+	return intern;
 }
 
 static void
-peak_platform_window_close(PeakWindowInternal *w)
+peak_platform_window_close(PeakWindowInternal *intern)
 {
+	struct peak_linux_win *w;
+
+	w = intern ? intern->w : NULL;
 	if (!w || !w->window || !peak_linux.display)
 		return;
 	if (w->ximage) {
@@ -248,12 +258,16 @@ peak_platform_window_close(PeakWindowInternal *w)
 	if (w->gfx_ctx)
 		peak_x11.XFreeGC(peak_linux.display, w->gfx_ctx);
 	peak_x11.XDestroyWindow(peak_linux.display, w->window);
-	*w = (PeakWindowInternal){0};
+	free(w);
+	intern->w = NULL;
 }
 
 static uint32_t *
-peak_platform_window_buffer(PeakWindowInternal *w, size_t *width, size_t *height)
+peak_platform_window_buffer(PeakWindowInternal *intern, size_t *width, size_t *height)
 {
+	struct peak_linux_win *w;
+
+	w = intern ? intern->w : NULL;
 	if (!w || !w->window) {
 		*width = 0;
 		*height = 0;
@@ -265,8 +279,11 @@ peak_platform_window_buffer(PeakWindowInternal *w, size_t *width, size_t *height
 }
 
 static void
-peak_platform_window_present(PeakWindowInternal *w)
+peak_platform_window_present(PeakWindowInternal *intern)
 {
+	struct peak_linux_win *w;
+
+	w = intern ? intern->w : NULL;
 	if (!w || !w->ximage || !peak_linux.display)
 		return;
 	peak_x11.XPutImage(peak_linux.display, w->window, w->gfx_ctx, w->ximage,
@@ -275,10 +292,12 @@ peak_platform_window_present(PeakWindowInternal *w)
 }
 
 static bool
-peak_platform_epoll(PeakWindowInternal *w, PeakEvent *ev)
+peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 {
+	struct peak_linux_win *w;
 	XEvent xev;
 
+	w = intern ? intern->w : NULL;
 	if (!w || !w->window || !peak_linux.display)
 		return 0;
 
@@ -444,10 +463,12 @@ peak_platform_vulkan_get_extensions(uint32_t *count)
 }
 
 static int
-peak_platform_vulkan_create_surface(PeakWindowInternal *w, void *instance, const void *allocator, void *out_surface)
+peak_platform_vulkan_create_surface(PeakWindowInternal *intern, void *instance, const void *allocator, void *out_surface)
 {
 #ifdef PEAK_VULKAN
+	struct peak_linux_win *w;
 	VkXlibSurfaceCreateInfoKHR ci;
+	w = intern ? intern->w : NULL;
 	if (!w || !peak_linux.display || !w->window) return 0;
 	memset(&ci, 0, sizeof ci);
 	ci.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
@@ -455,7 +476,7 @@ peak_platform_vulkan_create_surface(PeakWindowInternal *w, void *instance, const
 	ci.window = w->window;
 	return vkCreateXlibSurfaceKHR((VkInstance)instance, &ci, (const VkAllocationCallbacks *)allocator, (VkSurfaceKHR *)out_surface) == VK_SUCCESS;
 #else
-	(void)w; (void)instance; (void)allocator; (void)out_surface;
+	(void)intern; (void)instance; (void)allocator; (void)out_surface;
 	return 0;
 #endif
 }

@@ -1,9 +1,9 @@
-#define PEAK_IMPLEMENTATION
-#include "../Rend/rend.h"
-#include "../Rend/rend.c"
+#include "rend.h"
+#include "peak.c"
+#include "rend.c"
 #include "teapot.h"
-#define GRIT_IMPLEMENTATION
-#include "../../Grit/grit.h"
+#include "grit.h"
+#include "grit.c"
 #include <stddef.h>
 #include <stdlib.h>
 

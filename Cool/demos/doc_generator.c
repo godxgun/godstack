@@ -7,8 +7,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
-#define COOL_IMPLEMENTATION
 #include "../cool.h"
+#include "../cool.c"
 
 #include "view.cool.c"
 

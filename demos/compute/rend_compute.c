@@ -1,6 +1,6 @@
-#define PEAK_IMPLEMENTATION
-#include "../Rend/rend.h"
-#include "../Rend/rend.c"
+#include "rend.h"
+#include "peak.c"
+#include "rend.c"
 #include <stddef.h>
 #include <string.h>
 

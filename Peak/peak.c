@@ -1,5 +1,45 @@
+#include "peak.h"
+
 #include <stdio.h>
 #include <stdlib.h>
+
+#if defined(PEAK_WIN32) || defined(PEAK_WEB)
+#define PEAK_Q 64
+
+typedef struct {
+    unsigned h, n;
+    PeakEvent e[PEAK_Q];
+} PeakQ;
+
+static void
+peak_q_push(PeakQ *q, PeakEvent ev)
+{
+    if (!q || q->n == PEAK_Q)
+        return;
+    q->e[(q->h + q->n++) % PEAK_Q] = ev;
+}
+
+static int
+peak_q_pop(PeakQ *q, PeakEvent *ev)
+{
+    if (!q || !q->n)
+        return 0;
+    *ev = q->e[q->h];
+    q->h = (q->h + 1) % PEAK_Q;
+    q->n--;
+    return 1;
+}
+#endif
+
+#if defined(PEAK_WIN32)
+#include "p_win32.c"
+#elif defined(PEAK_LINUX)
+#include "p_linux.c"
+#elif defined(PEAK_WEB)
+#include "p_emscripten.c"
+#endif
+
+#include "p_log.c"
 
 static uint32_t *
 peak_window_sync(PeakWindow *win, size_t *width, size_t *height)

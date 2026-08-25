@@ -107,9 +107,6 @@ struct peak_win32_win {
 	PeakQ q;
 };
 
-struct peak_window_internal_t {
-	struct peak_win32_win *w;
-};
 
 static int peak_internal_user32_load(HMODULE handle);
 static int peak_internal_gdi32_load(HMODULE handle);
@@ -630,11 +627,13 @@ static int
 peak_platform_vulkan_create_surface(PeakWindowInternal *intern, void *instance, const void *allocator, void *out_surface)
 {
 #ifdef PEAK_VULKAN
+	struct peak_win32_win *w;
 	VkWin32SurfaceCreateInfoKHR ci;
-	if (!intern || !intern->w || !intern->w->hwnd) return 0;
+	w = intern ? intern->w : NULL;
+	if (!w || !w->hwnd) return 0;
 	memset(&ci, 0, sizeof ci);
 	ci.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-	ci.hwnd = intern->w->hwnd;
+	ci.hwnd = w->hwnd;
 	ci.hinstance = GetModuleHandleA(NULL);
 	return vkCreateWin32SurfaceKHR((VkInstance)instance, &ci, (const VkAllocationCallbacks *)allocator, (VkSurfaceKHR *)out_surface) == VK_SUCCESS;
 #else

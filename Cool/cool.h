@@ -66,15 +66,15 @@
 
 #define COOL_MAJOR 0  // breaking API changes
 #define COOL_MINOR 0  // non-breaking features
-#define COOL_PATCH 1  // non-breaking patches and bug fixes
+#define COOL_PATCH 2  // non-breaking patches and bug fixes
 
 /* CHANGE LOG
  * 0.0.0 - @vasco - server-side HTML from C functions
  * 0.0.1 - COOL_OUTPUT override, cool_html_txt scans *s;
  *         drop unused URL table, stub cool_html / cool_htmlf, cool_sv_write
+ * 0.0.2 - @vasco - include cool.c
  */
 
-#define COOLDEF static inline
 #ifndef COOL_OUTPUT
 #define COOL_OUTPUT stdout
 #endif
@@ -91,66 +91,13 @@ typedef struct {
 
 /* Macro to wrap string literal in a string view. Since we will be dealing with a lot of */
 #define COOL_SV(literal) ((Cool_StrView){ .cstr = (literal), .len = sizeof(literal) - 1 })
-COOLDEF void cool_html_raw(Cool_StrView sv); // Writes HTML to buffer without escaping sequences. Vulnerable to XSS. Use with caution.
-COOLDEF void cool_html_raw_cstr(const char *str, size_t len); // Writes unsafe HTML using C strings.
-COOLDEF void cool_html_txt(const char *str, size_t len); // Meant for inner text. Escapes '<', '>' and '&'.
-COOLDEF void cool_htmlf_raw(const char *fmt, ...); // Writes formatting HTML string to buffer without escaping sequences. Vulnerable to XSS. Use with caution.
+void cool_html_raw(Cool_StrView sv); // Writes HTML to buffer without escaping sequences. Vulnerable to XSS. Use with caution.
+void cool_html_raw_cstr(const char *str, size_t len); // Writes unsafe HTML using C strings.
+void cool_html_txt(const char *str, size_t len); // Meant for inner text. Escapes '<', '>' and '&'.
+void cool_htmlf_raw(const char *fmt, ...); // Writes formatting HTML string to buffer without escaping sequences. Vulnerable to XSS. Use with caution.
                                                                 
 #endif
 
-#define COOL_IMPLEMENTATION
-#ifdef COOL_IMPLEMENTATION
-#undef COOL_IMPLEMENTATION
-
-COOLDEF void
-cool_html_raw(Cool_StrView sv)
-{
-    fwrite(sv.cstr, sizeof *sv.cstr, sv.len, COOL_OUTPUT);
-}
-
-COOLDEF void
-cool_html_raw_cstr(const char *str, size_t len)
-{
-    fwrite(str, sizeof *str, len, COOL_OUTPUT);
-}
-
-COOLDEF void
-cool_html_txt(const char *str, size_t len)
-{
-    const char *s = str;
-	while (s && *s && len--) {
-        int c = *s;
-        if (c == '<' || c == '>' || c == '&') {
-            cool_html_raw_cstr(str, s - str);
-            switch (c) {
-                case '>':
-                    cool_html_raw(COOL_SV("&gt;"));
-                    break;
-                case '<':
-                    cool_html_raw(COOL_SV("&lt;"));
-                    break;
-                case '&':
-                    cool_html_raw(COOL_SV("&amp;"));
-                    break;
-            }
-            str = s + 1;
-        }
-        s++;
-    }
-
-    if (s != str) cool_html_raw_cstr(str, s - str);
-}
-
-COOLDEF void
-cool_htmlf_raw(const char *fmt, ...)
-{
-    va_list args;
-    va_start(args, fmt);
-    vfprintf(COOL_OUTPUT, fmt, args);
-    va_end(args);
-}
-                    
-#endif
 
 /*
 ------------------------------------------------------------------------------

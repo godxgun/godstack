@@ -6,19 +6,22 @@
 ·▀▀▀▀  ▀▀▀ ▀▀ █▪ ▀▀▀▀  ▀▀▀  ▀  ▀ ·▀▀▀ ·▀  ▀
 ```
 
-Collection of modular and minimal libraries used by our games. These libraries are designed to be
-"vendored in" aka. copy-and-pasted into a project's folder. Some libraries may depend on each other,
-but most can be used in isolation. Each library should contain a license in the header.
-
-Use at your own risk.
+Collection of modular and minimal libraries used by our games.
 
 | Name   | Description                                |
 | ------ | ------------------------------------------ |
-| Peak   | Single-header platform library that automatically links the write system libraries. |
-| Grit   | Memory allocators, math, software raster.  |
-| Poof   | Build software without going insane.       |
+| Poof   | Build system.                              |
+| Peak   | Platform library that automatically links the correct system libraries. |
+| Grit   | Utilities: allocators, math, rng, software raster.  |
 | Rend   | Modern graphics API layer.                 |
 | Cool   | Render HTML by calling functions.          |
+
+## Installing
+
+1. Copy and paste the folder.
+2. -I the directory.
+3. Include foo.h.
+4. Include foo.c and it will pull other .c files as needed.
 
 ## Maturity & Versioning
 

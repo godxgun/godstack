@@ -1,6 +1,6 @@
-#define GRIT_IMPLEMENTATION
 #define GRIT_DEBUG
-#include "../../Grit/grit.h"
+#include "grit.h"
+#include "grit.c"
 
 #include <stdio.h>
 #include <stdint.h>

@@ -38,9 +38,6 @@ struct peak_web_win {
 	uint32_t buffer[];
 };
 
-struct peak_window_internal_t {
-	struct peak_web_win *w;
-};
 
 static void
 peak_web_sel(const char *name, char *out, size_t n)
