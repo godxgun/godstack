@@ -14,8 +14,8 @@
 #define _REND_H_
 
 #define REND_MAJOR 1  // breaking API changes
-#define REND_MINOR 0  // non-breaking features
-#define REND_PATCH 10  // non-breaking patches and bug fixes
+#define REND_MINOR 1  // non-breaking features
+#define REND_PATCH 1  // non-breaking patches and bug fixes
                     
 #ifndef PEAK_VULKAN
 #define PEAK_VULKAN
@@ -84,6 +84,7 @@ extern void rend_quit(void); // Will free ALL resources created by the library s
 
 /* Renderer */
 extern RendRenderer rend_renderer_create(PeakWindow*, RendBackendType backend, void* device, bool vsync, RendBindingInfo *bind_info); // Create Renderer that renders to a target window with 
+extern RendRenderer rend_renderer_create_offscreen(uint32_t width, uint32_t height, RendFormat format, RendBackendType backend, RendBindingInfo *bind_info); // No window. Default target is an owned color image. First renderer creates the process device.
 extern void         rend_renderer_destroy(RendRenderer renderer); // Destroy renderer. Unless you need to freely create and destroy renderers, you can rely on rend_quit to clean up.
 extern bool         rend_renderer_frame_begin(RendRenderer renderer); // May fail. Acquires backbuffer and starts recording commands!
 extern void         rend_renderer_frame_end(RendRenderer renderer, float *delta); // Stops recording commands and presents the contents to the screen.
@@ -105,7 +106,8 @@ extern RendTexture  rend_texture_create(RendRenderer renderer, uint32_t width, u
 extern RendTexture  rend_texture_create_from_data(RendRenderer renderer, const void *data, uint32_t width, uint32_t height, RendFormat format); // Create texture and copy data to it immediately.
 extern void         rend_texture_destroy(RendRenderer renderer, RendTexture *texture); // Destroy texture. Does not deallocate it's memory from the bump allocator.
 extern void         rend_texture_copy_data(RendRenderer renderer, RendTexture *texture, const void *data, size_t size); // Copy data to texture. MUST be the same size as the format expects (width x height x sizeof format).
-extern void         rend_texture_copy_buffer(RendRenderer renderer, RendTexture *texture, RendBuffer *buffer); // Copy buffer to texture. 
+extern void         rend_texture_copy_buffer(RendRenderer renderer, RendTexture *texture, RendBuffer *buffer); // Copy buffer to texture.
+extern void         rend_texture_read(RendRenderer renderer, RendTexture *texture, void *dst, size_t size); // Copy texture to host. Tight-packed texels. Outside a frame and pass. MUST be width x height x sizeof format.
 
 /* Create, Configure, and Destroy Rendering Pipelines */
 extern RendPipeline rend_pipeline_create_graphics_spirv(RendRenderer renderer, uint8_t *vertex_bytes, size_t vertex_size, uint8_t *frag_bytes, size_t frag_size, const RendVertexBinding *vertex_bindings, uint32_t vertex_binding_count, const RendVertexAttributes *vertex_attributes, uint32_t vertex_attribute_count, const RendPushConstantInfo *push_constants, uint32_t push_constant_count,  RendPolygonMode polygon_mode, RendCullMode cull_mode, RendTopology topology, RendFormat color_format, bool depth_test_enable); // Create a pipeline for a renderer using a configuration handle.
@@ -291,6 +293,8 @@ enum RendBufferType_t {
  * 1.0.8 - @vasco - offscreen pass clears new images; texture destroy not during a frame
  * 1.0.9 - @vasco - vulkan host alloc callbacks actually free (resize was exhausting 1MB arena)
  * 1.0.10 - @vasco - blit outside pass; texture layout after copy and blit
+ * 1.1.0 - @vasco - rend_renderer_create_offscreen: no window, no swapchain
+ * 1.1.1 - @vasco - rend_texture_read: image to host via staging buffer
  *
  * 1.0.0 finished API release
  *

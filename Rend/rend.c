@@ -25,6 +25,7 @@ bool rend_backend_vk_initialized = false;
 RendVTable rend_vtables[] = {
     [REND_BACKEND_VULKAN_14] = {
             .renderer_create = rend_vk_renderer_create,
+            .renderer_create_offscreen = rend_vk_renderer_create_offscreen,
             .renderer_destroy = rend_vk_renderer_destroy,
             .renderer_frame_begin = rend_vk_renderer_frame_begin,
             .renderer_frame_end = rend_vk_renderer_frame_end,
@@ -36,6 +37,7 @@ RendVTable rend_vtables[] = {
             .texture_create = rend_vk_texture_create,
             .texture_destroy = rend_vk_texture_destroy,
             .texture_copy_buffer = rend_vk_texture_copy_buffer,
+            .texture_copy_to_buffer = rend_vk_texture_copy_to_buffer,
             .texture_blit = rend_vk_texture_blit,
 
             .pipeline_create = rend_vk_pipeline_create,
@@ -89,6 +91,42 @@ rend_renderer_create(PeakWindow *target, RendBackendType backend, void* device, 
     rend->window = target;
 
     rend->context = rend_vtables[rend->backend].renderer_create(target, bind_info);
+    if (!rend->context) {
+        rfree(rend);
+        return NULL;
+    }
+
+    rend->next = rend_renderers_head;
+    rend->prev = NULL;
+    rend_renderers_head = rend;
+    if (rend->next)
+        rend->next->prev = rend;
+
+    return rend;
+}
+
+extern RendRenderer
+rend_renderer_create_offscreen(uint32_t width, uint32_t height, RendFormat format, RendBackendType backend, RendBindingInfo *bind_info)
+{
+    RendRenderer rend = rmalloc(sizeof *rend);
+    if (!rend) return NULL;
+    memset(rend, 0, sizeof *rend);
+
+    if (!rend__renderer_init_recursive(rend, backend, false)) {
+        rfree(rend);
+        return NULL;
+    }
+
+    rend->vsync = false;
+    if (bind_info)
+        rend->bind_info = *bind_info;
+    rend->window = NULL;
+
+    if (!rend_vtables[rend->backend].renderer_create_offscreen) {
+        rfree(rend);
+        return NULL;
+    }
+    rend->context = rend_vtables[rend->backend].renderer_create_offscreen(width, height, format, bind_info);
     if (!rend->context) {
         rfree(rend);
         return NULL;
@@ -274,6 +312,29 @@ extern void
 rend_texture_copy_buffer(RendRenderer renderer, RendTexture *texture, RendBuffer *buffer)
 {
     rend_vtables[renderer->backend].texture_copy_buffer(renderer->context, texture, buffer);
+}
+
+extern void
+rend_texture_read(RendRenderer renderer, RendTexture *texture, void *dst, size_t size)
+{
+    RendBuffer staging_buffer;
+
+    RASSERT(renderer && renderer->context, "Invalid renderer.");
+    RASSERT(texture, "Invalid texture.");
+    RASSERT(dst, "Invalid destination.");
+    RASSERT(!renderer->in_frame, "Must be called outside a frame.");
+    RASSERT(!renderer->in_pass, "Must be called outside a render pass.");
+    if (!renderer || !renderer->context || !texture || !dst || !size)
+        return;
+    if (renderer->in_frame || renderer->in_pass)
+        return;
+
+    staging_buffer = rend_vtables[renderer->backend].buffer_create_lifetime(
+        renderer->context, size, REND_BUFFER_TRANSFER, false, REND_LIFETIME_FRAME);
+    rend_vtables[renderer->backend].texture_copy_to_buffer(renderer->context, texture, &staging_buffer);
+    if (staging_buffer.mapped_memory)
+        memcpy(dst, staging_buffer.mapped_memory, size);
+    rend_vtables[renderer->backend].buffer_destroy(&staging_buffer);
 }
 
 extern void

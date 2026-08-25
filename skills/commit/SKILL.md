@@ -9,7 +9,7 @@ description: >
 
 If the target is unclear, ask once. Else start now.
 Do not invent a body. Details live in library headers.
-One pass: align headers, then commit or amend. Stop.
+One pass: align headers, AGENTS.md, and README.md, then commit or amend. Stop.
 
 # Subject
 
@@ -51,6 +51,30 @@ Bump before you commit if the module actually changed:
 
 If the module did not change, do not bump it and do not name it.
 
+# AGENTS.md and README.md
+
+Repo-root contract and public index. Not modules. Do not name them
+in the subject.
+
+Read each against the staged tree. Every line must still be true.
+
+`AGENTS.md`:
+
+- Lib table matches directories; include / build rules still hold
+- Skills list matches `skills/*/SKILL.md`
+- Product, file, and build facts still hold if those paths moved
+
+`README.md`:
+
+- Lib table matches directories and still describes each header
+- Version column equals the header macros you are committing
+- Install, versioning, and docs lines still hold
+
+If a line would be false after this commit, edit the file and stage it.
+Do not invent policy. Delete stale lines. Add only what the tree now needs.
+If several of these files sit in the commit (superproject + submodule),
+check each against its own tree.
+
 # Check
 
 Before `git commit` or `git commit --amend`:
@@ -62,6 +86,7 @@ Before `git commit` or `git commit --amend`:
 4. If the header was bumped with no matching source change, do not
    claim it unless that bump is the change.
 5. Subject versions must equal the header macros you are committing.
+6. `AGENTS.md` and `README.md` match the tree you are committing. Fix them first if not.
 
 Amend only when the user asked, or the latest commit is yours, unpushed,
 and they asked to fix its message. Keep author and date unless told

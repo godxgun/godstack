@@ -69,6 +69,7 @@ typedef struct rend_pipeline_config_t {
 
 typedef struct {
     RendContextHandle (*renderer_create)(PeakWindow *window, RendBindingInfo *bind_info);
+    RendContextHandle (*renderer_create_offscreen)(uint32_t width, uint32_t height, RendFormat format, RendBindingInfo *bind_info);
 
     void (*renderer_destroy)(RendContextHandle);
 
@@ -85,6 +86,7 @@ typedef struct {
     RendTexture  (*texture_create)(RendContextHandle handle, uint32_t width, uint32_t height, uint32_t depth, uint32_t mip_levels, uint32_t layers, RendFormat format);
     void         (*texture_destroy)(RendContextHandle handle, RendTexture *tex);
     void         (*texture_copy_buffer)(RendContextHandle handle, RendTexture *texture, RendBuffer *buffer);
+    void         (*texture_copy_to_buffer)(RendContextHandle handle, RendTexture *texture, RendBuffer *buffer);
     void         (*texture_blit)(RendContextHandle handle, RendTexture *src, RendTexture *dst, uint32_t src_x, uint32_t src_y, uint32_t src_w, uint32_t src_h, uint32_t dst_x, uint32_t dst_y, uint32_t dst_w, uint32_t dst_h);
 
     bool (*pipeline_create)(RendContextHandle, RendPipeline, Rend__PipelineConfig, uint8_t type, const uint8_t *shader1, size_t bytes1, const uint8_t *shader2, size_t bytes2, const uint8_t *shader3, size_t bytes3);

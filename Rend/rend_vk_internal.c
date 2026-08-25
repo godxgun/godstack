@@ -396,13 +396,18 @@ rend_vk_device_score_default(RendVkDevice *device, RendSpecs minimum_specs, cons
 				}
 			}
 
-			supports_present = VK_FALSE;
-			CHECK_VK_RESULT(vkGetPhysicalDeviceSurfaceSupportKHR(device->physical_device, i, device->surface, &supports_present));
-			if (supports_present) {
-				device->present_family_index = i;
+			if (device->surface) {
+				supports_present = VK_FALSE;
+				CHECK_VK_RESULT(vkGetPhysicalDeviceSurfaceSupportKHR(device->physical_device, i, device->surface, &supports_present));
+				if (supports_present) {
+					device->present_family_index = i;
+				}
 			}
 		}
 	}
+
+	if (device->present_family_index == UINT32_MAX)
+		device->present_family_index = device->graphics_family_index;
 
 	if ((minimum_specs.graphics && device->graphics_family_index == UINT32_MAX) ||
 			(minimum_specs.present && device->present_family_index == UINT32_MAX) ||
@@ -411,10 +416,12 @@ rend_vk_device_score_default(RendVkDevice *device, RendSpecs minimum_specs, cons
 		return 0;
 	}
 
-	rend_vk_device_query_swapchain_support(device);
+	if (device->surface) {
+		rend_vk_device_query_swapchain_support(device);
 
-	if (device->swapchain_support.format_count < 1 || device->swapchain_support.present_mode_count < 1) {
-		return 0;
+		if (device->swapchain_support.format_count < 1 || device->swapchain_support.present_mode_count < 1) {
+			return 0;
+		}
 	}
 
 	if (required_extensions) {

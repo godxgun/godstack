@@ -14,6 +14,7 @@ Vendored by copy. `-I` the library directory. Include `foo.h`, then `foo.c`. Tha
 | Fuse | `Fuse/fuse.h` | itself |
 | Poof | `Poof/poof.h` | itself |
 | Cool | `Cool/cool.h` | itself |
+| Term | `Term/term.h` | itself |
 
 Peak before Rend. `peak.h` sets the Vulkan WSI macros when `PEAK_VULKAN` is on.
 
