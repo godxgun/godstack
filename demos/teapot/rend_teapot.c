@@ -2,7 +2,8 @@
 #include "../Rend/rend.h"
 #include "../Rend/rend.c"
 #include "teapot.h"
-#include "../Math/math.h"
+#define GRIT_IMPLEMENTATION
+#include "../../Grit/grit.h"
 #include <stddef.h>
 #include <stdlib.h>
 
@@ -126,8 +127,8 @@ int main() {
 
     float view[16], proj[16];
     float eye[3] = {0.0f, 0.0f, -3.0f};
-    math_mat4_translate(view, eye);
-    math_mat4_perspective(proj, MATH_PI_HALF, 800.0f / 600.0f, 0.1f, 100.0f);
+    grit_mat4_translate(view, eye);
+    grit_mat4_perspective(proj, GRIT_PI_HALF, 800.0f / 600.0f, 0.1f, 100.0f);
     proj[5] *= -1.0f; /* Vulkan clip space Y inversion fix */
 
     bool running = true;
@@ -149,19 +150,19 @@ int main() {
                 switch (ev.key.key) {
                     case PEAK_KEY_W: {
                         float d[3] = {0.0f, 0.0f, 0.1f};
-                        math_mat4_translate_by(view, d);
+                        grit_mat4_translate_by(view, d);
                     } break;
                     case PEAK_KEY_S: {
                         float d[3] = {0.0f, 0.0f, -0.1f};
-                        math_mat4_translate_by(view, d);
+                        grit_mat4_translate_by(view, d);
                     } break;
                     case PEAK_KEY_A: {
                         float d[3] = {0.1f, 0.0f, 0.0f};
-                        math_mat4_translate_by(view, d);
+                        grit_mat4_translate_by(view, d);
                     } break;
                     case PEAK_KEY_D: {
                         float d[3] = {-0.1f, 0.0f, 0.0f};
-                        math_mat4_translate_by(view, d);
+                        grit_mat4_translate_by(view, d);
                     } break;
                     default: break;
                 }
@@ -183,12 +184,12 @@ int main() {
                         float yaw = dx * sensitivity;
                         float pitch = dy * sensitivity;
 
-                        math_mat4_rotate_y_by(view, yaw);
+                        grit_mat4_rotate_y_by(view, yaw);
                         {
                             float rx[16];
                             int i;
-                            math_mat4_rotate_x(rx, pitch);
-                            math_mat4_mul(rx, view);
+                            grit_mat4_rotate_x(rx, pitch);
+                            grit_mat4_mul(rx, view);
                             for (i = 0; i < 16; i++) view[i] = rx[i];
                         }
 
@@ -203,13 +204,13 @@ int main() {
 
         float model[16], vm[16], mvp[16];
         int i;
-        math_mat4_identity(model);
-        math_mat4_rotate_y_by(model, angle * 0.5f);
+        grit_mat4_identity(model);
+        grit_mat4_rotate_y_by(model, angle * 0.5f);
 
         for (i = 0; i < 16; i++) vm[i] = view[i];
-        math_mat4_mul(vm, model);
+        grit_mat4_mul(vm, model);
         for (i = 0; i < 16; i++) mvp[i] = proj[i];
-        math_mat4_mul(mvp, vm);
+        grit_mat4_mul(mvp, vm);
 
         CoolPushConstants pc;
         for (i = 0; i < 16; i++) pc.MVP[i] = mvp[i];

@@ -15,7 +15,7 @@
 
 #define REND_MAJOR 1  // breaking API changes
 #define REND_MINOR 0  // non-breaking features
-#define REND_PATCH 9  // non-breaking patches and bug fixes
+#define REND_PATCH 10  // non-breaking patches and bug fixes
                     
 #ifndef PEAK_VULKAN
 #define PEAK_VULKAN
@@ -290,6 +290,7 @@ enum RendBufferType_t {
  * 1.0.7 - @vasco - resize recreates swapchain via oldSwapchain; surface extent before acquire
  * 1.0.8 - @vasco - offscreen pass clears new images; texture destroy not during a frame
  * 1.0.9 - @vasco - vulkan host alloc callbacks actually free (resize was exhausting 1MB arena)
+ * 1.0.10 - @vasco - blit outside pass; texture layout after copy and blit
  *
  * 1.0.0 finished API release
  *

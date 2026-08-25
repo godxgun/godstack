@@ -1291,6 +1291,7 @@ rend_vk_texture_copy_buffer(RendContextHandle handle, RendTexture *texture, Rend
 		rend_vk_texture_transfer_ownership_release(handle, cmd_transfer, texture, vk_device.transfer_family_index, vk_device.graphics_family_index, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	} rend_vk_cmdbuffer_single_use_end(ctx->upload_command_pool, cmd_transfer, vk_device.transfer_queue);
 
+	texture->layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 	VkCommandBuffer cmd_graphics = rend_vk_cmdbuffer_single_use_begin(ctx->graphics_command_pool); {
 		rend_vk_texture_transfer_ownership_acquire(handle, cmd_graphics, texture, vk_device.transfer_family_index, vk_device.graphics_family_index, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	} rend_vk_cmdbuffer_single_use_end(ctx->graphics_command_pool, cmd_graphics, vk_device.graphics_queue);
@@ -1300,7 +1301,16 @@ void
 rend_vk_texture_blit(RendContextHandle handle, RendTexture *src, RendTexture *dst, uint32_t src_x, uint32_t src_y, uint32_t src_w, uint32_t src_h, uint32_t dst_x, uint32_t dst_y, uint32_t dst_w, uint32_t dst_h)
 {
 	RendVk14Context *ctx = (RendVk14Context *)handle;
-	VkCommandBuffer cmd = ctx->frame_resources[ctx->frame_index].command_buffer;
+	VkCommandBuffer cmd;
+	int standalone;
+
+	standalone = !ctx->in_frame;
+	if (standalone) {
+		vkQueueWaitIdle(vk_device.graphics_queue);
+		cmd = rend_vk_cmdbuffer_single_use_begin(ctx->graphics_command_pool);
+	} else {
+		cmd = ctx->frame_resources[ctx->frame_index].command_buffer;
+	}
 
 	rend_vk_texture_transition_layout(handle, cmd, src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 	rend_vk_texture_transition_layout(handle, cmd, dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
@@ -1342,6 +1352,12 @@ rend_vk_texture_blit(RendContextHandle handle, RendTexture *src, RendTexture *ds
 	};
 
 	vkCmdBlitImage2(cmd, &blit_info);
+	rend_vk_texture_transition_layout(handle, cmd, src, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	rend_vk_texture_transition_layout(handle, cmd, dst, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+	if (standalone) {
+		rend_vk_cmdbuffer_single_use_end(ctx->graphics_command_pool, cmd, vk_device.graphics_queue);
+	}
 }
 
 static VkCommandBuffer

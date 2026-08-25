@@ -89,6 +89,21 @@ build_peak_demos(void)
 }
 
 static bool
+build_grit_demo(void)
+{
+    Poof_CC cc = {0};
+    poof_mkdir("demos/grit");
+    poof_cc_init(&cc, POOF_CC_GCC | POOF_CC_CLANG, POOF_TARGET_HOST);
+    cc.debug_mode = true;
+    cc.optimization = POOF_O0;
+    cc.output = "demos/grit/demo";
+    poof_cmd_append(&cc.inputs, "demos/grit/demo.c");
+    poof_cmd_append(&cc.includes, ".");
+    poof_cmd_append(&cc.extra_flags, "-std=c99", "-Wall", "-Werror");
+    return poof_cc_run(&cc);
+}
+
+static bool
 build_rend_demos(void)
 {
     poof_mkdir("demos/compute");
@@ -120,6 +135,7 @@ main(int argc, char **argv)
 
     if (!build_peak_header()) return 1;
     if (!build_peak_demos()) return 1;
+    if (!build_grit_demo()) return 1;
     if (!build_rend_demos()) return 1;
     return 0;
 }

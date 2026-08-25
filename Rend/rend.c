@@ -562,7 +562,6 @@ rend_cmd_blit(RendRenderer renderer, RendTexture *src, RendTexture *dst, uint32_
 {
     RASSERT(renderer->in_frame && "Must be called while rendering a frame!");
     RASSERT(!renderer->in_pass && "Must be called outside a render pass!");
-    renderer->in_pass = true;
     rend_vtables[renderer->backend].texture_blit(renderer->context, src, dst, src_x, src_y, src_w, src_h, dst_x, dst_y, dst_w, dst_h);
 }
 

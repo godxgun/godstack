@@ -15,8 +15,7 @@ Use at your own risk.
 | Name   | Description                                |
 | ------ | ------------------------------------------ |
 | Peak   | Single-header platform library that automatically links the write system libraries. |
-| Draw   | Simple RGBA software raster                |
-| Math   | Math for games. Speed over precision.|
+| Grit   | Memory allocators, math, software raster.  |
 | Poof   | Build software without going insane.       |
 | Rend   | Modern graphics API layer.                 |
 | Cool   | Render HTML by calling functions.          |
