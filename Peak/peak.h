@@ -18,7 +18,7 @@
 
 #define PEAK_MAJOR "0"
 #define PEAK_MINOR "5"
-#define PEAK_PATCH "7"
+#define PEAK_PATCH "9"
 
 /* CHANGE LOG 
  * 0.0.0 - @vasco - prototyping
@@ -36,6 +36,8 @@
  * 0.5.5 - @vasco - include peak.c; no PEAK_IMPLEMENTATION
  * 0.5.6 - @vasco - digits, tab, backspace, delete; key.code from XLookupString
  * 0.5.7 - @vasco - peak_window_fd; X11 ConnectionNumber
+ * 0.5.8 - @vasco - peak_window_pending; XPending so idle poll can sleep
+ * 0.5.9 - @vasco - wheel up/down as PeakPointerType (X11 Button4/5)
  */
 
 #define NANOS_PER_SEC 1000000000ull
@@ -192,6 +194,8 @@ typedef enum {
     PEAK_POINTER_RIGHT,
     PEAK_POINTER_MIDDLE,
     PEAK_POINTER_TOUCH,
+    PEAK_POINTER_WHEEL_UP,
+    PEAK_POINTER_WHEEL_DOWN,
 } PeakPointerType;
 
 typedef struct {
@@ -230,6 +234,7 @@ PEAK void       peak_window_close(PeakWindow *window); // Close a window.
 PEAK void       peak_window_run(PeakWindow *win, int (*peak_tick)(PeakWindow *win, void *userdata), void *userdata); // Hijacking the main loop makes life easier on platforms like web
 PEAK int        peak_window_epoll(PeakWindow *win, PeakEvent *ev); // Poll a window for events.
 PEAK int        peak_window_fd(PeakWindow *win); // Display connection fd, or -1.
+PEAK int        peak_window_pending(PeakWindow *win); // Queued window events (XPending). 0 if none.
 PEAK uint32_t*  peak_window_backbuffer(PeakWindow *win, size_t *width, size_t *height); // Get the windows backbuffer.
 PEAK void       peak_window_clear(PeakWindow *win, float r, float g, float b, float a); // Clear window to color.
 PEAK void       peak_window_present(PeakWindow *win); // Present window backbuffer.

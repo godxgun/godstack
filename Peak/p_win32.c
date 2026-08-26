@@ -122,6 +122,7 @@ static uint32_t *peak_platform_window_buffer(PeakWindowInternal *intern, size_t 
 static void peak_platform_window_present(PeakWindowInternal *intern);
 static bool peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev);
 static int peak_platform_fd(PeakWindowInternal *intern);
+static int peak_platform_pending(PeakWindowInternal *intern);
 static int peak_internal_winmm_load(void);
 static void peak_internal_win32_audio_fill(int i);
 static DWORD WINAPI peak_internal_win32_audio_thread(LPVOID arg);
@@ -495,6 +496,13 @@ peak_platform_fd(PeakWindowInternal *intern)
 {
 	(void)intern;
 	return -1;
+}
+
+static int
+peak_platform_pending(PeakWindowInternal *intern)
+{
+	(void)intern;
+	return 0;
 }
 
 static int

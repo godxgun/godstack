@@ -108,6 +108,14 @@ peak_window_fd(PeakWindow *win)
     return peak_platform_fd(&win->internal);
 }
 
+int
+peak_window_pending(PeakWindow *win)
+{
+    if (!win)
+        return 0;
+    return peak_platform_pending(&win->internal);
+}
+
 uint32_t *
 peak_window_backbuffer(PeakWindow *win, size_t *width, size_t *height)
 {

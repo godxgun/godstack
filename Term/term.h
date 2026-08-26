@@ -25,7 +25,7 @@
 
 #define TERM_MAJOR 0
 #define TERM_MINOR 3
-#define TERM_PATCH 2
+#define TERM_PATCH 3
 
 /* CHANGE LOG
  * 0.1.0 - @vasco - extract from vt: feed, grid, live CSI
@@ -33,6 +33,7 @@
  * 0.3.0 - @vasco - alt screen, scroll region, IL/DL/DCH/ECH, SGR 256/RGB, DSR/DA
  * 0.3.1 - @vasco - resize copies rows; alt switch resets scroll region
  * 0.3.2 - @vasco - CSI 18 t, DECRQM, XTVERSION; larger reply
+ * 0.3.3 - @vasco - primary scroll hist; term_hist_line / term_hist_count
  */
 
 #include <assert.h>
@@ -95,6 +96,7 @@
 
 #define TERM_ESC_ARG_SIZ 16
 #define TERM_CSI_BUF_SIZ 256
+#define TERM_HIST_MAX    1024
 
 typedef struct TermColors {
     uint32_t fg[16];
@@ -159,6 +161,11 @@ typedef struct Term {
     char reply[256];
     uint32_t reply_n;
     char str_buf[128];
+    TermCell *hist;
+    uint32_t hist_cap;
+    uint32_t hist_n;
+    uint32_t hist_i;
+    uint32_t hist_cols;
 } Term;
 
 int  term_init(Term *t, uint32_t cols, uint32_t rows, const TermColors *colors);
@@ -167,6 +174,8 @@ void term_resize(Term *t, uint32_t cols, uint32_t rows);
 void term_feed(Term *t, const char *bytes, size_t len);
 void term_feed_ascii(Term *t, const char *bytes, size_t len); /* no ESC, no UTF-8; CR/LF/putc only */
 TermScreen *term_screen(Term *t);
+uint32_t term_hist_count(const Term *t);
+const TermCell *term_hist_line(const Term *t, uint32_t back);
 
 #endif /* TERM_H */
 

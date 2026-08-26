@@ -197,6 +197,13 @@ peak_platform_fd(PeakWindowInternal *intern)
 	return -1;
 }
 
+static int
+peak_platform_pending(PeakWindowInternal *intern)
+{
+	(void)intern;
+	return 0;
+}
+
 #define PEAK_AUDIO_FRAMES 1024
 
 static struct {

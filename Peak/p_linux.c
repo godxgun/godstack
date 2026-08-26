@@ -37,6 +37,7 @@
 	X(XFreeGC,             int, (Display *, GC)) \
 	X(XDestroyWindow,      int, (Display *, Window)) \
 	X(XCheckIfEvent,       Bool, (Display *, XEvent *, Bool (*)(Display *, XEvent *, XPointer), XPointer)) \
+	X(XPending,            int, (Display *)) \
 	X(XLookupKeysym,       KeySym, (XKeyEvent *, int)) \
 	X(XLookupString,       int, (XKeyEvent *, char *, int, KeySym *, XComposeStatus *)) \
 	X(XPutImage,           int, (Display *, Drawable, GC, XImage *, int, int, int, int, unsigned int, unsigned int))
@@ -335,8 +336,16 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 			ev->pointer.state = (xev.type == ButtonPress) ? PEAK_POINTER_PRESSED : PEAK_POINTER_RELEASED;
 			ev->pointer.x = (float)xev.xbutton.x;
 			ev->pointer.y = (float)xev.xbutton.y;
-			ev->pointer.type = (xev.xbutton.button == Button2) ? PEAK_POINTER_MIDDLE :
-			                   (xev.xbutton.button == Button3) ? PEAK_POINTER_RIGHT : PEAK_POINTER_LEFT;
+			if (xev.xbutton.button == Button4)
+				ev->pointer.type = PEAK_POINTER_WHEEL_UP;
+			else if (xev.xbutton.button == Button5)
+				ev->pointer.type = PEAK_POINTER_WHEEL_DOWN;
+			else if (xev.xbutton.button == Button2)
+				ev->pointer.type = PEAK_POINTER_MIDDLE;
+			else if (xev.xbutton.button == Button3)
+				ev->pointer.type = PEAK_POINTER_RIGHT;
+			else
+				ev->pointer.type = PEAK_POINTER_LEFT;
 			return 1;
 		case MotionNotify:
 			ev->type = PEAK_EVENT_POINTER;
@@ -372,6 +381,15 @@ peak_platform_fd(PeakWindowInternal *intern)
 	if (!peak_linux.display)
 		return -1;
 	return ConnectionNumber(peak_linux.display);
+}
+
+static int
+peak_platform_pending(PeakWindowInternal *intern)
+{
+	(void)intern;
+	if (!peak_linux.display || !peak_x11.XPending)
+		return 0;
+	return peak_x11.XPending(peak_linux.display);
 }
 
 static int

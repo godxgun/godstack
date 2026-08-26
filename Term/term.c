@@ -130,6 +130,23 @@ term_screen(Term *t)
     return term_live(t);
 }
 
+uint32_t
+term_hist_count(const Term *t)
+{
+    return t ? t->hist_n : 0;
+}
+
+const TermCell *
+term_hist_line(const Term *t, uint32_t back)
+{
+    uint32_t i;
+
+    if (!t || !t->hist || back >= t->hist_n || !t->hist_cols)
+        return NULL;
+    i = (t->hist_i + t->hist_cap - 1 - back) % t->hist_cap;
+    return t->hist + (size_t)i * t->hist_cols;
+}
+
 int
 term_init(Term *t, uint32_t cols, uint32_t rows, const TermColors *colors)
 {
@@ -156,6 +173,11 @@ term_init(Term *t, uint32_t cols, uint32_t rows, const TermColors *colors)
     t->mode = TERM_MODE_UTF8 | TERM_MODE_WRAP;
     t->top = 0;
     t->bot = rows - 1;
+    t->hist_cap = TERM_HIST_MAX;
+    t->hist_cols = cols;
+    t->hist = calloc((size_t)TERM_HIST_MAX * cols, sizeof *t->hist);
+    if (!t->hist)
+        t->hist_cap = 0;
     return 1;
 }
 
@@ -166,6 +188,7 @@ term_destroy(Term *t)
         return;
     term_screen_free(&t->screen);
     term_screen_free(&t->alt);
+    free(t->hist);
     memset(t, 0, sizeof *t);
 }
 
@@ -187,6 +210,34 @@ term_resize(Term *t, uint32_t cols, uint32_t rows)
     if (full || t->bot >= rows || t->top >= rows) {
         t->top = 0;
         t->bot = rows - 1;
+    }
+    if (t->hist && t->hist_cols != cols) {
+        TermCell *next;
+        uint32_t i, copy;
+
+        next = calloc((size_t)t->hist_cap * cols, sizeof *next);
+        if (!next) {
+            free(t->hist);
+            t->hist = NULL;
+            t->hist_cap = 0;
+            t->hist_n = 0;
+            t->hist_i = 0;
+            t->hist_cols = 0;
+            return;
+        }
+        copy = TERM_MIN(t->hist_cols, cols);
+        for (i = 0; i < t->hist_n; i++) {
+            uint32_t src;
+
+            src = (t->hist_i + t->hist_cap - t->hist_n + i) % t->hist_cap;
+            memcpy(next + (size_t)i * cols,
+                t->hist + (size_t)src * t->hist_cols,
+                (size_t)copy * sizeof *next);
+        }
+        free(t->hist);
+        t->hist = next;
+        t->hist_cols = cols;
+        t->hist_i = t->hist_n % (t->hist_cap ? t->hist_cap : 1);
     }
 }
 
@@ -444,6 +495,19 @@ term_scroll(Term *t, uint32_t y0, uint32_t y1, int n)
     if (n == 0)
         return;
     if (n > 0) {
+        if (!(t->mode & TERM_MODE_ALTSCREEN) && y0 == 0 && y1 + 1 == s->rows
+            && t->hist && t->hist_cols == cols) {
+            int k;
+
+            for (k = 0; k < n; k++) {
+                memcpy(t->hist + (size_t)t->hist_i * cols,
+                    s->cell_buffer + (size_t)(y0 + (uint32_t)k) * cols,
+                    (size_t)cols * sizeof *t->hist);
+                t->hist_i = (t->hist_i + 1) % t->hist_cap;
+                if (t->hist_n < t->hist_cap)
+                    t->hist_n++;
+            }
+        }
         if ((uint32_t)n < rows)
             memmove(s->cell_buffer + y0 * cols,
                 s->cell_buffer + (y0 + (uint32_t)n) * cols,
