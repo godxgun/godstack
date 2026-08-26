@@ -576,3 +576,5 @@ peak_platform_vulkan_create_surface(PeakWindowInternal *intern, void *instance, 
 	return 0;
 #endif
 }
+
+#include "p_posix.c"

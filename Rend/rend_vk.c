@@ -2157,7 +2157,23 @@ rend_vk_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain, VkSwa
 	}
 
 	swapchain_create_info.preTransform = surface_caps.currentTransform;
-	swapchain_create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+	{
+		static const VkCompositeAlphaFlagBitsKHR alpha_pref[] = {
+			VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR,
+			VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR,
+			VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+			VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
+		};
+		uint32_t ai;
+
+		swapchain_create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+		for (ai = 0; ai < sizeof alpha_pref / sizeof alpha_pref[0]; ai++) {
+			if (surface_caps.supportedCompositeAlpha & alpha_pref[ai]) {
+				swapchain_create_info.compositeAlpha = alpha_pref[ai];
+				break;
+			}
+		}
+	}
 	swapchain_create_info.presentMode = present_mode;
 	swapchain_create_info.clipped = VK_TRUE;
 	swapchain_create_info.oldSwapchain = old_swapchain;

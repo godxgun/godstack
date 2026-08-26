@@ -15,7 +15,7 @@
 
 #define REND_MAJOR 1  // breaking API changes
 #define REND_MINOR 1  // non-breaking features
-#define REND_PATCH 1  // non-breaking patches and bug fixes
+#define REND_PATCH 2  // non-breaking patches and bug fixes
                     
 #ifndef PEAK_VULKAN
 #define PEAK_VULKAN
@@ -295,6 +295,7 @@ enum RendBufferType_t {
  * 1.0.10 - @vasco - blit outside pass; texture layout after copy and blit
  * 1.1.0 - @vasco - rend_renderer_create_offscreen: no window, no swapchain
  * 1.1.1 - @vasco - rend_texture_read: image to host via staging buffer
+ * 1.1.2 - @vasco - swapchain picks non-opaque composite alpha when offered
  *
  * 1.0.0 finished API release
  *

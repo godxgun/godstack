@@ -698,3 +698,5 @@ peak_platform_audio_stop(void)
 	peak_audio.fill = NULL;
 	peak_audio.userdata = NULL;
 }
+
+#include "p_win32_proc.c"

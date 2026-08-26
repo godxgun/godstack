@@ -25,7 +25,7 @@
 
 #define TERM_MAJOR 0
 #define TERM_MINOR 3
-#define TERM_PATCH 3
+#define TERM_PATCH 4
 
 /* CHANGE LOG
  * 0.1.0 - @vasco - extract from vt: feed, grid, live CSI
@@ -34,6 +34,7 @@
  * 0.3.1 - @vasco - resize copies rows; alt switch resets scroll region
  * 0.3.2 - @vasco - CSI 18 t, DECRQM, XTVERSION; larger reply
  * 0.3.3 - @vasco - primary scroll hist; term_hist_line / term_hist_count
+ * 0.3.4 - @vasco - DECSET mouse 1000/1002/1003/1006
  */
 
 #include <assert.h>
@@ -74,6 +75,11 @@
 #define TERM_MODE_PRINT     (1u << 5)
 #define TERM_MODE_UTF8      (1u << 6)
 #define TERM_MODE_HIDE      (1u << 7)
+#define TERM_MODE_MOUSEBTN  (1u << 8)
+#define TERM_MODE_MOUSEMOT  (1u << 9)
+#define TERM_MODE_MOUSEMANY (1u << 10)
+#define TERM_MODE_MOUSESGR  (1u << 11)
+#define TERM_MODE_MOUSE     (TERM_MODE_MOUSEBTN | TERM_MODE_MOUSEMOT | TERM_MODE_MOUSEMANY)
 #define TERM_WRAPNEXT       1u
 
 #define TERM_ESC_START      1u

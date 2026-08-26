@@ -641,6 +641,30 @@ term_set_mode(Term *t, int set)
             case 1049:
                 term_alt(t, set, 1);
                 break;
+            case 1000:
+                if (set)
+                    t->mode |= TERM_MODE_MOUSEBTN;
+                else
+                    t->mode &= ~TERM_MODE_MOUSEBTN;
+                break;
+            case 1002:
+                if (set)
+                    t->mode |= TERM_MODE_MOUSEMOT;
+                else
+                    t->mode &= ~TERM_MODE_MOUSEMOT;
+                break;
+            case 1003:
+                if (set)
+                    t->mode |= TERM_MODE_MOUSEMANY;
+                else
+                    t->mode &= ~TERM_MODE_MOUSEMANY;
+                break;
+            case 1006:
+                if (set)
+                    t->mode |= TERM_MODE_MOUSESGR;
+                else
+                    t->mode &= ~TERM_MODE_MOUSESGR;
+                break;
             default:
                 break;
             }

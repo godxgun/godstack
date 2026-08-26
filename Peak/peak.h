@@ -18,7 +18,7 @@
 
 #define PEAK_MAJOR "0"
 #define PEAK_MINOR "6"
-#define PEAK_PATCH "0"
+#define PEAK_PATCH "2"
 
 /* CHANGE LOG 
  * 0.0.0 - @vasco - prototyping
@@ -39,6 +39,8 @@
  * 0.5.8 - @vasco - peak_window_pending; XPending so idle poll can sleep
  * 0.5.9 - @vasco - wheel up/down as PeakPointerType (X11 Button4/5)
  * 0.6.0 - @vasco - macos (Cocoa/Metal/AudioQueue)
+ * 0.6.1 - @vasco - PEAK_WINDOW_TRANSPARENT (X11 ARGB visual)
+ * 0.6.2 - @vasco - PEAK_HANDLE, pty, wait, sock, job, mirror ring
  */
 
 #define NANOS_PER_SEC 1000000000ull
@@ -95,6 +97,13 @@
 #define VK_USE_PLATFORM_METAL_EXT
 #endif
 #endif
+
+#if defined(PEAK_WIN32)
+typedef void *PEAK_HANDLE;
+#else
+typedef int PEAK_HANDLE;
+#endif
+#define PEAK_HANDLE_INVALID ((PEAK_HANDLE)(intptr_t)-1)
 
 #define PEAK extern
 
@@ -227,9 +236,16 @@ typedef struct PeakWindow {
     int running;
 } PeakWindow;
 
+typedef struct PeakProc {
+    PEAK_HANDLE fd; /* PEAK_HANDLE_INVALID if closed / failed */
+    int pid;        /* 0 if none */
+} PeakProc;
+
 /* Initialize the platform. */
 PEAK int  peak_init(void); // Initialize platform context and load necessary DLLs.
 PEAK void peak_quit(void); // Close platform context.
+
+#define PEAK_WINDOW_TRANSPARENT (1u << 0) /* 32-bit ARGB visual when the platform has one */
 
 /* Do sexy stuff with the windows. */
 PEAK PeakWindow peak_window_open(const char *name, uint32_t width, uint32_t height, uint32_t flags); // Open a window.
@@ -253,6 +269,36 @@ PEAK void peak_sleep_ns(int64_t ns); // Sleep for nanoseconds!!!
 /* File */
 PEAK int peak_file_exists(const char *path); // Does this file exist?
 PEAK void *peak_file_alloc(const char *path, unsigned long *buf_size); // Allocate an entire file.
+
+/* Child + PTY. fd is nonblocking. fail: PEAK_HANDLE_INVALID. */
+PEAK PeakProc peak_pty_spawn(const char *file, const char **argv, uint32_t cols, uint32_t rows, uint32_t xpixel, uint32_t ypixel);
+PEAK void     peak_pty_resize(PeakProc *pty, uint32_t cols, uint32_t rows, uint32_t xpixel, uint32_t ypixel);
+PEAK int      peak_pty_reap(PeakProc *pty); /* 1 if dead */
+PEAK void     peak_pty_close(PeakProc *pty);
+
+/* Sleep until window (nullable) or any fd is ready. timeout_ms: -1 block, 0 poll. 1 if ready. */
+PEAK int peak_wait(PeakWindow *win, const PEAK_HANDLE *fds, uint32_t n, int timeout_ms);
+
+/* Local stream (unix socket / named pipe). listen/accept fds are nonblocking. */
+PEAK int         peak_runtime_dir(char *buf, size_t cap, const char *app);
+PEAK PEAK_HANDLE peak_sock_listen(const char *path);
+PEAK PEAK_HANDLE peak_sock_accept(PEAK_HANDLE listen_fd);
+
+/* Byte IO on Peak fds (pty, sock, job). -1 would-block, 0 EOF, >0 count. */
+PEAK int  peak_fd_read(PEAK_HANDLE fd, void *buf, size_t n);
+PEAK int  peak_fd_write(PEAK_HANDLE fd, const void *buf, size_t n);
+PEAK void peak_fd_close(PEAK_HANDLE fd);
+
+/* Off-grid shell -c. stdout+stderr on fd. cwd NULL keeps current. */
+PEAK PeakProc peak_job_run(const char *cmd, const char *cwd);
+PEAK int      peak_job_reap(PeakProc *job, int *code); /* 1 if exited */
+PEAK void     peak_job_kill(PeakProc *job);
+PEAK int      peak_pid_cwd(int pid, char *buf, size_t cap);
+
+/* Page-mirrored ring: size must be page-aligned. pointer valid for size*2. */
+PEAK size_t peak_page_size(void);
+PEAK void  *peak_mirror_map(size_t size);
+PEAK void   peak_mirror_unmap(void *p, size_t size);
 
 /* Graphics API bull... */
 PEAK const char **peak_vulkan_get_extensions(uint32_t *count); // Get vulkan extensions.

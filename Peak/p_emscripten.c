@@ -321,3 +321,139 @@ peak_platform_audio_stop(void)
 	peak_web_audio.fill = NULL;
 	peak_web_audio.userdata = NULL;
 }
+
+static PeakProc
+peak_internal_proc_fail(void)
+{
+	PeakProc p;
+
+	p.fd = PEAK_HANDLE_INVALID;
+	p.pid = 0;
+	return p;
+}
+
+PeakProc
+peak_pty_spawn(const char *file, const char **argv, uint32_t cols, uint32_t rows, uint32_t xpixel, uint32_t ypixel)
+{
+	(void)file; (void)argv; (void)cols; (void)rows; (void)xpixel; (void)ypixel;
+	return peak_internal_proc_fail();
+}
+
+void
+peak_pty_resize(PeakProc *pty, uint32_t cols, uint32_t rows, uint32_t xpixel, uint32_t ypixel)
+{
+	(void)pty; (void)cols; (void)rows; (void)xpixel; (void)ypixel;
+}
+
+int
+peak_pty_reap(PeakProc *pty)
+{
+	(void)pty;
+	return 0;
+}
+
+void
+peak_pty_close(PeakProc *pty)
+{
+	if (!pty)
+		return;
+	pty->fd = PEAK_HANDLE_INVALID;
+	pty->pid = 0;
+}
+
+int
+peak_wait(PeakWindow *win, const PEAK_HANDLE *fds, uint32_t n, int timeout_ms)
+{
+	(void)win; (void)fds; (void)n; (void)timeout_ms;
+	return 0;
+}
+
+int
+peak_runtime_dir(char *buf, size_t cap, const char *app)
+{
+	(void)buf; (void)cap; (void)app;
+	return 0;
+}
+
+PEAK_HANDLE
+peak_sock_listen(const char *path)
+{
+	(void)path;
+	return PEAK_HANDLE_INVALID;
+}
+
+PEAK_HANDLE
+peak_sock_accept(PEAK_HANDLE listen_fd)
+{
+	(void)listen_fd;
+	return PEAK_HANDLE_INVALID;
+}
+
+int
+peak_fd_read(PEAK_HANDLE fd, void *buf, size_t n)
+{
+	(void)fd; (void)buf; (void)n;
+	return 0;
+}
+
+int
+peak_fd_write(PEAK_HANDLE fd, const void *buf, size_t n)
+{
+	(void)fd; (void)buf; (void)n;
+	return 0;
+}
+
+void
+peak_fd_close(PEAK_HANDLE fd)
+{
+	(void)fd;
+}
+
+PeakProc
+peak_job_run(const char *cmd, const char *cwd)
+{
+	(void)cmd; (void)cwd;
+	return peak_internal_proc_fail();
+}
+
+int
+peak_job_reap(PeakProc *job, int *code)
+{
+	(void)job; (void)code;
+	return 0;
+}
+
+void
+peak_job_kill(PeakProc *job)
+{
+	if (!job)
+		return;
+	job->fd = PEAK_HANDLE_INVALID;
+	job->pid = 0;
+}
+
+int
+peak_pid_cwd(int pid, char *buf, size_t cap)
+{
+	(void)pid; (void)buf; (void)cap;
+	return 0;
+}
+
+size_t
+peak_page_size(void)
+{
+	return 4096;
+}
+
+void *
+peak_mirror_map(size_t size)
+{
+	(void)size;
+	return NULL;
+}
+
+void
+peak_mirror_unmap(void *p, size_t size)
+{
+	(void)p; (void)size;
+}

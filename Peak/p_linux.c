@@ -26,6 +26,11 @@
 	X(XOpenDisplay,        Display *, (const char *)) \
 	X(XCloseDisplay,       int, (Display *)) \
 	X(XCreateSimpleWindow, Window, (Display *, Window, int, int, unsigned int, unsigned int, unsigned int, unsigned long, unsigned long)) \
+	X(XCreateWindow,       Window, (Display *, Window, int, int, unsigned int, unsigned int, unsigned int, int, unsigned int, Visual *, unsigned long, XSetWindowAttributes *)) \
+	X(XGetVisualInfo,      XVisualInfo *, (Display *, long, XVisualInfo *, int *)) \
+	X(XCreateColormap,     Colormap, (Display *, Window, Visual *, int)) \
+	X(XFreeColormap,       int, (Display *, Colormap)) \
+	X(XFree,               int, (void *)) \
 	X(XStoreName,          int, (Display *, Window, const char *)) \
 	X(XInternAtom,         Atom, (Display *, const char *, Bool)) \
 	X(XSetWMProtocols,     Status, (Display *, Window, Atom *, int)) \
@@ -80,9 +85,13 @@ struct peak_linux_win {
 	Window window;
 	GC gfx_ctx;
 	XImage *ximage;
+	Visual *visual;
+	Colormap colormap;
 	uint32_t *buffer;
 	uint32_t width;
 	uint32_t height;
+	int depth;
+	int colormap_owned;
 };
 
 static PeakLinux peak_linux;
@@ -163,8 +172,8 @@ peak_linux_buffer(struct peak_linux_win *w, uint32_t width, uint32_t height)
 	w->height = height;
 	screen = DefaultScreen(peak_linux.display);
 	w->ximage = peak_x11.XCreateImage(peak_linux.display,
-		DefaultVisual(peak_linux.display, screen),
-		DefaultDepth(peak_linux.display, screen),
+		w->visual ? w->visual : DefaultVisual(peak_linux.display, screen),
+		w->depth ? (unsigned int)w->depth : (unsigned int)DefaultDepth(peak_linux.display, screen),
 		ZPixmap, 0, (char *)w->buffer, width, height, 32, 0);
 	if (!w->ximage) {
 		free(w->buffer);
@@ -210,14 +219,35 @@ peak_platform_quit(void)
 	peak_linux.display = 0;
 }
 
+static int
+peak_linux_visual32(int screen, XVisualInfo *out)
+{
+	XVisualInfo tpl;
+	XVisualInfo *list;
+	int n;
+
+	memset(&tpl, 0, sizeof tpl);
+	tpl.screen = screen;
+	tpl.depth = 32;
+	tpl.class = TrueColor;
+	list = peak_x11.XGetVisualInfo(peak_linux.display,
+		VisualScreenMask | VisualDepthMask | VisualClassMask, &tpl, &n);
+	if (!list || n < 1)
+		return 0;
+	*out = list[0];
+	peak_x11.XFree(list);
+	return 1;
+}
+
 static PeakWindowInternal
 peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uint32_t flags)
 {
 	PeakWindowInternal intern = {0};
 	struct peak_linux_win *w;
+	XVisualInfo vi;
 	int screen;
+	long evmask;
 
-	(void)flags;
 	if (!peak_linux.display && !peak_platform_init())
 		return intern;
 
@@ -226,19 +256,42 @@ peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uin
 		return intern;
 
 	screen = DefaultScreen(peak_linux.display);
-	w->window = peak_x11.XCreateSimpleWindow(peak_linux.display,
-		RootWindow(peak_linux.display, screen), 0, 0, width, height, 0,
-		BlackPixel(peak_linux.display, screen), BlackPixel(peak_linux.display, screen));
+	evmask = KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask |
+		PointerMotionMask | StructureNotifyMask;
+	w->visual = DefaultVisual(peak_linux.display, screen);
+	w->depth = DefaultDepth(peak_linux.display, screen);
+	if ((flags & PEAK_WINDOW_TRANSPARENT) && peak_linux_visual32(screen, &vi)) {
+		XSetWindowAttributes swa;
+
+		memset(&swa, 0, sizeof swa);
+		w->visual = vi.visual;
+		w->depth = vi.depth;
+		w->colormap = peak_x11.XCreateColormap(peak_linux.display,
+			RootWindow(peak_linux.display, screen), vi.visual, AllocNone);
+		w->colormap_owned = 1;
+		swa.colormap = w->colormap;
+		swa.border_pixel = 0;
+		swa.background_pixel = 0;
+		swa.event_mask = evmask;
+		w->window = peak_x11.XCreateWindow(peak_linux.display,
+			RootWindow(peak_linux.display, screen), 0, 0, width, height, 0,
+			vi.depth, InputOutput, vi.visual,
+			CWColormap | CWBorderPixel | CWBackPixel | CWEventMask, &swa);
+	} else {
+		w->window = peak_x11.XCreateSimpleWindow(peak_linux.display,
+			RootWindow(peak_linux.display, screen), 0, 0, width, height, 0,
+			BlackPixel(peak_linux.display, screen), BlackPixel(peak_linux.display, screen));
+		peak_x11.XSelectInput(peak_linux.display, w->window, evmask);
+	}
 	peak_x11.XStoreName(peak_linux.display, w->window, name);
 	peak_x11.XSetWMProtocols(peak_linux.display, w->window, &peak_linux.wm_delete_window, 1);
-	peak_x11.XSelectInput(peak_linux.display, w->window,
-		KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask |
-		PointerMotionMask | StructureNotifyMask);
 	w->gfx_ctx = peak_x11.XCreateGC(peak_linux.display, w->window, 0, NULL);
 
 	if (!peak_linux_buffer(w, width, height)) {
 		peak_x11.XFreeGC(peak_linux.display, w->gfx_ctx);
 		peak_x11.XDestroyWindow(peak_linux.display, w->window);
+		if (w->colormap_owned)
+			peak_x11.XFreeColormap(peak_linux.display, w->colormap);
 		free(w);
 		return intern;
 	}
@@ -265,6 +318,8 @@ peak_platform_window_close(PeakWindowInternal *intern)
 	if (w->gfx_ctx)
 		peak_x11.XFreeGC(peak_linux.display, w->gfx_ctx);
 	peak_x11.XDestroyWindow(peak_linux.display, w->window);
+	if (w->colormap_owned)
+		peak_x11.XFreeColormap(peak_linux.display, w->colormap);
 	free(w);
 	intern->w = NULL;
 }
@@ -541,3 +596,5 @@ peak_platform_audio_stop(void)
 	peak_audio.fill = NULL;
 	peak_audio.userdata = NULL;
 }
+
+#include "p_posix.c"
