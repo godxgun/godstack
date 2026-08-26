@@ -126,12 +126,12 @@ static int peak_platform_pending(PeakWindowInternal *intern);
 static int peak_internal_winmm_load(void);
 static void peak_internal_win32_audio_fill(int i);
 static DWORD WINAPI peak_internal_win32_audio_thread(LPVOID arg);
+static void peak_platform_audio_stop(void);
 static int peak_platform_audio_start(uint32_t channels, uint32_t rate, void (*fill)(int16_t *out, size_t frames, void *userdata), void *userdata);
 static uint64_t peak_platform_get_time(void);
 static void peak_platform_sleep_ns(int64_t ns);
 static const char **peak_platform_vulkan_get_extensions(uint32_t *count);
 static int peak_platform_vulkan_create_surface(PeakWindowInternal *intern, void *instance, const void *allocator, void *out_surface);
-static void peak_platform_audio_stop(void);
 
 static PeakWin32 peak_win32;
 static PeakUser32Api peak_user32;
@@ -567,6 +567,39 @@ peak_internal_win32_audio_thread(LPVOID arg)
 	return 0;
 }
 
+static void
+peak_platform_audio_stop(void)
+{
+	int i;
+
+	peak_audio.run = 0;
+	if (peak_audio.event)
+		SetEvent(peak_audio.event);
+	if (peak_audio.thread) {
+		WaitForSingleObject(peak_audio.thread, INFINITE);
+		CloseHandle(peak_audio.thread);
+		peak_audio.thread = NULL;
+	}
+	if (peak_audio.out) {
+		peak_winmm.waveOutReset(peak_audio.out);
+		for (i = 0; i < PEAK_AUDIO_BUFFERS; i++) {
+			if (peak_audio.hdr[i].dwFlags & WHDR_PREPARED)
+				peak_winmm.waveOutUnprepareHeader(peak_audio.out, &peak_audio.hdr[i], sizeof (WAVEHDR));
+			free(peak_audio.pcm[i]);
+			peak_audio.pcm[i] = NULL;
+			memset(&peak_audio.hdr[i], 0, sizeof peak_audio.hdr[i]);
+		}
+		peak_winmm.waveOutClose(peak_audio.out);
+		peak_audio.out = NULL;
+	}
+	if (peak_audio.event) {
+		CloseHandle(peak_audio.event);
+		peak_audio.event = NULL;
+	}
+	peak_audio.fill = NULL;
+	peak_audio.userdata = NULL;
+}
+
 static int
 peak_platform_audio_start(uint32_t channels, uint32_t rate, void (*fill)(int16_t *out, size_t frames, void *userdata), void *userdata)
 {
@@ -678,39 +711,6 @@ peak_platform_vulkan_create_surface(PeakWindowInternal *intern, void *instance, 
 	(void)out_surface;
 	return 0;
 #endif
-}
-
-static void
-peak_platform_audio_stop(void)
-{
-	int i;
-
-	peak_audio.run = 0;
-	if (peak_audio.event)
-		SetEvent(peak_audio.event);
-	if (peak_audio.thread) {
-		WaitForSingleObject(peak_audio.thread, INFINITE);
-		CloseHandle(peak_audio.thread);
-		peak_audio.thread = NULL;
-	}
-	if (peak_audio.out) {
-		peak_winmm.waveOutReset(peak_audio.out);
-		for (i = 0; i < PEAK_AUDIO_BUFFERS; i++) {
-			if (peak_audio.hdr[i].dwFlags & WHDR_PREPARED)
-				peak_winmm.waveOutUnprepareHeader(peak_audio.out, &peak_audio.hdr[i], sizeof (WAVEHDR));
-			free(peak_audio.pcm[i]);
-			peak_audio.pcm[i] = NULL;
-			memset(&peak_audio.hdr[i], 0, sizeof peak_audio.hdr[i]);
-		}
-		peak_winmm.waveOutClose(peak_audio.out);
-		peak_audio.out = NULL;
-	}
-	if (peak_audio.event) {
-		CloseHandle(peak_audio.event);
-		peak_audio.event = NULL;
-	}
-	peak_audio.fill = NULL;
-	peak_audio.userdata = NULL;
 }
 
 #include "p_win32_proc.c"
