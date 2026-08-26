@@ -68,13 +68,14 @@ typedef struct rend_pipeline_config_t {
 } Rend__PipelineConfig;
 
 typedef struct {
-    RendContextHandle (*renderer_create)(PeakWindow *window, RendBindingInfo *bind_info);
+    RendContextHandle (*renderer_create)(PeakWindow *window, RendBindingInfo *bind_info, bool vsync);
     RendContextHandle (*renderer_create_offscreen)(uint32_t width, uint32_t height, RendFormat format, RendBindingInfo *bind_info);
 
     void (*renderer_destroy)(RendContextHandle);
 
     bool (*renderer_frame_begin)(RendContextHandle);
     void (*renderer_frame_end)(RendContextHandle, float *delta);
+    RendTexture *(*color_target)(RendContextHandle handle);
 
     void (*descriptor_write_buffer)(RendContextHandle handle, RendBuffer ubo, uint32_t binding, uint32_t slot, uint32_t offset, uint32_t size, bool is_ubo);
     void (*descriptor_write_texture)(RendContextHandle handle, RendTexture *texture, uint32_t binding, uint32_t slot);
@@ -108,39 +109,6 @@ typedef struct {
 } RendVTable;
 
 
-struct rend_pipeline_t {
-    struct rend_pipeline_t *next;
-    struct rend_pipeline_t *prev;
-    void *backend_ctx;
-    uint32_t idx; // index into renderers internal array of pipelines
-    uint32_t frame_count;
-    uint8_t backend;
-    uint8_t type;
-};
-
-struct rend_renderer_t {
-    struct rend_renderer_t *next;
-    struct rend_renderer_t *prev;
-
-    struct rend_pipeline_t *pipeline_head;
-    RendContextHandle context; // backend specific internal data
-    PeakWindow *window;
-    uint64_t frame_count;
-
-    RendBindingInfo bind_info;
-
-    uint32_t texture_binding;
-    uint32_t texture_count;
-    uint32_t ubo_binding;
-    uint32_t ubo_count;
-
-    uint8_t backend;
-    uint8_t in_frame;
-    uint8_t in_pass;
-    uint8_t vsync;
-};
-
-
 /* NOTE(vasco): Its simpler if backeds all use a uniform struct than
  * every single one having to basically redefine the same thing
  */
@@ -164,6 +132,39 @@ struct RendBuffer {
     uint32_t usage;
     uint32_t size;
     uint8_t backend;
+};
+
+struct rend_pipeline_t {
+    struct rend_pipeline_t *next;
+    struct rend_pipeline_t *prev;
+    void *backend_ctx;
+    uint32_t idx; // index into renderers internal array of pipelines
+    uint32_t frame_count;
+    uint8_t backend;
+    uint8_t type;
+};
+
+struct rend_renderer_t {
+    struct rend_renderer_t *next;
+    struct rend_renderer_t *prev;
+
+    struct rend_pipeline_t *pipeline_head;
+    RendContextHandle context; // backend specific internal data
+    PeakWindow *window;
+    uint64_t frame_count;
+
+    RendBindingInfo bind_info;
+    RendBuffer staging;
+
+    uint32_t texture_binding;
+    uint32_t texture_count;
+    uint32_t ubo_binding;
+    uint32_t ubo_count;
+
+    uint8_t backend;
+    uint8_t in_frame;
+    uint8_t in_pass;
+    uint8_t vsync;
 };
 
 struct RendTexture {
@@ -194,6 +195,7 @@ struct RendTexture {
     uint32_t layout;
 
     uint8_t backend;
+    uint8_t borrowed; /* swapchain / offscreen default: do not destroy the image */
 };
 
 struct RendSpecs {

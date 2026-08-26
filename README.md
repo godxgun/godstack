@@ -11,12 +11,12 @@ Collection of modular and minimal libraries used by our software.
 | Name   | Version | Description                                |
 | ------ | ------- | ------------------------------------------ |
 | Poof   | 0.1.4   | Build system.                              |
-| Peak   | 0.6.4   | Platform library that automatically links the correct system libraries. |
+| Peak   | 0.6.5   | Platform library that automatically links the correct system libraries. |
 | Grit   | 0.2.1   | Utilities: allocators, math, rng, software raster.  |
 | Fuse   | 0.8.0   | Immediate-mode UI command buffer.          |
-| Term   | 0.3.4   | Cell-grid terminal emulator.               |
-| Rend   | 1.1.2   | Modern graphics API layer.                 |
-| Cool   | 0.0.2   | Render HTML by calling functions.          |
+| Term   | 0.3.7   | Cell-grid terminal emulator.               |
+| Rend   | 1.5.0   | Modern graphics API layer.                 |
+| Cool   | 0.0.3   | Render HTML by calling functions.          |
 
 ## Installing
 
@@ -24,6 +24,15 @@ Collection of modular and minimal libraries used by our software.
 2. -I the directory.
 3. Include foo.h.
 4. Include foo.c and it will pull other .c files as needed.
+
+## Build
+
+```
+./build        # demos + fuse_test
+./build test   # that, then run them headlessly
+```
+
+Rend demos take `--headless` (`--frames N`, `--ppm path`). Peak window demos need a display.
 
 ## Maturity & Versioning
 

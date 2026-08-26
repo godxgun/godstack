@@ -25,7 +25,7 @@
 
 #define TERM_MAJOR 0
 #define TERM_MINOR 3
-#define TERM_PATCH 4
+#define TERM_PATCH 7
 
 /* CHANGE LOG
  * 0.1.0 - @vasco - extract from vt: feed, grid, live CSI
@@ -35,6 +35,10 @@
  * 0.3.2 - @vasco - CSI 18 t, DECRQM, XTVERSION; larger reply
  * 0.3.3 - @vasco - primary scroll hist; term_hist_line / term_hist_count
  * 0.3.4 - @vasco - DECSET mouse 1000/1002/1003/1006
+ * 0.3.5 - @vasco - is_dirty on scroll, ICH/DCH, alt leave, resize
+ * 0.3.6 - @vasco - term_init_on / term_resize_on: external screen/alt storage
+ * 0.3.7 - @vasco - dirty putc, LF=IND, DECSTBM 1-line, CUU/CUD margins,
+ *                  DECALN, RIS, ACS G0, resize_on adopt; TERM_MAX
  */
 
 #include <assert.h>
@@ -61,7 +65,7 @@
     } while (0)
 
 #define TERM_MIN(a, b) ((a) < (b) ? (a) : (b))
-#define TERM_MAX(a, b) ((a) > (b) ? (b) : (a))
+#define TERM_MAX(a, b) ((a) > (b) ? (a) : (b))
 #define TERM_BETWEEN(x, a, b) (((unsigned)((x) - (a))) <= (unsigned)((b) - (a)))
 #define TERM_DEFAULT(a, b) ((a) = (a) ? (a) : (b))
 
@@ -172,11 +176,20 @@ typedef struct Term {
     uint32_t hist_n;
     uint32_t hist_i;
     uint32_t hist_cols;
+    int cells_owned;
+    uint8_t cs_g0;
+    uint8_t cs_g1;
+    uint8_t cs_gl;
+    uint8_t cs_sel;
 } Term;
 
 int  term_init(Term *t, uint32_t cols, uint32_t rows, const TermColors *colors);
+int  term_init_on(Term *t, uint32_t cols, uint32_t rows, const TermColors *colors,
+    TermCell *screen, TermCell *alt, uint32_t cap);
 void term_destroy(Term *t);
 void term_resize(Term *t, uint32_t cols, uint32_t rows);
+void term_resize_on(Term *t, uint32_t cols, uint32_t rows,
+    TermCell *screen, TermCell *alt, uint32_t cap);
 void term_feed(Term *t, const char *bytes, size_t len);
 void term_feed_ascii(Term *t, const char *bytes, size_t len); /* no ESC, no UTF-8; CR/LF/putc only */
 TermScreen *term_screen(Term *t);

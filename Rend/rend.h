@@ -1,12 +1,9 @@
-/* ===========================================================================   
+/* ===========================================================================
  * REND - Renderer Library - Copyright (c) 2026 Vasco Alves
  *
- * DESCRIPTION:
- * - High level graphics rendering API around Vulkan 1.4
- * - Pushes data to the GPU in a highly configurable and STABLE fashion.
- * - Is not responsible for initializing windows.
- * - Is not responsible for compiling shaders.
- * - Depends on Peak to be cross-platform.
+ * Send data to the GPU. Peak owns the window. Caller owns SPIR-V.
+ *
+ * PREFIX: REND (macros)  Rend (types)  rend_ (functions)
  *
  * =========================================================================== */
 
@@ -14,8 +11,8 @@
 #define _REND_H_
 
 #define REND_MAJOR 1  // breaking API changes
-#define REND_MINOR 1  // non-breaking features
-#define REND_PATCH 2  // non-breaking patches and bug fixes
+#define REND_MINOR 5  // non-breaking features
+#define REND_PATCH 0  // non-breaking patches and bug fixes
                     
 #ifndef PEAK_VULKAN
 #define PEAK_VULKAN
@@ -83,14 +80,21 @@ typedef struct {
 extern void rend_quit(void); // Will free ALL resources created by the library such as RendRenderer, RendPipeline, RendBuffer and RendTexture.
 
 /* Renderer */
-extern RendRenderer rend_renderer_create(PeakWindow*, RendBackendType backend, void* device, bool vsync, RendBindingInfo *bind_info); // Create Renderer that renders to a target window with 
+extern RendRenderer rend_renderer_create(PeakWindow*, RendBackendType backend, void* device, bool vsync, RendBindingInfo *bind_info); // Windowed renderer. First renderer creates the process device.
 extern RendRenderer rend_renderer_create_offscreen(uint32_t width, uint32_t height, RendFormat format, RendBackendType backend, RendBindingInfo *bind_info); // No window. Default target is an owned color image. First renderer creates the process device.
 extern void         rend_renderer_destroy(RendRenderer renderer); // Destroy renderer. Unless you need to freely create and destroy renderers, you can rely on rend_quit to clean up.
 extern bool         rend_renderer_frame_begin(RendRenderer renderer); // May fail. Acquires backbuffer and starts recording commands!
 extern void         rend_renderer_frame_end(RendRenderer renderer, float *delta); // Stops recording commands and presents the contents to the screen.
+/* Borrowed default color. After frame_begin. */
+extern RendTexture *rend_renderer_color_target(RendRenderer renderer);
+extern uint32_t     rend_texture_width(const RendTexture *texture);
+extern uint32_t     rend_texture_height(const RendTexture *texture);
+extern RendFormat   rend_texture_format(const RendTexture *texture);
+extern uint64_t     rend_texture_id(RendTexture *texture);
+extern void         rend_renderer_read(RendRenderer renderer, void *dst, size_t size); // color_target to host. Tight-packed. Outside a frame. Offscreen only.
 
 /* Write to Descriptor Sets */
-extern void         rend_descriptor_write_ubo(RendRenderer, RendBuffer ubo, uint32_t binding, uint32_t slot); // 
+extern void         rend_descriptor_write_ubo(RendRenderer, RendBuffer ubo, uint32_t binding, uint32_t slot);
 extern void         rend_descriptor_write_ssbo(RendRenderer, RendBuffer ssbo, uint32_t binding, uint32_t slot);
 extern void         rend_descriptor_write_texture(RendRenderer, RendTexture *texture, uint32_t binding, uint32_t slot); // Writes texture to a slot in the texture array. Does not need to be in the main render loop.
 
@@ -100,13 +104,14 @@ extern void         rend_buffer_destroy(RendBuffer *buffer); // Destroy a buffer
 extern void         rend_buffer_write(RendRenderer renderer, RendBuffer *buffer, const void *data, size_t size, size_t offset); // Write to buffer. Works for dynamically and statically allocated buffers.
 extern void         rend_buffer_copy(RendRenderer renderer, RendBuffer *dest, size_t dest_offset, RendBuffer *src, size_t src_offset, size_t bytes);
 extern uint64_t     rend_buffer_address(RendBuffer *buffer); // Returns 64 bit address to buffer memory.
+extern void        *rend_buffer_mapped(RendBuffer *buffer); // Host pointer if the buffer is host-visible, else NULL.
 
 /* Textures */
 extern RendTexture  rend_texture_create(RendRenderer renderer, uint32_t width, uint32_t height, uint32_t depth, uint32_t mip_levels, uint32_t layers, RendFormat format); // Create a texture.
 extern RendTexture  rend_texture_create_from_data(RendRenderer renderer, const void *data, uint32_t width, uint32_t height, RendFormat format); // Create texture and copy data to it immediately.
 extern void         rend_texture_destroy(RendRenderer renderer, RendTexture *texture); // Destroy texture. Does not deallocate it's memory from the bump allocator.
 extern void         rend_texture_copy_data(RendRenderer renderer, RendTexture *texture, const void *data, size_t size); // Copy data to texture. MUST be the same size as the format expects (width x height x sizeof format).
-extern void         rend_texture_copy_buffer(RendRenderer renderer, RendTexture *texture, RendBuffer *buffer); // Copy buffer to texture.
+extern void         rend_texture_copy_buffer(RendRenderer renderer, RendTexture *texture, RendBuffer *buffer); // Copy buffer to texture. Outside a frame: transfer-queue one-shot. Inside a frame: same as rend_cmd_copy_buffer_to_texture.
 extern void         rend_texture_read(RendRenderer renderer, RendTexture *texture, void *dst, size_t size); // Copy texture to host. Tight-packed texels. Outside a frame and pass. MUST be width x height x sizeof format.
 
 /* Create, Configure, and Destroy Rendering Pipelines */
@@ -114,12 +119,13 @@ extern RendPipeline rend_pipeline_create_graphics_spirv(RendRenderer renderer, u
 extern RendPipeline rend_pipeline_create_graphics_bindless_spirv(RendRenderer renderer, uint8_t *vertex_bytes, size_t vertex_size, uint8_t *frag_bytes, size_t frag_size, const RendPushConstantInfo *push_constants, uint32_t push_constant_count,  RendPolygonMode polygon_mode, RendCullMode cull_mode, RendTopology topology, RendFormat color_format, bool depth_test_enable); // Create a pipeline for a renderer using a configuration handle.
 extern RendPipeline rend_pipeline_create_meshlet_spirv(RendRenderer renderer, uint8_t *meshlet_bytes, size_t meshlet_size, uint8_t *frag_bytes, size_t frag_size, const RendPushConstantInfo *push_constants, uint32_t push_constant_count, RendPolygonMode polygon_mode, RendCullMode cull_mode, bool depth_test_enable); // Creates a meshlet rendering pipeline.
 extern RendPipeline rend_pipeline_create_compute_spirv(RendRenderer renderer, const uint8_t *compute_bytes, size_t compute_size, const RendPushConstantInfo *push_constants, uint32_t push_constant_count); // Create a compute pipeline.
+extern void         rend_pipeline_set_blend(RendPipeline pipeline, bool blend);
 
 /* Commands */
-extern void rend_cmd_render_begin(RendRenderer renderer, float r, float g, float b, float a); // Begin render pass to default target the window.
-extern void rend_cmd_render_begin_texture(RendRenderer renderer, RendTexture *texture); // Begin render pass with a texture as the target.
+extern void rend_cmd_render_begin(RendRenderer renderer, float r, float g, float b, float a); // Pass on color_target(). Clear to RGBA.
+extern void rend_cmd_render_begin_texture(RendRenderer renderer, RendTexture *texture); // Pass on a caller texture (not the borrowed color_target unless you mean to).
 extern void rend_cmd_render_end(RendRenderer renderer); // End render pass.
-extern void rend_cmd_render_end_texture(RendRenderer renderer, RendTexture *texture); // End render pass that targets texture. Transition texture to read optimal format.
+extern void rend_cmd_render_end_texture(RendRenderer renderer, RendTexture *texture); // End pass on a caller texture. Ready to sample.
 extern void rend_cmd_bind_pipeline(RendPipeline pipeline); // Bind the pipeline to this frame.
 extern void rend_cmd_bind_vertex_buffer(RendPipeline pipeline, uint32_t binding, RendBuffer buffer, size_t offset); // Bind vertex buffer to this graphics pipeline.
 extern void rend_cmd_bind_index_buffer(RendPipeline pipeline, RendBuffer buffer, size_t offset, RendIndexType index_type); // Bind index buffer to this graphics pipeline.
@@ -127,7 +133,8 @@ extern void rend_cmd_push_constants(RendPipeline pipeline, void *push_data, size
 extern void rend_cmd_dispatch(RendPipeline pipeline, uint32_t x, uint32_t y, uint32_t z); // Dispatch compute commands to group with dimensions x, y, z!
 extern void rend_cmd_draw(RendPipeline pipeline, size_t count, uint32_t instance_count); // Calls draw command on the pipeline.
 extern void rend_cmd_draw_indexed(RendPipeline pipeline, uint32_t index_count, uint32_t first_index, int32_t vertex_offset, uint32_t instance_count); // Draw the pipeline using indexed rendering.
-extern void rend_cmd_blit(RendRenderer renderer, RendTexture *src, RendTexture *dst, uint32_t src_x, uint32_t src_y, uint32_t src_w, uint32_t src_h, uint32_t dst_x, uint32_t dst_y, uint32_t dst_w, uint32_t dst_h); // Blit a section of one texture onto another texture.
+extern void rend_cmd_copy_buffer_to_texture(RendRenderer renderer, RendTexture *texture, RendBuffer *buffer); // Buffer to texture on the frame cmdbuf. Compute-write barrier, then copy. Leaves texture TRANSFER_DST. Inside a frame, outside a pass.
+extern void rend_cmd_blit(RendRenderer renderer, RendTexture *src, RendTexture *dst, uint32_t src_x, uint32_t src_y, uint32_t src_w, uint32_t src_h, uint32_t dst_x, uint32_t dst_y, uint32_t dst_w, uint32_t dst_h); // Blit. dst may be color_target(). Inside a frame, outside a pass. color_target stays TRANSFER_DST for present.
 
 enum RendBackendType_t {
     REND_BACKEND_AUTO = 0, 
@@ -296,12 +303,11 @@ enum RendBufferType_t {
  * 1.1.0 - @vasco - rend_renderer_create_offscreen: no window, no swapchain
  * 1.1.1 - @vasco - rend_texture_read: image to host via staging buffer
  * 1.1.2 - @vasco - swapchain picks non-opaque composite alpha when offered
- *
- * 1.0.0 finished API release
- *
- * -------------------------------------------
- *
- * 1.1.0 shader hot reloading plugin (need settings management and dll loading in Peak)
+ * 1.2.0 - @vasco - rend_renderer_read: offscreen color target to host
+ * 1.2.1 - @vasco - vsync, present queue, exclusive buffers, create cleanup, blend/indirect/delta
+ * 1.3.0 - @vasco - rend_renderer_color_target: borrowed default color + extent/format
+ * 1.4.0 - @vasco - rend_buffer_mapped; texture_id / set_blend; reuse staging
+ * 1.5.0 - @vasco - in-frame buffer to texture; blit-only present
  */
 
 /*

@@ -8,10 +8,13 @@
 #include "rend.h"
 #include "rend_internal.h"
 
-#define CHECK_VK_RESULT(r)                                                     \
-{                                                                            \
-	assert(r == VK_SUCCESS && __LINE__);                                       \
-}
+#define CHECK_VK_RESULT(r) do { \
+	VkResult _rend_vk_r = (r); \
+	if (_rend_vk_r != VK_SUCCESS) { \
+		RASSERT(_rend_vk_r == VK_SUCCESS, "vulkan call failed"); \
+		return false; \
+	} \
+} while (0)
 
 typedef struct RendVkImage RendVkImage;
 typedef struct RendVkArenaAllocator RendVkArenaAllocator;
@@ -190,6 +193,7 @@ static const VkBufferUsageFlags vk_buffer_usage[] = {
 	[REND_BUFFER_INDEX]    = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 	[REND_BUFFER_UNIFORM]  = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 	[REND_BUFFER_STORAGE]  = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+	[REND_BUFFER_INDIRECT] = VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 	[REND_BUFFER_TRANSFER] = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 };
 
@@ -320,7 +324,7 @@ rend_vk_allocator_free_notification(void *pUserData, size_t size, VkInternalAllo
 
 /* --- device --- */
 
-static void
+static bool
 rend_vk_device_query_swapchain_support(RendVkDevice *device)
 {
 	RASSERT(device->physical_device, "Invalid device pointer.");
@@ -342,6 +346,7 @@ rend_vk_device_query_swapchain_support(RendVkDevice *device)
 		}
 		CHECK_VK_RESULT(vkGetPhysicalDeviceSurfacePresentModesKHR(device->physical_device, device->surface, &device->swapchain_support.present_mode_count, device->swapchain_support.present_modes));
 	}
+	return true;
 }
 
 static uint32_t
@@ -353,6 +358,13 @@ rend_vk_device_score_default(RendVkDevice *device, RendSpecs minimum_specs, cons
 	uint32_t i;
 
 	score = 0;
+
+	if (VK_API_VERSION_MAJOR(device->properties.apiVersion) < 1 ||
+			VK_API_VERSION_MINOR(device->properties.apiVersion) < 4) {
+		return 0;
+	}
+	if (!device->features.shaderInt64)
+		return 0;
 
 	device->graphics_family_index = UINT32_MAX;
 	device->present_family_index = UINT32_MAX;
@@ -406,9 +418,6 @@ rend_vk_device_score_default(RendVkDevice *device, RendSpecs minimum_specs, cons
 		}
 	}
 
-	if (device->present_family_index == UINT32_MAX)
-		device->present_family_index = device->graphics_family_index;
-
 	if ((minimum_specs.graphics && device->graphics_family_index == UINT32_MAX) ||
 			(minimum_specs.present && device->present_family_index == UINT32_MAX) ||
 			(minimum_specs.compute && device->compute_family_index == UINT32_MAX) ||
@@ -417,11 +426,15 @@ rend_vk_device_score_default(RendVkDevice *device, RendSpecs minimum_specs, cons
 	}
 
 	if (device->surface) {
-		rend_vk_device_query_swapchain_support(device);
-
+		if (!rend_vk_device_query_swapchain_support(device))
+			return 0;
+		if (device->present_family_index == UINT32_MAX)
+			return 0;
 		if (device->swapchain_support.format_count < 1 || device->swapchain_support.present_mode_count < 1) {
 			return 0;
 		}
+	} else {
+		device->present_family_index = device->graphics_family_index;
 	}
 
 	if (required_extensions) {
@@ -437,7 +450,12 @@ rend_vk_device_score_default(RendVkDevice *device, RendSpecs minimum_specs, cons
 			uint32_t j;
 
 			available_extentions = rmalloc(available_extentions_count * sizeof(*available_extentions));
-			CHECK_VK_RESULT(vkEnumerateDeviceExtensionProperties(device->physical_device, VK_NULL_HANDLE, &available_extentions_count, available_extentions));
+			if (!available_extentions)
+				return 0;
+			if (vkEnumerateDeviceExtensionProperties(device->physical_device, VK_NULL_HANDLE, &available_extentions_count, available_extentions) != VK_SUCCESS) {
+				rfree(available_extentions);
+				return 0;
+			}
 
 			overall_found = true;
 			for (i = 0; i < required_extension_count; ++i) {
@@ -599,9 +617,9 @@ rend_vk_device_create(VkSurfaceKHR surface, RendSpecs specs, RendVkDevice *out_d
 		}
 
 		device_features = (VkPhysicalDeviceFeatures){0};
-		device_features.samplerAnisotropy = specs.sampler_anisotropy;
-		device_features.fillModeNonSolid = VK_TRUE;
-		device_features.shaderInt64 = VK_TRUE;
+		device_features.samplerAnisotropy = specs.sampler_anisotropy && out_device->features.samplerAnisotropy;
+		device_features.fillModeNonSolid = out_device->features.fillModeNonSolid;
+		device_features.shaderInt64 = out_device->features.shaderInt64;
 
 		vk13_features = (VkPhysicalDeviceVulkan13Features){0};
 		vk13_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
@@ -1045,3 +1063,293 @@ rend_vk_image_view_create(RendVkImage *image, VkImageViewType view_type, VkImage
 
 	vkCreateImageView(image->logical_device, &view_create_info, vk_allocator, &image->view);
 }
+
+/* Version-agnostic Vulkan helpers (shared; not the 1.4 renderer backend). */
+
+VKAPI_ATTR VkBool32 VKAPI_CALL
+rend_vk_debug_func(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity, VkDebugUtilsMessageTypeFlagsEXT message_types, const VkDebugUtilsMessengerCallbackDataEXT *callback_data, void *user_data)
+{
+	switch (message_severity) {
+		default:
+		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
+			PERROR(callback_data->pMessage);
+			break;
+		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
+			PWARN(callback_data->pMessage);
+			break;
+		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
+			PINFO(callback_data->pMessage);
+			break;
+		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
+			PTRACE(callback_data->pMessage);
+			break;
+	}
+	return VK_FALSE;
+}
+
+bool
+rend_vk_init(void)
+{
+	RASSERT(sizeof(void*) == 8 && sizeof(int64_t) == 8 && sizeof(double) == 8, "SPEC: Host device 64-bit integer and floating-point types.");
+
+	/* trying to init another renderer with the same backend */
+	if (vk_instance) {
+		return true;
+	}
+
+	/* create instance if does not exist */
+	VkApplicationInfo vk_app_info = {VK_STRUCTURE_TYPE_APPLICATION_INFO};
+	vk_app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+	vk_app_info.pApplicationName = "REND";
+	vk_app_info.applicationVersion = VK_MAKE_VERSION(REND_MAJOR, REND_MINOR, REND_PATCH);
+	vk_app_info.apiVersion = VK_API_VERSION_1_4;
+	vk_app_info.pEngineName = "REND Renderer";
+	vk_app_info.engineVersion = VK_MAKE_VERSION(REND_MAJOR, REND_MINOR, REND_PATCH);
+
+	uint32_t peak_ext_count = 0;
+	const char **peak_exts = peak_vulkan_get_extensions(&peak_ext_count);
+	const char *extensions[8];
+	uint32_t ext_count = 0;
+	uint32_t ei;
+	for (ei = 0; ei < peak_ext_count && ext_count < 8; ei++)
+		extensions[ext_count++] = peak_exts[ei];
+
+#ifdef REND_DEBUG
+	if (ext_count < 8)
+		extensions[ext_count++] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+	PDEBUG("Vulkan Extensions: ");
+	for (ei = 0; ei < ext_count; ei++)
+		PDEBUG("%s", extensions[ei]);
+#endif
+
+#ifdef REND_DEBUG
+	const char *required_validation_layers[] = { "VK_LAYER_KHRONOS_validation" };
+	uint32_t layer_count = 1;
+
+	PDEBUG("Required Validation Layers: ");
+	for (ei = 0; ei < layer_count; ei++) {
+		PDEBUG(" - %s", required_validation_layers[ei]);
+	}
+
+	VkValidationFeaturesEXT validation_features = {
+		.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT,
+		.pNext = NULL,
+		/* GPU-assisted validation: VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT */
+	};
+#endif
+
+	VkInstanceCreateInfo vk_create_info = { VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
+	vk_create_info.pApplicationInfo = &vk_app_info;
+	vk_create_info.ppEnabledExtensionNames = extensions;
+	vk_create_info.enabledExtensionCount = ext_count;
+	vk_create_info.pApplicationInfo = &vk_app_info;
+#ifdef REND_DEBUG
+	vk_create_info.enabledLayerCount = layer_count;
+	vk_create_info.ppEnabledLayerNames = required_validation_layers;
+	vk_create_info.pNext = &validation_features;
+#else
+	vk_create_info.enabledLayerCount = 0;
+	vk_create_info.ppEnabledLayerNames = NULL;
+#endif
+
+	VkResult res = vkCreateInstance(&vk_create_info, vk_allocator, &vk_instance);
+	CHECK_VK_RESULT(res);
+
+	PDEBUG("Vulkan instance created!");
+
+#ifdef REND_DEBUG
+	uint32_t log_severity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
+	VkDebugUtilsMessengerCreateInfoEXT debug_create_info = { VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT};
+	debug_create_info.messageSeverity = log_severity;
+	debug_create_info.messageType =
+		VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+		VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
+		VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
+	debug_create_info.pfnUserCallback = rend_vk_debug_func;
+
+	PFN_vkCreateDebugUtilsMessengerEXT func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(vk_instance, "vkCreateDebugUtilsMessengerEXT");
+	if (!func) {
+		PDEBUG("Failed to create vulkan debug messenger!");
+		return false;
+	}
+	func(vk_instance, &debug_create_info, vk_allocator, &vk_debug_messenger);
+#endif
+	return true;
+}
+
+void
+rend_vk_quit(void)
+{
+	PDEBUG("[REND_VK14] Destroying device.");
+
+	/* we destroy the device on quit */
+	if (vk_device.logical_device != 0) {
+		rend_vk_device_destroy(&vk_device);
+	}
+
+	if (vk_debug_messenger) {
+		PFN_vkDestroyDebugUtilsMessengerEXT func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(vk_instance, "vkDestroyDebugUtilsMessengerEXT");
+		func(vk_instance, vk_debug_messenger, vk_allocator);
+		vk_debug_messenger = 0;
+	}
+
+	vkDestroyInstance(vk_instance, vk_allocator);
+	vk_instance = 0;
+}
+
+static uint32_t
+rend_vk_get_heap_index(uint32_t memory_type_bits, uint32_t preferred_index)
+{
+	uint32_t i;
+	if (memory_type_bits & (1u << preferred_index)) {
+		return preferred_index;
+	}
+
+	for (i = 0; i < 32; i++) {
+		if (memory_type_bits & (1u << i)) {
+			return i;
+		}
+	}
+
+	return UINT32_MAX;
+}
+
+static VkShaderModule
+rend_vk_shader_module_create(const void *data, size_t size)
+{
+
+	VkShaderModuleCreateInfo create_info = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+	create_info.codeSize = size;
+	create_info.pCode = (const uint32_t *)data;
+
+	VkShaderModule module;
+	VkResult res = vkCreateShaderModule(vk_device.logical_device, &create_info, vk_allocator, &module);
+
+	if (res != VK_SUCCESS) {
+		PWARN("Failed to create shader module for %p", data);
+		return VK_NULL_HANDLE;
+	}
+
+	return module;
+}
+
+static VkCommandBuffer
+rend_vk_cmdbuffer_single_use_begin(VkCommandPool pool)
+{
+	VkCommandBufferAllocateInfo alloc_info = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+		.commandPool = pool,
+		.commandBufferCount = 1,
+	};
+
+	VkCommandBuffer cmd;
+	vkAllocateCommandBuffers(vk_device.logical_device, &alloc_info, &cmd);
+
+	VkCommandBufferBeginInfo begin = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+	};
+
+	vkBeginCommandBuffer(cmd, &begin);
+
+	return cmd;
+}
+
+static void
+rend_vk_cmdbuffer_single_use_end(VkCommandPool pool, VkCommandBuffer cmd, VkQueue q)
+{
+	vkEndCommandBuffer(cmd);
+
+	VkSubmitInfo submit_info = {
+		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+		.commandBufferCount = 1,
+		.pCommandBuffers = &cmd,
+	};
+
+	vkQueueSubmit(q, 1, &submit_info, VK_NULL_HANDLE);
+	vkQueueWaitIdle(q);
+
+	vkFreeCommandBuffers(vk_device.logical_device, pool, 1, &cmd);
+}
+
+static void
+rend_vk_texture_barrier(VkCommandBuffer cmd, RendTexture *texture, VkImageLayout new_layout, uint32_t src_family, uint32_t dst_family, VkAccessFlags2 src_access, VkAccessFlags2 dst_access, VkPipelineStageFlags2 src_stage, VkPipelineStageFlags2 dst_stage)
+{
+	VkImageMemoryBarrier2 barrier = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.oldLayout = texture->layout,
+		.newLayout = new_layout,
+		.srcQueueFamilyIndex = src_family,
+		.dstQueueFamilyIndex = dst_family,
+		.image = (VkImage)texture->handle,
+		.srcAccessMask = src_access,
+		.dstAccessMask = dst_access,
+		.srcStageMask = src_stage,
+		.dstStageMask = dst_stage,
+		.subresourceRange = {
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.baseMipLevel = 0,
+			.levelCount = texture->mip_levels,
+			.baseArrayLayer = 0,
+			.layerCount = texture->layers,
+		},
+	};
+	VkDependencyInfo dep = {
+		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		.pImageMemoryBarriers = &barrier,
+		.imageMemoryBarrierCount = 1,
+	};
+	texture->layout = new_layout;
+	vkCmdPipelineBarrier2(cmd, &dep);
+}
+
+void
+rend_vk_texture_transition_layout(RendContextHandle handle, VkCommandBuffer cmd, RendTexture *texture, VkImageLayout new_layout)
+{
+	(void)handle;
+	if (texture->layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+		rend_vk_texture_barrier(cmd, texture, new_layout, VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+			0, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+			VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT);
+	} else if (texture->layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+		rend_vk_texture_barrier(cmd, texture, new_layout, VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+			VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_ACCESS_2_SHADER_READ_BIT,
+			VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+	} else {
+		rend_vk_texture_barrier(cmd, texture, new_layout, VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+			VK_ACCESS_2_MEMORY_WRITE_BIT, VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT,
+			VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
+	}
+}
+
+void
+rend_vk_texture_transfer_ownership_release(RendContextHandle handle, VkCommandBuffer cmd, RendTexture *texture, uint32_t src_family, uint32_t dst_family, VkImageLayout new_layout)
+{
+	(void)handle;
+	if (texture->layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+		rend_vk_texture_barrier(cmd, texture, new_layout, src_family, dst_family,
+			VK_ACCESS_2_TRANSFER_WRITE_BIT, 0,
+			VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT);
+	} else {
+		rend_vk_texture_barrier(cmd, texture, new_layout, src_family, dst_family,
+			VK_ACCESS_2_MEMORY_WRITE_BIT, 0,
+			VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT);
+	}
+}
+
+void
+rend_vk_texture_transfer_ownership_acquire(RendContextHandle handle, VkCommandBuffer cmd, RendTexture *texture, uint32_t src_family, uint32_t dst_family, VkImageLayout new_layout)
+{
+	(void)handle;
+	if (texture->layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+		rend_vk_texture_barrier(cmd, texture, new_layout, src_family, dst_family,
+			0, VK_ACCESS_2_SHADER_READ_BIT,
+			VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+	} else {
+		rend_vk_texture_barrier(cmd, texture, new_layout, src_family, dst_family,
+			0, VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT,
+			VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
+	}
+}
+

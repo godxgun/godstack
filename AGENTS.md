@@ -9,7 +9,7 @@ Vendored by copy. `-I` the library directory. Include `foo.h`, then `foo.c`. Tha
 | Lib | Header | `.c` pulls |
 |-----|--------|------------|
 | Peak | `Peak/peak.h` | platform + `p_log.c` |
-| Rend | `Rend/rend.h` | `rend_vk.c` |
+| Rend | `Rend/rend.h` | `rend_vk14.c` |
 | Grit | `Grit/grit.h` | itself |
 | Fuse | `Fuse/fuse.h` | itself |
 | Poof | `Poof/poof.h` | itself |
@@ -26,7 +26,7 @@ Build: `./build` in this directory (includes `Poof/poof.c`).
 
 Full record in `skills/`. One directory per skill, `SKILL.md` inside. Do not restate them here.
 
-- `skills/algorithm/SKILL.md` — compress, simplify, delete; then repeat
-- `skills/style/SKILL.md` — C layout, names, lint (`lint.py`)
+- `skills/algorithm/SKILL.md` — compress, simplify, delete; performance first; then repeat
+- `skills/style/SKILL.md` — C layout, names, lint
 - `skills/debug/SKILL.md` — `MASSERT` / recoverable return / `MOD_TODO`
 - `skills/commit/SKILL.md` — `<ModuleName> MAJOR.MINOR.PATCH`

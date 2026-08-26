@@ -5,6 +5,7 @@
 #include "fuse.c"
 #include "fuse_rend.h"
 #include "fuse_rend.c"
+#include "demos/headless.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -45,7 +46,7 @@ load_spv(const char *a, const char *b, unsigned long *size)
 }
 
 int
-main(void)
+main(int argc, char **argv)
 {
     PeakWindow win;
     RendBindingInfo bind_info;
@@ -64,24 +65,44 @@ main(void)
     float mx, my;
     float cpu, mem, net, volume, theme;
     float job_a, job_b, job_c, job_d;
+    int headless;
+    int frames;
+    int frame_i;
+    const char *ppm;
+    uint32_t width;
+    uint32_t height;
 
-    if (!peak_init()) {
-        PFATAL("Failed to init Peak!");
-        return 1;
-    }
+    width = 1280;
+    height = 720;
+    memset(&win, 0, sizeof win);
+    headless = headless_parse(argc, argv, &frames, &ppm);
 
-    win = peak_window_open("Fuse Dashboard", 1280, 720, 0);
-    if (!win.running) {
-        PFATAL("Failed to open a window!");
-        return 1;
+    if (!headless) {
+        if (!peak_init()) {
+            PFATAL("Failed to init Peak!");
+            return 1;
+        }
+
+        win = peak_window_open("Fuse Dashboard", width, height, 0);
+        if (!win.running) {
+            PFATAL("Failed to open a window!");
+            return 1;
+        }
+        width = win.width;
+        height = win.height;
     }
 
     memset(&bind_info, 0, sizeof bind_info);
-    renderer = rend_renderer_create(&win, REND_BACKEND_AUTO, NULL, true, &bind_info);
+    if (headless)
+        renderer = rend_renderer_create_offscreen(width, height, REND_FORMAT_R8G8B8A8_UNORM, REND_BACKEND_AUTO, &bind_info);
+    else
+        renderer = rend_renderer_create(&win, REND_BACKEND_AUTO, NULL, true, &bind_info);
     if (!renderer) {
         PFATAL("Failed to create renderer!");
-        peak_window_close(&win);
-        peak_quit();
+        if (!headless) {
+            peak_window_close(&win);
+            peak_quit();
+        }
         return 1;
     }
 
@@ -125,6 +146,7 @@ main(void)
     job_c = 0.12f;
     job_d = 0.96f;
     running = 1;
+    frame_i = 0;
 
     while (running) {
         PeakEvent ev;
@@ -135,14 +157,19 @@ main(void)
         static FuseClass nav;
         int i;
 
-        while (peak_window_epoll(&win, &ev)) {
+        if (headless && frame_i >= frames)
+            break;
+
+        while (!headless && peak_window_epoll(&win, &ev)) {
             if (ev.type == PEAK_EVENT_WINDOW_CLOSE)
                 running = 0;
             if (ev.type == PEAK_EVENT_KEY_DOWN && ev.key.key == PEAK_KEY_ESCAPE)
                 running = 0;
             if (ev.type == PEAK_EVENT_WINDOW_RESIZE) {
-                win.width = ev.resize.width;
-                win.height = ev.resize.height;
+                width = ev.resize.width;
+                height = ev.resize.height;
+                win.width = width;
+                win.height = height;
             }
             if (ev.type == PEAK_EVENT_POINTER) {
                 mx = ev.pointer.x;
@@ -159,8 +186,8 @@ main(void)
             }
         }
 
-        W = (float)win.width;
-        H = (float)win.height;
+        W = (float)width;
+        H = (float)height;
         if (W < 640.0f)
             W = 640.0f;
         if (H < 400.0f)
@@ -284,12 +311,22 @@ main(void)
             rend_cmd_render_end(renderer);
             rend_renderer_frame_end(renderer, NULL);
         }
+        frame_i++;
+    }
+
+    if (headless && !headless_finish(renderer, width, height, REND_FORMAT_R8G8B8A8_UNORM, ppm)) {
+        fuse_rend_shutdown(&fr);
+        rend_renderer_destroy(renderer);
+        rend_quit();
+        return 1;
     }
 
     fuse_rend_shutdown(&fr);
     rend_renderer_destroy(renderer);
-    peak_window_close(&win);
-    peak_quit();
+    if (!headless) {
+        peak_window_close(&win);
+        peak_quit();
+    }
     rend_quit();
     return 0;
 }

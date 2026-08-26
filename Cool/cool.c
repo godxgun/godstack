@@ -3,40 +3,43 @@
 void
 cool_html_raw(Cool_StrView sv)
 {
-    fwrite(sv.cstr, sizeof *sv.cstr, sv.len, COOL_OUTPUT);
+    cool_html_raw_cstr(sv.cstr, sv.len);
 }
 
 void
 cool_html_raw_cstr(const char *str, size_t len)
 {
-    fwrite(str, sizeof *str, len, COOL_OUTPUT);
+    fwrite(str, 1, len, COOL_OUTPUT);
 }
 
 void
 cool_html_txt(const char *str, size_t len)
 {
     const char *s = str;
-	while (s && *s && len--) {
-        int c = *s;
-        if (c == '<' || c == '>' || c == '&') {
-            cool_html_raw_cstr(str, s - str);
-            switch (c) {
-                case '>':
-                    cool_html_raw(COOL_SV("&gt;"));
-                    break;
-                case '<':
-                    cool_html_raw(COOL_SV("&lt;"));
-                    break;
-                case '&':
-                    cool_html_raw(COOL_SV("&amp;"));
-                    break;
-            }
-            str = s + 1;
-        }
-        s++;
-    }
 
-    if (s != str) cool_html_raw_cstr(str, s - str);
+    for (; s && *s && len; s++, len--) {
+        const char *e;
+        size_t n;
+
+        if (*s == '<') {
+            e = "&lt;";
+            n = 4;
+        } else if (*s == '>') {
+            e = "&gt;";
+            n = 4;
+        } else if (*s == '&') {
+            e = "&amp;";
+            n = 5;
+        } else {
+            continue;
+        }
+        if (s != str)
+            fwrite(str, 1, (size_t)(s - str), COOL_OUTPUT);
+        fwrite(e, 1, n, COOL_OUTPUT);
+        str = s + 1;
+    }
+    if (s != str)
+        fwrite(str, 1, (size_t)(s - str), COOL_OUTPUT);
 }
 
 void

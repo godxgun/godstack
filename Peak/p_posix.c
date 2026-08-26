@@ -20,6 +20,7 @@
 #endif
 #ifdef __linux__
 #include <sys/syscall.h>
+long syscall(long number, ...);
 #endif
 
 #define PEAK_WAIT_MAX 64

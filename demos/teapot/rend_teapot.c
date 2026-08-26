@@ -4,6 +4,7 @@
 #include "teapot.h"
 #include "grit.h"
 #include "grit.c"
+#include "demos/headless.h"
 #include <stddef.h>
 #include <stdlib.h>
 
@@ -18,21 +19,31 @@ load_spv(const char *a, const char *b, unsigned long *size)
     return peak_file_alloc(b, size);
 }
 
-int main() {
-
-    if (!peak_init()) {
-        PFATAL("Failed to init Peak!");
-        return 1;
-    }
-
-    PeakWindow win = peak_window_open("teapot", 800, 600, 0);
-    if (!win.running) {
-        PFATAL("Failed to open a window!");
-        return 1;
-    }
-
+int main(int argc, char **argv) {
+    PeakWindow win = {0};
     RendBindingInfo bind_info = {0};
     RendRenderer renderer;
+    int headless;
+    int frames;
+    int frame_i;
+    const char *ppm;
+    uint32_t width = 800;
+    uint32_t height = 600;
+
+    headless = headless_parse(argc, argv, &frames, &ppm);
+
+    if (!headless) {
+        if (!peak_init()) {
+            PFATAL("Failed to init Peak!");
+            return 1;
+        }
+
+        win = peak_window_open("teapot", width, height, 0);
+        if (!win.running) {
+            PFATAL("Failed to open a window!");
+            return 1;
+        }
+    }
 
     /* basic.slang: set 0 binding 0 = ubos[3], binding 1 = test[3] */
     bind_info.ubo_bindings[0] = 0;
@@ -41,11 +52,16 @@ int main() {
     bind_info.texture_bindings[0] = 1;
     bind_info.texture_array_sizes[0] = 3;
     bind_info.texture_binding_count = 1;
-    renderer = rend_renderer_create(&win, REND_BACKEND_AUTO, NULL, true, &bind_info);
+    if (headless)
+        renderer = rend_renderer_create_offscreen(width, height, REND_FORMAT_R8G8B8A8_UNORM, REND_BACKEND_AUTO, &bind_info);
+    else
+        renderer = rend_renderer_create(&win, REND_BACKEND_AUTO, NULL, true, &bind_info);
     if (!renderer) {
         PFATAL("Failed to create renderer!");
-        peak_window_close(&win);
-        peak_quit();
+        if (!headless) {
+            peak_window_close(&win);
+            peak_quit();
+        }
         return 1;
     }
 
@@ -137,11 +153,15 @@ int main() {
     bool pointer_down = false;
     float last_pointer_x = 0;
     float last_pointer_y = 0;
+    frame_i = 0;
 
     while (running) {
-
         PeakEvent ev;
-        while (peak_window_epoll(&win, &ev)) {
+
+        if (headless) {
+            if (frame_i >= frames)
+                break;
+        } else while (peak_window_epoll(&win, &ev)) {
             if (ev.type == PEAK_EVENT_WINDOW_CLOSE) {
                 running = false;
                 break;
@@ -226,8 +246,17 @@ int main() {
             } rend_renderer_render_pass_end(renderer);
 
             rend_renderer_frame_end(renderer, NULL);
-        } 
+        }
+        frame_i++;
+    }
 
+    if (headless && !headless_finish(renderer, width, height, REND_FORMAT_R8G8B8A8_UNORM, ppm)) {
+        rend_texture_destroy(renderer, &texture);
+        rend_buffer_destroy(&vert_buf);
+        rend_buffer_destroy(&ind_buf);
+        rend_renderer_destroy(renderer);
+        rend_quit();
+        return 1;
     }
 
     rend_texture_destroy(renderer, &texture);
@@ -235,8 +264,10 @@ int main() {
     rend_buffer_destroy(&ind_buf);
     rend_renderer_destroy(renderer);
 
-    peak_window_close(&win);
-    peak_quit();
+    if (!headless) {
+        peak_window_close(&win);
+        peak_quit();
+    }
     rend_quit();
 
     return 0;

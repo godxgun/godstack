@@ -130,7 +130,8 @@ peak_internal_x11_key_map(KeySym sym)
 	case XK_Escape: return PEAK_KEY_ESCAPE;
 	case XK_Return: return PEAK_KEY_ENTER;
 	case XK_BackSpace: return PEAK_KEY_BACKSPACE;
-	case XK_Tab: return PEAK_KEY_TAB;
+	case XK_Tab:
+	case XK_ISO_Left_Tab: return PEAK_KEY_TAB;
 	case XK_Delete: return PEAK_KEY_DELETE;
 	default: return PEAK_KEY_UNKNOWN;
 	}

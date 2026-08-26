@@ -18,7 +18,7 @@
 
 #define PEAK_MAJOR "0"
 #define PEAK_MINOR "6"
-#define PEAK_PATCH "4"
+#define PEAK_PATCH "5"
 
 /* CHANGE LOG 
  * 0.0.0 - @vasco - prototyping
@@ -43,6 +43,7 @@
  * 0.6.2 - @vasco - PEAK_HANDLE, pty, wait, sock, job, mirror ring
  * 0.6.3 - @vasco - win32 sizeof style; platform fn prototypes
  * 0.6.4 - @vasco - win32 audio_stop before start
+ * 0.6.5 - @vasco - ISO_Left_Tab; linux syscall prototype
  */
 
 #define NANOS_PER_SEC 1000000000ull

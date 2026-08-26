@@ -15,15 +15,9 @@ FUNCTION: module_object_action()
 LOCAL VARIABLES: module_variable
 LOCAL VARIABLES: variable
 
-# Lintable
+# Lintable (linter not implemented=
 
-Do not read whole files.
-
-    uv run --project <this-skill-dir> python lint.py PATH
-
-Re-run until clean or only false positives. No extra restyling.
-
-Reports: return type, name, and `{` each on their own line; `(void)` if no params;
+Check: return type, name, and `{` each on their own line; `(void)` if no params;
 `int *p`; space after `if` `for` `while` `switch`, none inside `()`;
 decls at top of block; `if {` same line; `switch` cases unindented;
 system includes first, alphabetical, then a blank line and locals.

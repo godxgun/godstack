@@ -15,7 +15,16 @@ static void term_screen_free(TermScreen *s);
 static int  term_screen_grow(TermScreen *s, uint32_t cols, uint32_t rows);
 static TermScreen *term_live(Term *t);
 static void term_next_line(Term *t);
+static void term_index(Term *t);
+static void term_reverse_index(Term *t);
+static void term_lf(Term *t);
+static void term_cursor_up(Term *t, uint32_t n);
+static void term_cursor_down(Term *t, uint32_t n);
 static void term_cursor_forward(Term *t);
+static void term_decaln(Term *t);
+static void term_reset(Term *t);
+static void term_clear_screen(Term *t, TermScreen *s);
+static uint32_t term_acs_map(uint32_t c);
 static int  term_codepoint_width(uint32_t c);
 static int  term_utf8_consume(Term *t, unsigned char ch, uint32_t *out);
 static void term_putc(Term *t, uint32_t c);
@@ -37,6 +46,12 @@ static void term_set_mode(Term *t, int set);
 static void term_reply_str(Term *t, const char *s);
 static uint32_t term_color_256(Term *t, int n);
 static void term_clear_region(Term *t, uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1);
+static void term_dirty_rect(TermScreen *s, uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1);
+static void term_dirty_all(TermScreen *s);
+static int  term_init_common(Term *t, uint32_t cols, uint32_t rows, const TermColors *colors);
+static void term_hist_resize(Term *t, uint32_t cols);
+static void term_screen_adopt(TermScreen *s, TermCell *cells, uint32_t cols, uint32_t rows, uint32_t cap);
+static void term_screen_copy_on(TermScreen *s, TermCell *dst, uint32_t cols, uint32_t rows, uint32_t cap);
 static void term_move_to(Term *t, uint32_t x, uint32_t y);
 static void term_move_abs(Term *t, uint32_t x, uint32_t y);
 static void term_colors_default(TermColors *c);
@@ -112,7 +127,121 @@ term_screen_grow(TermScreen *s, uint32_t cols, uint32_t rows)
     s->cols = cols;
     s->rows = rows;
     s->capacity = (uint32_t)need;
+    term_dirty_all(s);
     return 1;
+}
+
+static void
+term_screen_adopt(TermScreen *s, TermCell *cells, uint32_t cols, uint32_t rows, uint32_t cap)
+{
+    s->cell_buffer = cells;
+    s->cols = cols;
+    s->rows = rows;
+    s->capacity = cap;
+}
+
+static void
+term_screen_copy_on(TermScreen *s, TermCell *dst, uint32_t cols, uint32_t rows, uint32_t cap)
+{
+    uint32_t y;
+    uint32_t copy_cols;
+    uint32_t copy_rows;
+    TermCell *src;
+    TermCell *tmp;
+
+    src = s->cell_buffer;
+    copy_cols = TERM_MIN(s->cols, cols);
+    copy_rows = TERM_MIN(s->rows, rows);
+    if (dst == src) {
+        if (s->cols == cols && s->rows == rows) {
+            s->capacity = cap;
+            term_dirty_all(s);
+            return;
+        }
+        tmp = NULL;
+        if (src && copy_cols && copy_rows) {
+            tmp = malloc((size_t)s->cols * s->rows * sizeof *tmp);
+            if (tmp)
+                memcpy(tmp, src, (size_t)s->cols * s->rows * sizeof *tmp);
+        }
+        memset(dst, 0, (size_t)cap * sizeof *dst);
+        if (tmp) {
+            for (y = 0; y < copy_rows; y++)
+                memcpy(dst + (size_t)y * cols,
+                    tmp + (size_t)y * s->cols,
+                    (size_t)copy_cols * sizeof *dst);
+            free(tmp);
+        }
+        term_screen_adopt(s, dst, cols, rows, cap);
+        term_dirty_all(s);
+        return;
+    }
+    memset(dst, 0, (size_t)cap * sizeof *dst);
+    if (src && copy_cols && copy_rows) {
+        for (y = 0; y < copy_rows; y++)
+            memcpy(dst + (size_t)y * cols,
+                src + (size_t)y * s->cols,
+                (size_t)copy_cols * sizeof *dst);
+    }
+    term_screen_adopt(s, dst, cols, rows, cap);
+    term_dirty_all(s);
+}
+
+static int
+term_init_common(Term *t, uint32_t cols, uint32_t rows, const TermColors *colors)
+{
+    memset(t, 0, sizeof *t);
+    if (colors)
+        t->colors = *colors;
+    else
+        term_colors_default(&t->colors);
+
+    t->cursor.fg = t->colors.fg[t->colors.fg_default < 16 ? t->colors.fg_default : 7];
+    t->cursor.bg = t->colors.bg[t->colors.bg_default < 8 ? t->colors.bg_default : 0];
+    t->saved = t->cursor;
+    t->mode = TERM_MODE_UTF8 | TERM_MODE_WRAP;
+    t->top = 0;
+    t->bot = rows - 1;
+    t->hist_cap = TERM_HIST_MAX;
+    t->hist_cols = cols;
+    t->hist = calloc((size_t)TERM_HIST_MAX * cols, sizeof *t->hist);
+    if (!t->hist)
+        t->hist_cap = 0;
+    return 1;
+}
+
+static void
+term_hist_resize(Term *t, uint32_t cols)
+{
+    TermCell *next;
+    uint32_t i;
+    uint32_t copy;
+
+    if (!t->hist || t->hist_cols == cols)
+        return;
+    next = calloc((size_t)t->hist_cap * cols, sizeof *next);
+    if (!next) {
+        free(t->hist);
+        t->hist = NULL;
+        t->hist_cap = 0;
+        t->hist_n = 0;
+        t->hist_i = 0;
+        t->hist_cols = 0;
+        return;
+    }
+    copy = TERM_MIN(t->hist_cols, cols);
+    for (i = 0; i < t->hist_n; i++) {
+        uint32_t src;
+
+        src = (t->hist_i + t->hist_cap - t->hist_n + i) % t->hist_cap;
+        memcpy(next + (size_t)i * cols,
+            t->hist + (size_t)src * t->hist_cols,
+            (size_t)copy * sizeof *next);
+    }
+    free(t->hist);
+    t->hist = next;
+    t->hist_cols = cols;
+    t->hist_i = t->hist_n % (t->hist_cap ? t->hist_cap : 1);
 }
 
 static TermScreen *
@@ -153,31 +282,30 @@ term_init(Term *t, uint32_t cols, uint32_t rows, const TermColors *colors)
     TASSERT(t, "Invalid term.");
     if (!t || !cols || !rows)
         return 0;
-
-    memset(t, 0, sizeof *t);
-    if (colors)
-        t->colors = *colors;
-    else
-        term_colors_default(&t->colors);
-
+    term_init_common(t, cols, rows, colors);
     term_screen_init(&t->screen, cols, rows);
     term_screen_init(&t->alt, cols, rows);
+    t->cells_owned = 1;
     if (!t->screen.cell_buffer || !t->alt.cell_buffer) {
         term_destroy(t);
         return 0;
     }
+    return 1;
+}
 
-    t->cursor.fg = t->colors.fg[t->colors.fg_default < 16 ? t->colors.fg_default : 7];
-    t->cursor.bg = t->colors.bg[t->colors.bg_default < 8 ? t->colors.bg_default : 0];
-    t->saved = t->cursor;
-    t->mode = TERM_MODE_UTF8 | TERM_MODE_WRAP;
-    t->top = 0;
-    t->bot = rows - 1;
-    t->hist_cap = TERM_HIST_MAX;
-    t->hist_cols = cols;
-    t->hist = calloc((size_t)TERM_HIST_MAX * cols, sizeof *t->hist);
-    if (!t->hist)
-        t->hist_cap = 0;
+int
+term_init_on(Term *t, uint32_t cols, uint32_t rows, const TermColors *colors,
+    TermCell *screen, TermCell *alt, uint32_t cap)
+{
+    TASSERT(t, "Invalid term.");
+    if (!t || !cols || !rows || !screen || !alt || cap < cols * rows)
+        return 0;
+    term_init_common(t, cols, rows, colors);
+    memset(screen, 0, (size_t)cap * sizeof *screen);
+    memset(alt, 0, (size_t)cap * sizeof *alt);
+    term_screen_adopt(&t->screen, screen, cols, rows, cap);
+    term_screen_adopt(&t->alt, alt, cols, rows, cap);
+    t->cells_owned = 0;
     return 1;
 }
 
@@ -186,8 +314,13 @@ term_destroy(Term *t)
 {
     if (!t)
         return;
-    term_screen_free(&t->screen);
-    term_screen_free(&t->alt);
+    if (t->cells_owned) {
+        term_screen_free(&t->screen);
+        term_screen_free(&t->alt);
+    } else {
+        memset(&t->screen, 0, sizeof t->screen);
+        memset(&t->alt, 0, sizeof t->alt);
+    }
     free(t->hist);
     memset(t, 0, sizeof *t);
 }
@@ -199,7 +332,7 @@ term_resize(Term *t, uint32_t cols, uint32_t rows)
     int full;
 
     TASSERT(t, "Invalid term.");
-    if (!t || !cols || !rows)
+    if (!t || !cols || !rows || !t->cells_owned)
         return;
     old_rows = t->screen.rows;
     full = (t->top == 0 && old_rows && t->bot + 1 == old_rows);
@@ -211,43 +344,51 @@ term_resize(Term *t, uint32_t cols, uint32_t rows)
         t->top = 0;
         t->bot = rows - 1;
     }
-    if (t->hist && t->hist_cols != cols) {
-        TermCell *next;
-        uint32_t i, copy;
+    term_hist_resize(t, cols);
+}
 
-        next = calloc((size_t)t->hist_cap * cols, sizeof *next);
-        if (!next) {
-            free(t->hist);
-            t->hist = NULL;
-            t->hist_cap = 0;
-            t->hist_n = 0;
-            t->hist_i = 0;
-            t->hist_cols = 0;
-            return;
-        }
-        copy = TERM_MIN(t->hist_cols, cols);
-        for (i = 0; i < t->hist_n; i++) {
-            uint32_t src;
+void
+term_resize_on(Term *t, uint32_t cols, uint32_t rows,
+    TermCell *screen, TermCell *alt, uint32_t cap)
+{
+    uint32_t old_rows;
+    int full;
+    int owned;
+    TermCell *old_scr;
+    TermCell *old_alt;
 
-            src = (t->hist_i + t->hist_cap - t->hist_n + i) % t->hist_cap;
-            memcpy(next + (size_t)i * cols,
-                t->hist + (size_t)src * t->hist_cols,
-                (size_t)copy * sizeof *next);
-        }
-        free(t->hist);
-        t->hist = next;
-        t->hist_cols = cols;
-        t->hist_i = t->hist_n % (t->hist_cap ? t->hist_cap : 1);
+    TASSERT(t, "Invalid term.");
+    if (!t || !cols || !rows || !screen || !alt || cap < cols * rows)
+        return;
+    old_rows = t->screen.rows;
+    full = (t->top == 0 && old_rows && t->bot + 1 == old_rows);
+    owned = t->cells_owned;
+    old_scr = t->screen.cell_buffer;
+    old_alt = t->alt.cell_buffer;
+    term_screen_copy_on(&t->screen, screen, cols, rows, cap);
+    term_screen_copy_on(&t->alt, alt, cols, rows, cap);
+    if (owned) {
+        if (old_scr && old_scr != screen)
+            free(old_scr);
+        if (old_alt && old_alt != alt)
+            free(old_alt);
     }
+    t->cells_owned = 0;
+    t->cursor.x = TERM_MIN(t->cursor.x, cols - 1);
+    t->cursor.y = TERM_MIN(t->cursor.y, rows - 1);
+    if (full || t->bot >= rows || t->top >= rows) {
+        t->top = 0;
+        t->bot = rows - 1;
+    }
+    term_hist_resize(t, cols);
 }
 
 static void
-term_next_line(Term *t)
+term_index(Term *t)
 {
     TermScreen *s;
 
     s = term_live(t);
-    t->cursor.x = 0;
     t->cursor.state &= (uint8_t)~TERM_WRAPNEXT;
     if (t->cursor.y == t->bot) {
         term_scroll(t, t->top, t->bot, 1);
@@ -255,6 +396,72 @@ term_next_line(Term *t)
     }
     if (t->cursor.y + 1 < s->rows)
         t->cursor.y++;
+}
+
+static void
+term_reverse_index(Term *t)
+{
+    t->cursor.state &= (uint8_t)~TERM_WRAPNEXT;
+    if (t->cursor.y == t->top) {
+        term_scroll(t, t->top, t->bot, -1);
+        return;
+    }
+    if (t->cursor.y > 0)
+        t->cursor.y--;
+}
+
+static void
+term_next_line(Term *t)
+{
+    t->cursor.x = 0;
+    term_index(t);
+}
+
+static void
+term_lf(Term *t)
+{
+    term_index(t);
+    if (t->mode & TERM_MODE_CRLF) {
+        t->cursor.x = 0;
+        t->cursor.state &= (uint8_t)~TERM_WRAPNEXT;
+    }
+}
+
+static void
+term_cursor_up(Term *t, uint32_t n)
+{
+    uint32_t y;
+    uint32_t lim;
+
+    if (!n)
+        return;
+    y = t->cursor.y;
+    lim = (y >= t->top) ? t->top : 0;
+    y = (y > n) ? y - n : 0;
+    if (y < lim)
+        y = lim;
+    term_move_to(t, t->cursor.x, y);
+}
+
+static void
+term_cursor_down(Term *t, uint32_t n)
+{
+    TermScreen *s;
+    uint32_t y;
+    uint32_t lim;
+
+    s = term_live(t);
+    if (!n)
+        return;
+    y = t->cursor.y;
+    lim = s->rows ? s->rows - 1 : 0;
+    if (y <= t->bot)
+        lim = t->bot;
+    if (n < lim - y)
+        y += n;
+    else
+        y = lim;
+    term_move_to(t, t->cursor.x, y);
 }
 
 static void
@@ -348,6 +555,21 @@ term_utf8_consume(Term *t, unsigned char ch, uint32_t *out)
     return 1;
 }
 
+static uint32_t
+term_acs_map(uint32_t c)
+{
+    static const uint32_t map[32] = {
+        0x00A0, 0x25C6, 0x2592, 0x2409, 0x240C, 0x240D, 0x240A, 0x00B0,
+        0x00B1, 0x2424, 0x240B, 0x2518, 0x2510, 0x250C, 0x2514, 0x253C,
+        0x23BA, 0x23BB, 0x2500, 0x23BC, 0x23BD, 0x251C, 0x2524, 0x2534,
+        0x252C, 0x2502, 0x2264, 0x2265, 0x03C0, 0x2260, 0x00A3, 0x00B7,
+    };
+
+    if (c < 0x5Fu || c > 0x7Eu)
+        return c;
+    return map[c - 0x5Fu];
+}
+
 static void
 term_putc(Term *t, uint32_t c)
 {
@@ -358,6 +580,8 @@ term_putc(Term *t, uint32_t c)
     uint32_t bg;
 
     s = term_live(t);
+    if ((t->cs_gl ? t->cs_g1 : t->cs_g0) && c >= 0x5Fu && c <= 0x7Eu)
+        c = term_acs_map(c);
     width = term_codepoint_width(c);
     if (width <= 0)
         return;
@@ -383,6 +607,7 @@ term_putc(Term *t, uint32_t c)
     s->cell_buffer[idx].codepoint = c;
     s->cell_buffer[idx].fg = fg;
     s->cell_buffer[idx].bg = bg;
+    s->cell_buffer[idx].is_dirty = true;
     term_cursor_forward(t);
 
     if (width == 2 && t->cursor.x != 0) {
@@ -391,6 +616,7 @@ term_putc(Term *t, uint32_t c)
             s->cell_buffer[idx].codepoint = 0;
             s->cell_buffer[idx].fg = fg;
             s->cell_buffer[idx].bg = bg;
+            s->cell_buffer[idx].is_dirty = true;
         }
         term_cursor_forward(t);
     }
@@ -432,6 +658,7 @@ term_insert_blank(Term *t, uint32_t n)
             s->cell_buffer + t->cursor.y * s->cols + x,
             rest * sizeof *s->cell_buffer);
     term_clear_region(t, x, t->cursor.y, x + n - 1, t->cursor.y);
+    term_dirty_rect(s, x, t->cursor.y, s->cols - 1, t->cursor.y);
 }
 
 static void
@@ -453,6 +680,7 @@ term_delete_chars(Term *t, uint32_t n)
             s->cell_buffer + t->cursor.y * s->cols + x + n,
             rest * sizeof *s->cell_buffer);
     term_clear_region(t, s->cols - n, t->cursor.y, s->cols - 1, t->cursor.y);
+    term_dirty_rect(s, x, t->cursor.y, s->cols - 1, t->cursor.y);
 }
 
 static void
@@ -521,6 +749,7 @@ term_scroll(Term *t, uint32_t y0, uint32_t y1, int n)
                 (rows - (uint32_t)n) * cols * sizeof *s->cell_buffer);
         term_clear_region(t, 0, y0, cols - 1, y0 + (uint32_t)n - 1);
     }
+    term_dirty_rect(s, 0, y0, cols - 1, y1);
 }
 
 static void
@@ -531,6 +760,81 @@ term_reset_margins(Term *t)
     s = term_live(t);
     t->top = 0;
     t->bot = s->rows ? s->rows - 1 : 0;
+}
+
+static void
+term_clear_screen(Term *t, TermScreen *s)
+{
+    uint32_t i;
+    uint32_t n;
+    uint32_t fg;
+    uint32_t bg;
+
+    if (!s || !s->cell_buffer || !s->cols || !s->rows)
+        return;
+    fg = (t->cursor.fg << 8) | t->cursor.attr;
+    bg = t->cursor.bg << 8;
+    n = s->cols * s->rows;
+    for (i = 0; i < n; i++) {
+        s->cell_buffer[i].codepoint = 0;
+        s->cell_buffer[i].fg = fg;
+        s->cell_buffer[i].bg = bg;
+        s->cell_buffer[i].is_dirty = true;
+    }
+}
+
+static void
+term_decaln(Term *t)
+{
+    TermScreen *s;
+    uint32_t i;
+    uint32_t n;
+    uint32_t fg;
+    uint32_t bg;
+
+    s = term_live(t);
+    term_reset_margins(t);
+    t->cursor.x = 0;
+    t->cursor.y = 0;
+    t->cursor.state &= (uint8_t)~TERM_WRAPNEXT;
+    if (!s->cell_buffer || !s->cols || !s->rows)
+        return;
+    fg = (t->cursor.fg << 8) | t->cursor.attr;
+    bg = t->cursor.bg << 8;
+    n = s->cols * s->rows;
+    for (i = 0; i < n; i++) {
+        s->cell_buffer[i].codepoint = 'E';
+        s->cell_buffer[i].fg = fg;
+        s->cell_buffer[i].bg = bg;
+        s->cell_buffer[i].is_dirty = true;
+    }
+}
+
+static void
+term_reset(Term *t)
+{
+    t->mode = TERM_MODE_UTF8 | TERM_MODE_WRAP;
+    t->state = 0;
+    t->utf8_acc = 0;
+    t->utf8_min = 0;
+    t->utf8_rem = 0;
+    t->last_ch = 0;
+    t->cs_g0 = 0;
+    t->cs_g1 = 0;
+    t->cs_gl = 0;
+    t->cs_sel = 0;
+    t->cursor.attr = 0;
+    t->cursor.state = 0;
+    t->cursor.x = 0;
+    t->cursor.y = 0;
+    t->cursor.fg = t->colors.fg[t->colors.fg_default < 16 ? t->colors.fg_default : 7];
+    t->cursor.bg = t->colors.bg[t->colors.bg_default < 8 ? t->colors.bg_default : 0];
+    t->saved = t->cursor;
+    memset(&t->csi, 0, sizeof t->csi);
+    memset(&t->str, 0, sizeof t->str);
+    term_reset_margins(t);
+    term_clear_screen(t, &t->screen);
+    term_clear_screen(t, &t->alt);
 }
 
 static void
@@ -560,6 +864,7 @@ term_alt(Term *t, int on, int save_cur)
             t->cursor = t->saved;
             term_move_to(t, t->cursor.x, t->cursor.y);
         }
+        term_dirty_all(term_live(t));
     }
 }
 
@@ -674,9 +979,47 @@ term_set_mode(Term *t, int set)
                     t->mode |= TERM_MODE_INSERT;
                 else
                     t->mode &= ~TERM_MODE_INSERT;
+            } else if (a == 20) {
+                if (set)
+                    t->mode |= TERM_MODE_CRLF;
+                else
+                    t->mode &= ~TERM_MODE_CRLF;
             }
         }
     }
+}
+
+static void
+term_dirty_rect(TermScreen *s, uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1)
+{
+    uint32_t x;
+    uint32_t y;
+
+    if (!s || !s->cell_buffer || !s->cols || !s->rows)
+        return;
+    if (x0 > x1) { uint32_t tmp = x0; x0 = x1; x1 = tmp; }
+    if (y0 > y1) { uint32_t tmp = y0; y0 = y1; y1 = tmp; }
+    if (x0 >= s->cols || y0 >= s->rows)
+        return;
+    x1 = TERM_MIN(x1, s->cols - 1);
+    y1 = TERM_MIN(y1, s->rows - 1);
+    for (y = y0; y <= y1; y++) {
+        for (x = x0; x <= x1; x++)
+            s->cell_buffer[y * s->cols + x].is_dirty = true;
+    }
+}
+
+static void
+term_dirty_all(TermScreen *s)
+{
+    uint32_t i;
+    uint32_t n;
+
+    if (!s || !s->cell_buffer)
+        return;
+    n = s->cols * s->rows;
+    for (i = 0; i < n; i++)
+        s->cell_buffer[i].is_dirty = true;
 }
 
 static void
@@ -727,10 +1070,10 @@ term_handle_c0(Term *t, unsigned char code)
     case '\r':
         term_move_to(t, 0, t->cursor.y);
         return;
-    case '\f':
-    case '\v':
+    case '\f': /* FALLTHROUGH */
+    case '\v': /* FALLTHROUGH */
     case '\n':
-        term_next_line(t);
+        term_lf(t);
         return;
     case TERM_BEL:
         if (t->state & TERM_ESC_STR_END)
@@ -742,7 +1085,10 @@ term_handle_c0(Term *t, unsigned char code)
         memset(&t->csi, 0, sizeof t->csi);
         return;
     case '\016':
+        t->cs_gl = 1;
+        return;
     case '\017':
+        t->cs_gl = 0;
         return;
     case TERM_SUB:
     case TERM_CAN:
@@ -785,15 +1131,23 @@ term_handle_esc(Term *t, unsigned char ascii)
     case 'o':
         break;
     case '(':
+        t->state |= TERM_ESC_ALTCHARSET;
+        t->cs_sel = 0;
+        return 0;
     case ')':
+        t->state |= TERM_ESC_ALTCHARSET;
+        t->cs_sel = 1;
+        return 0;
     case '*':
+        t->state |= TERM_ESC_ALTCHARSET;
+        t->cs_sel = 2;
+        return 0;
     case '+':
+        t->state |= TERM_ESC_ALTCHARSET;
+        t->cs_sel = 3;
         return 0;
     case 'D':
-        if (t->cursor.y == t->bot)
-            term_scroll(t, t->top, t->bot, 1);
-        else
-            term_move_to(t, t->cursor.x, t->cursor.y + 1);
+        term_index(t);
         break;
     case 'E':
         term_next_line(t);
@@ -801,15 +1155,13 @@ term_handle_esc(Term *t, unsigned char ascii)
     case 'H':
         break;
     case 'M':
-        if (t->cursor.y == t->top)
-            term_scroll(t, t->top, t->bot, -1);
-        else if (t->cursor.y > 0)
-            term_move_to(t, t->cursor.x, t->cursor.y - 1);
+        term_reverse_index(t);
         break;
     case 'Z':
         term_reply_str(t, "\033[?1;2c");
         break;
     case 'c':
+        term_reset(t);
         break;
     case '=':
         break;
@@ -1022,13 +1374,12 @@ term_handle_csi(Term *t)
         break;
     case 'A':
         TERM_DEFAULT(t->csi.arg[0], 1);
-        term_move_to(t, t->cursor.x,
-            t->cursor.y > (uint32_t)t->csi.arg[0] ? t->cursor.y - (uint32_t)t->csi.arg[0] : 0);
+        term_cursor_up(t, (uint32_t)t->csi.arg[0]);
         break;
     case 'B':
     case 'e':
         TERM_DEFAULT(t->csi.arg[0], 1);
-        term_move_to(t, t->cursor.x, t->cursor.y + (uint32_t)t->csi.arg[0]);
+        term_cursor_down(t, (uint32_t)t->csi.arg[0]);
         break;
     case 'c':
         if (t->csi.priv == '>')
@@ -1056,12 +1407,13 @@ term_handle_csi(Term *t)
         break;
     case 'E':
         TERM_DEFAULT(t->csi.arg[0], 1);
-        term_move_to(t, 0, t->cursor.y + (uint32_t)t->csi.arg[0]);
+        term_cursor_down(t, (uint32_t)t->csi.arg[0]);
+        term_move_to(t, 0, t->cursor.y);
         break;
     case 'F':
         TERM_DEFAULT(t->csi.arg[0], 1);
-        term_move_to(t, 0,
-            t->cursor.y > (uint32_t)t->csi.arg[0] ? t->cursor.y - (uint32_t)t->csi.arg[0] : 0);
+        term_cursor_up(t, (uint32_t)t->csi.arg[0]);
+        term_move_to(t, 0, t->cursor.y);
         break;
     case 'g':
         break;
@@ -1180,7 +1532,7 @@ term_handle_csi(Term *t)
         if (!t->csi.priv) {
             uint32_t top = t->csi.arg[0] ? (uint32_t)t->csi.arg[0] : 1;
             uint32_t bot = t->csi.arg[1] ? (uint32_t)t->csi.arg[1] : s->rows;
-            if (top >= 1 && bot <= s->rows && top < bot) {
+            if (top >= 1 && bot <= s->rows && top <= bot) {
                 t->top = top - 1;
                 t->bot = bot - 1;
                 term_move_abs(t, 0, 0);
@@ -1293,6 +1645,28 @@ term_char_feed(Term *t, unsigned char ch)
             }
             return;
         }
+        if (t->state & TERM_ESC_TEST) {
+            if (ch == '8')
+                term_decaln(t);
+            t->state = 0;
+            return;
+        }
+        if (t->state & TERM_ESC_UTF8) {
+            if (ch == '@')
+                t->mode &= ~TERM_MODE_UTF8;
+            else
+                t->mode |= TERM_MODE_UTF8;
+            t->state = 0;
+            return;
+        }
+        if (t->state & TERM_ESC_ALTCHARSET) {
+            if (t->cs_sel == 0)
+                t->cs_g0 = (ch == '0');
+            else if (t->cs_sel == 1)
+                t->cs_g1 = (ch == '0');
+            t->state = 0;
+            return;
+        }
         switch (ch) {
         case '[':
             t->state |= TERM_ESC_CSI;
@@ -1333,7 +1707,7 @@ term_feed(Term *t, const char *bytes, size_t len)
 
         if (!(t->state & TERM_ESC_START) && !t->utf8_rem) {
             if (ch == '\n') {
-                term_next_line(t);
+                term_lf(t);
                 continue;
             }
             if (ch == '\r') {
@@ -1367,7 +1741,7 @@ term_feed_ascii(Term *t, const char *bytes, size_t len)
         unsigned char ch = (unsigned char)bytes[i];
 
         if (ch == '\n')
-            term_next_line(t);
+            term_lf(t);
         else if (ch == '\r')
             term_move_to(t, 0, t->cursor.y);
         else {

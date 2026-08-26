@@ -1,15 +1,20 @@
 /*
  * Vulkan 1.4 backend. Per-renderer context is RendVk14Context.
- * Instance, allocator, and device are process-global (see rend_vk_internal.c).
+ * Instance, allocator, device, and version-agnostic Vulkan helpers: rend_vk_internal.c.
  *
  * * 1.0.3 - @vasco - backend functions take RendContextHandle
  * * 1.0.7 - @vasco - resize: oldSwapchain recreate, surface extent, present OUT_OF_DATE
  * * 1.0.8 - @vasco - offscreen CLEAR on new images; texture destroy not in-frame
+ * * 1.2.1 - @vasco - vsync, present queue, exclusive buffers, create cleanup, blend/indirect/delta
+ * * 1.3.0 - @vasco - wrap swapchain/offscreen images as borrowed RendTexture
+ * * 1.4.0 - @vasco - window pass uses color_target; drop renderer_read
+ * * 1.5.0 - @vasco - in-frame copy_buffer; blit-only present barrier
  */
 
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+#include <time.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
 
@@ -43,11 +48,11 @@ typedef struct {
 
 typedef struct RendVkPipeline {
 	VkPipeline handle;
+	VkPipeline handle_blend;
 	VkPipelineLayout layout;
 	uint32_t push_constants_range;
 	bool blend_enable;
 } RendVkPipeline;
-
 
 /*
  * per renderer context, separate from global vk_ variables
@@ -79,8 +84,13 @@ typedef struct RendVk14Context {
 
 	bool vsync;
 	bool in_frame;
+	bool has_frame_time;
+	struct timespec frame_time;
 	bool offscreen;
 	RendVkImage offscreen_color;
+	RendTexture *color_targets;
+	uint32_t color_target_count;
+	RendFormat color_rend_format;
 
 	VkDescriptorPool        descriptor_pool;
 	VkDescriptorSet         desc_set;
@@ -88,135 +98,23 @@ typedef struct RendVk14Context {
 
 } RendVk14Context;
 
-
-static void rend_vk_texture_transition_layout(RendContextHandle handle, VkCommandBuffer cmd, RendTexture *texture, VkImageLayout new_layout);
-static VkCommandBuffer rend_vk_cmdbuffer_single_use_begin(VkCommandPool pool);
-static void rend_vk_cmdbuffer_single_use_end(VkCommandPool pool, VkCommandBuffer cmd, VkQueue q);
-static void rend_vk_pipeline_destroy(RendVkPipeline *pipeline);
-static VkExtent2D rend_vk_surface_extent(RendVk14Context *ctx, const VkSurfaceCapabilitiesKHR *caps);
-static bool rend_vk_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain, VkSwapchainKHR old_swapchain);
-static void rend_vk_swapchain_destroy(RendVk14Context *ctx, RendVkSwapchain *swapchain);
-static bool rend_vk_swapchain_recreate(RendVk14Context *ctx);
-static bool rend_vk_offscreen_create(RendVk14Context *ctx, uint32_t width, uint32_t height, RendFormat format);
-static void rend_vk_offscreen_destroy(RendVk14Context *ctx);
-static bool rend_vk_renderer_init_sync_and_descriptors(RendVk14Context *ctx, RendBindingInfo *bind_info);
-static VkShaderModule rend_vk_shader_module_create(const void *data, size_t size);
-static uint32_t rend_vk_get_heap_index(uint32_t memory_type_bits, uint32_t preferred_index);
-VKAPI_ATTR VkBool32 VKAPI_CALL rend_vk_debug_func(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity, VkDebugUtilsMessageTypeFlagsEXT message_types, const VkDebugUtilsMessengerCallbackDataEXT *callback_data, void *user_data);
-
-
-bool
-rend_vk_init(void)
-{
-	RASSERT(sizeof(void*) == 8 && sizeof(int64_t) == 8 && sizeof(double) == 8, "SPEC: Host device 64-bit integer and floating-point types.");
-
-	/* trying to init another renderer with the same backend */
-	if (vk_instance) {
-		return true;
-	}
-
-	/* create instance if does not exist */
-	VkApplicationInfo vk_app_info = {VK_STRUCTURE_TYPE_APPLICATION_INFO};
-	vk_app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-	vk_app_info.pApplicationName = "REND";
-	vk_app_info.applicationVersion = VK_MAKE_VERSION(REND_MAJOR, REND_MINOR, REND_PATCH);
-	vk_app_info.apiVersion = VK_API_VERSION_1_4;
-	vk_app_info.pEngineName = "REND Renderer";
-	vk_app_info.engineVersion = VK_MAKE_VERSION(REND_MAJOR, REND_MINOR, REND_PATCH);
-
-	uint32_t peak_ext_count = 0;
-	const char **peak_exts = peak_vulkan_get_extensions(&peak_ext_count);
-	const char *extensions[8];
-	uint32_t ext_count = 0;
-	uint32_t ei;
-	for (ei = 0; ei < peak_ext_count && ext_count < 8; ei++)
-		extensions[ext_count++] = peak_exts[ei];
-
-#ifdef REND_DEBUG
-	if (ext_count < 8)
-		extensions[ext_count++] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
-	PDEBUG("Vulkan Extensions: ");
-	for (ei = 0; ei < ext_count; ei++)
-		PDEBUG("%s", extensions[ei]);
-#endif
-
-#ifdef REND_DEBUG
-	const char *required_validation_layers[] = { "VK_LAYER_KHRONOS_validation" };
-	uint32_t layer_count = 1;
-
-	PDEBUG("Required Validation Layers: ");
-	for (ei = 0; ei < layer_count; ei++) {
-		PDEBUG(" - %s", required_validation_layers[ei]);
-	}
-
-	VkValidationFeaturesEXT validation_features = {
-		.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT,
-		.pNext = NULL,
-		/* GPU-assisted validation: VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT */
-	};
-#endif
-
-	VkInstanceCreateInfo vk_create_info = { VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
-	vk_create_info.pApplicationInfo = &vk_app_info;
-	vk_create_info.ppEnabledExtensionNames = extensions;
-	vk_create_info.enabledExtensionCount = ext_count;
-	vk_create_info.pApplicationInfo = &vk_app_info;
-#ifdef REND_DEBUG
-	vk_create_info.enabledLayerCount = layer_count;
-	vk_create_info.ppEnabledLayerNames = required_validation_layers;
-	vk_create_info.pNext = &validation_features;
-#else
-	vk_create_info.enabledLayerCount = 0;
-	vk_create_info.ppEnabledLayerNames = NULL;
-#endif
-
-	VkResult res = vkCreateInstance(&vk_create_info, vk_allocator, &vk_instance);
-	CHECK_VK_RESULT(res);
-
-	PDEBUG("Vulkan instance created!");
-
-#ifdef REND_DEBUG
-	uint32_t log_severity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
-	VkDebugUtilsMessengerCreateInfoEXT debug_create_info = { VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT};
-	debug_create_info.messageSeverity = log_severity;
-	debug_create_info.messageType =
-		VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-		VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
-		VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
-	debug_create_info.pfnUserCallback = rend_vk_debug_func;
-
-	PFN_vkCreateDebugUtilsMessengerEXT func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(vk_instance, "vkCreateDebugUtilsMessengerEXT");
-	if (!func) {
-		PDEBUG("Failed to create vulkan debug messenger!");
-		return false;
-	}
-	func(vk_instance, &debug_create_info, vk_allocator, &vk_debug_messenger);
-#endif
-	return true;
-}
-
-void
-rend_vk_quit(void)
-{
-	PDEBUG("[REND_VK14] Destroying device.");
-
-	/* we destroy the device on quit */
-	if (vk_device.logical_device != 0) {
-		rend_vk_device_destroy(&vk_device);
-	}
-
-	if (vk_debug_messenger) {
-		PFN_vkDestroyDebugUtilsMessengerEXT func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(vk_instance, "vkDestroyDebugUtilsMessengerEXT");
-		func(vk_instance, vk_debug_messenger, vk_allocator);
-		vk_debug_messenger = 0;
-	}
-
-	vkDestroyInstance(vk_instance, vk_allocator);
-	vk_instance = 0;
-}
+static void rend_vk14_pipeline_destroy(RendVkPipeline *pipeline);
+void rend_vk14_renderer_destroy(RendContextHandle handle);
+static VkExtent2D rend_vk14_surface_extent(RendVk14Context *ctx, const VkSurfaceCapabilitiesKHR *caps);
+static bool rend_vk14_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain, VkSwapchainKHR old_swapchain);
+static void rend_vk14_swapchain_destroy(RendVk14Context *ctx, RendVkSwapchain *swapchain);
+static bool rend_vk14_swapchain_recreate(RendVk14Context *ctx);
+static bool rend_vk14_offscreen_create(RendVk14Context *ctx, uint32_t width, uint32_t height, RendFormat format);
+static void rend_vk14_offscreen_destroy(RendVk14Context *ctx);
+static bool rend_vk14_renderer_init_sync_and_descriptors(RendVk14Context *ctx, RendBindingInfo *bind_info);
+static RendFormat rend_vk14_format_from_vk(VkFormat fmt);
+static void rend_vk14_color_targets_free(RendVk14Context *ctx);
+static bool rend_vk14_color_targets_rebuild(RendVk14Context *ctx);
+static RendTexture *rend_vk14_color_target_at(RendVk14Context *ctx);
+RendTexture *rend_vk14_color_target(RendContextHandle handle);
 
 RendContextHandle
-rend_vk_renderer_create(PeakWindow *window, RendBindingInfo *bind_info)
+rend_vk14_renderer_create(PeakWindow *window, RendBindingInfo *bind_info, bool vsync)
 {
 	RendVk14Context *ctx = rmalloc(sizeof(*ctx));
 	if (!ctx) {
@@ -226,6 +124,7 @@ rend_vk_renderer_create(PeakWindow *window, RendBindingInfo *bind_info)
 
 	memset(ctx, 0, sizeof(*ctx));
 	ctx->window = window;
+	ctx->vsync = vsync;
 
 	/* get surface from window */
 	if (!peak_vulkan_create_surface(window, vk_instance, vk_allocator, &ctx->surface)) {
@@ -237,6 +136,7 @@ rend_vk_renderer_create(PeakWindow *window, RendBindingInfo *bind_info)
 	RendSpecs specs = {
 		.sampler_anisotropy = true,
 		.graphics = true,
+		.present = true,
 		.transfer = true,
 		.discrete_gpu = false, /* even though its not a requirement, I expect discrete gpu to be picked */
 	};
@@ -244,7 +144,12 @@ rend_vk_renderer_create(PeakWindow *window, RendBindingInfo *bind_info)
 	/* we lazily create the logical device only after creating the first renderer
 	 * because we need the surface first */
 	if (vk_device.logical_device == 0) {
-		rend_vk_device_create(ctx->surface, specs, &vk_device);
+		if (!rend_vk_device_create(ctx->surface, specs, &vk_device)) {
+			PERROR("Failed to create vulkan device.");
+			vkDestroySurfaceKHR(vk_instance, ctx->surface, vk_allocator);
+			rfree(ctx);
+			return NULL;
+		}
 	}
 
 	/* we must create arena before swapchain */
@@ -261,14 +166,20 @@ rend_vk_renderer_create(PeakWindow *window, RendBindingInfo *bind_info)
 			vk_allocator);
 
 	/* create swapchain */
-	if (!rend_vk_swapchain_create(ctx, &ctx->swapchain, VK_NULL_HANDLE)) {
+	if (!rend_vk14_swapchain_create(ctx, &ctx->swapchain, VK_NULL_HANDLE)) {
 		PERROR("Failed to create swapchain!");
-		rfree(ctx);
+		rend_vk14_renderer_destroy(ctx);
+		return NULL;
+	}
+	ctx->color_rend_format = rend_vk14_format_from_vk(ctx->swapchain.format.format);
+	if (!rend_vk14_color_targets_rebuild(ctx)) {
+		PERROR("Failed to wrap swapchain images.");
+		rend_vk14_renderer_destroy(ctx);
 		return NULL;
 	}
 
-	if (!rend_vk_renderer_init_sync_and_descriptors(ctx, bind_info)) {
-		rfree(ctx);
+	if (!rend_vk14_renderer_init_sync_and_descriptors(ctx, bind_info)) {
+		rend_vk14_renderer_destroy(ctx);
 		return NULL;
 	}
 
@@ -276,7 +187,7 @@ rend_vk_renderer_create(PeakWindow *window, RendBindingInfo *bind_info)
 }
 
 RendContextHandle
-rend_vk_renderer_create_offscreen(uint32_t width, uint32_t height, RendFormat format, RendBindingInfo *bind_info)
+rend_vk14_renderer_create_offscreen(uint32_t width, uint32_t height, RendFormat format, RendBindingInfo *bind_info)
 {
 	RendVk14Context *ctx;
 	RendSpecs specs;
@@ -322,15 +233,14 @@ rend_vk_renderer_create_offscreen(uint32_t width, uint32_t height, RendFormat fo
 			vk_device.properties.limits,
 			vk_allocator);
 
-	if (!rend_vk_offscreen_create(ctx, width, height, format)) {
+	if (!rend_vk14_offscreen_create(ctx, width, height, format)) {
 		PERROR("Failed to create offscreen target!");
-		rfree(ctx);
+		rend_vk14_renderer_destroy(ctx);
 		return NULL;
 	}
 
-	if (!rend_vk_renderer_init_sync_and_descriptors(ctx, bind_info)) {
-		rend_vk_offscreen_destroy(ctx);
-		rfree(ctx);
+	if (!rend_vk14_renderer_init_sync_and_descriptors(ctx, bind_info)) {
+		rend_vk14_renderer_destroy(ctx);
 		return NULL;
 	}
 
@@ -338,7 +248,7 @@ rend_vk_renderer_create_offscreen(uint32_t width, uint32_t height, RendFormat fo
 }
 
 static bool
-rend_vk_renderer_init_sync_and_descriptors(RendVk14Context *ctx, RendBindingInfo *bind_info)
+rend_vk14_renderer_init_sync_and_descriptors(RendVk14Context *ctx, RendBindingInfo *bind_info)
 {
 	uint32_t u;
 	uint32_t i;
@@ -451,7 +361,6 @@ rend_vk_renderer_init_sync_and_descriptors(RendVk14Context *ctx, RendBindingInfo
 			return false;
 		}
 
-
 		/*
 		 * Descriptor Sets!!!!!!
 		 */
@@ -535,65 +444,69 @@ rend_vk_renderer_init_sync_and_descriptors(RendVk14Context *ctx, RendBindingInfo
 }
 
 void
-rend_vk_renderer_destroy(RendContextHandle handle)
+rend_vk14_renderer_destroy(RendContextHandle handle)
 {
 	uint32_t u;
+	RendVk14Context *ctx;
+	VkDevice dev;
+
 	RASSERT(handle, "Invalid context handle.");
+	if (!handle)
+		return;
 
-	RendVk14Context *ctx = (RendVk14Context *)handle;
+	ctx = (RendVk14Context *)handle;
+	dev = vk_device.logical_device;
 
-	VkDevice dev = vk_device.logical_device;
+	if (dev) {
+		PDEBUG("[REND] Waiting for device...");
+		vkDeviceWaitIdle(dev);
 
-	PDEBUG("[REND] Waiting for device...");
-	vkDeviceWaitIdle(dev);
+		PDEBUG("[REND] Destroying renderer...");
+		vkDestroySemaphore(dev, ctx->timeline_semaphore, vk_allocator);
 
-	PDEBUG("[REND] Destroying renderer...");
-	vkDestroySemaphore(dev, ctx->timeline_semaphore, vk_allocator);
+		for (u = 0; u < REND_MAX_FRAMES_IN_FLIGHT; ++u) {
+			vkDestroySemaphore(dev, ctx->frame_resources[u].image_acquired_semaphore, vk_allocator);
+			vkDestroyCommandPool(dev, ctx->frame_resources[u].command_pool, vk_allocator);
+			ctx->frame_resources[u].image_acquired_semaphore = 0;
+			ctx->frame_resources[u].command_pool = 0;
+			ctx->frame_resources[u].command_buffer = 0;
+		}
 
-	/* destroy per frame semaphores */
-	for (u = 0; u < REND_MAX_FRAMES_IN_FLIGHT; ++u) {
-		vkDestroySemaphore(dev, ctx->frame_resources[u].image_acquired_semaphore, vk_allocator);
-		vkDestroyCommandPool(dev, ctx->frame_resources[u].command_pool, vk_allocator);
-		ctx->frame_resources[u].image_acquired_semaphore = 0;
-		ctx->frame_resources[u].command_pool = 0;
-		ctx->frame_resources[u].command_buffer = 0;
+		vkDestroyCommandPool(dev, ctx->upload_command_pool, vk_allocator);
+		vkDestroyCommandPool(dev, ctx->graphics_command_pool, vk_allocator);
+		vkDestroyDescriptorSetLayout(dev, ctx->desc_layout, vk_allocator);
+		vkDestroyDescriptorPool(dev, ctx->descriptor_pool, vk_allocator);
+
+		PDEBUG("[REND] Destroying pipelines...");
+		for (u = 0; u < ctx->pipeline_count; ++u) {
+			rend_vk14_pipeline_destroy(&ctx->pipelines[u]);
+		}
 	}
-
-	vkDestroyCommandPool(vk_device.logical_device, ctx->upload_command_pool, vk_allocator);
-	vkDestroyCommandPool(vk_device.logical_device, ctx->graphics_command_pool, vk_allocator);
 
 	rend_vk_arena_destroy(&ctx->arena_persistent);
 	rend_vk_arena_destroy(&ctx->arena_frame);
-
-
-	vkDestroyDescriptorSetLayout(dev, ctx->desc_layout, vk_allocator);
-	vkDestroyDescriptorPool(dev, ctx->descriptor_pool, vk_allocator);
-
-	PDEBUG("[REND] Destroying pipelines...");
-	for (u = 0; u < ctx->pipeline_count; ++u) {
-		rend_vk_pipeline_destroy(&ctx->pipelines[u]);
-	}
+	rend_vk14_color_targets_free(ctx);
 
 	if (ctx->offscreen) {
 		PDEBUG("[REND] Destroying offscreen target...");
-		rend_vk_offscreen_destroy(ctx);
+		rend_vk14_offscreen_destroy(ctx);
 	} else {
 		PDEBUG("[REND] Destroying swapchain...");
-		rend_vk_swapchain_destroy(ctx, &ctx->swapchain);
+		rend_vk14_swapchain_destroy(ctx, &ctx->swapchain);
 		ctx->swapchain.handle = 0;
 
-		PDEBUG("[REND] Destroying surface...");
-		RASSERT(vk_instance);
-		vkDestroySurfaceKHR(vk_instance, ctx->surface, vk_allocator);
-		ctx->surface = 0;
+		if (vk_instance && ctx->surface) {
+			PDEBUG("[REND] Destroying surface...");
+			vkDestroySurfaceKHR(vk_instance, ctx->surface, vk_allocator);
+			ctx->surface = 0;
+		}
 	}
 
-	/* handle is guarranteed to be allocated */
 	rfree(handle);
 }
 
 bool
-rend_vk_renderer_frame_begin(RendContextHandle handle)
+rend_vk14_renderer_frame_begin(RendContextHandle handle)
 {
 	RendVk14Context *ctx;
 	VkDevice dev;
@@ -622,7 +535,7 @@ rend_vk_renderer_frame_begin(RendContextHandle handle)
 				return false;
 			if (caps.currentExtent.width == 0 || caps.currentExtent.height == 0)
 				return false;
-			extent = rend_vk_surface_extent(ctx, &caps);
+			extent = rend_vk14_surface_extent(ctx, &caps);
 			if (extent.width != ctx->swapchain.extent.width ||
 					extent.height != ctx->swapchain.extent.height)
 				ctx->require_swapchain_recreation = true;
@@ -632,7 +545,7 @@ rend_vk_renderer_frame_begin(RendContextHandle handle)
 			PDEBUG("[REND] Awaiting device...");
 			vkDeviceWaitIdle(vk_device.logical_device);
 			PDEBUG("[REND] Recreating swapchain...");
-			if (!rend_vk_swapchain_recreate(ctx))
+			if (!rend_vk14_swapchain_recreate(ctx))
 				return false;
 			ctx->require_swapchain_recreation = false;
 		}
@@ -696,11 +609,11 @@ rend_vk_renderer_frame_begin(RendContextHandle handle)
 	layout_barriers[0] = (VkImageMemoryBarrier2) {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 
-		.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+		.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_2_TRANSFER_BIT,
 		.srcAccessMask = 0,
 
-		.dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-		.dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT_KHR,
+		.dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+		.dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT,
 
 		.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 		.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -745,7 +658,7 @@ rend_vk_renderer_frame_begin(RendContextHandle handle)
 		.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
 		.srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
 		.srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT,
-		.dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
+		.dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
 		.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
 	};
 
@@ -758,6 +671,14 @@ rend_vk_renderer_frame_begin(RendContextHandle handle)
 	vkCmdPipelineBarrier2(frame_resource.command_buffer, &dep_info);
 		}
 
+		{
+			RendTexture *color;
+
+			color = rend_vk14_color_target_at(ctx);
+			if (color)
+				color->layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		}
+
 		ctx->in_frame = true;
 		return true;
 	}
@@ -766,24 +687,31 @@ rend_vk_renderer_frame_begin(RendContextHandle handle)
 }
 
 void
-rend_vk_renderer_frame_end(RendContextHandle handle, float *delta)
+rend_vk14_renderer_frame_end(RendContextHandle handle, float *delta)
 {
 	RendVk14Context *ctx = (RendVk14Context *)handle;
+	RendTexture *color_end;
+	struct timespec now;
+	float dt;
+
 	RASSERT(ctx, "Uninitialized renderer.");
 
 	RendVkFrameResources res = ctx->frame_resources[ctx->frame_index];
+	color_end = rend_vk14_color_target_at(ctx);
 
 	VkImageMemoryBarrier2 present_barrier;
 	present_barrier = (VkImageMemoryBarrier2) {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 
-		.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-		.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+		.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+		.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT,
 
 		.dstStageMask = VK_PIPELINE_STAGE_2_NONE,
 		.dstAccessMask = 0,
 
-		.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		.oldLayout = color_end && color_end->layout
+			? (VkImageLayout)color_end->layout
+			: VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 		.newLayout = ctx->offscreen ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 
 		.image = ctx->swapchain.images[ctx->image_index],
@@ -803,6 +731,11 @@ rend_vk_renderer_frame_end(RendContextHandle handle, float *delta)
 	dep_info.pImageMemoryBarriers = &present_barrier;
 
 	vkCmdPipelineBarrier2(res.command_buffer, &dep_info);
+	if (color_end) {
+		color_end->layout = ctx->offscreen
+			? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+			: VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+	}
 	vkEndCommandBuffer(res.command_buffer);
 
 	{
@@ -816,14 +749,14 @@ rend_vk_renderer_frame_end(RendContextHandle handle, float *delta)
 		image_acquire_await_info = (VkSemaphoreSubmitInfo) {
 			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
 			.semaphore = res.image_acquired_semaphore,
-			.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT
+			.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_2_TRANSFER_BIT
 		};
 
 		semaphore_signals[0] = (VkSemaphoreSubmitInfo) {
 			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
 			.semaphore = ctx->timeline_semaphore,
 			.value = ctx->signal_value,
-			.stageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT
+			.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT
 		};
 		signal_count = 1;
 		wait_count = 0;
@@ -833,7 +766,7 @@ rend_vk_renderer_frame_end(RendContextHandle handle, float *delta)
 			semaphore_signals[0] = (VkSemaphoreSubmitInfo) {
 				.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
 				.semaphore = ctx->swapchain.present_semaphores[ctx->image_index],
-				.stageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT
+				.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT
 			};
 			signal_count = 2;
 			wait_count = 1;
@@ -869,7 +802,7 @@ rend_vk_renderer_frame_end(RendContextHandle handle, float *delta)
 		};
 		VkResult present_res;
 
-		present_res = vkQueuePresentKHR(vk_device.graphics_queue, &present_info);
+		present_res = vkQueuePresentKHR(vk_device.present_queue, &present_info);
 		if (present_res == VK_ERROR_OUT_OF_DATE_KHR || present_res == VK_SUBOPTIMAL_KHR)
 			ctx->require_swapchain_recreation = true;
 	}
@@ -877,13 +810,25 @@ rend_vk_renderer_frame_end(RendContextHandle handle, float *delta)
 	ctx->frame++;
 	ctx->in_frame = false;
 
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	if (ctx->has_frame_time) {
+		dt = (float)(now.tv_sec - ctx->frame_time.tv_sec) +
+			(float)(now.tv_nsec - ctx->frame_time.tv_nsec) * 1e-9f;
+	} else {
+		dt = 0.f;
+	}
+	ctx->frame_time = now;
+	ctx->has_frame_time = true;
+	if (delta)
+		*delta = dt;
+
 	/* clear host mapped memory */
 	rend_vk_arena_clear_all(&ctx->arena_frame);
 	rend_vk_arena_clear(&ctx->arena_persistent, vk_device.host_index);
 }
 
 static inline void
-rend_vk__renderer_render_pass_begin_internal(RendContextHandle handle, float r, float g, float b, float a, uint64_t view_handle, uint64_t depth_attachment_view_handle, uint32_t offset_x, uint32_t offset_y, uint32_t width, uint32_t height, VkAttachmentLoadOp color_load)
+rend_vk14__renderer_render_pass_begin_internal(RendContextHandle handle, float r, float g, float b, float a, uint64_t view_handle, uint64_t depth_attachment_view_handle, uint32_t offset_x, uint32_t offset_y, uint32_t width, uint32_t height, VkAttachmentLoadOp color_load)
 {
 	RendVk14Context *ctx = (RendVk14Context *)handle;
 	RASSERT(ctx->in_frame && "must begin render pass inside a frame");
@@ -939,25 +884,28 @@ rend_vk__renderer_render_pass_begin_internal(RendContextHandle handle, float r, 
 	vkCmdSetScissor(frame_resource.command_buffer, 0, 1, &scissor);
 }
 
-
 void
-rend_vk_renderer_render_pass_begin(RendContextHandle handle, float r, float g, float b, float a)
+rend_vk14_renderer_render_pass_begin(RendContextHandle handle, float r, float g, float b, float a)
 {
 	RendVk14Context *ctx = (RendVk14Context *)handle;
+	RendTexture *color = rend_vk14_color_target_at(ctx);
 
-	rend_vk__renderer_render_pass_begin_internal(
+	RASSERT(color, "No color target.");
+	if (!color)
+		return;
+	rend_vk14__renderer_render_pass_begin_internal(
 			handle,
 			r, g, b, a,
-			(uint64_t) ctx->swapchain.views[ctx->image_index],
-			(uint64_t) ctx->swapchain.depth_attachment.view,
+			color->view,
+			(uint64_t)ctx->swapchain.depth_attachment.view,
 			0, 0,
-			ctx->swapchain.extent.width, ctx->swapchain.extent.height,
+			color->width, color->height,
 			VK_ATTACHMENT_LOAD_OP_CLEAR
 	);
 }
 
 void
-rend_vk_renderer_render_pass_begin_texture(RendContextHandle handle, RendTexture *texture)
+rend_vk14_renderer_render_pass_begin_texture(RendContextHandle handle, RendTexture *texture)
 {
 	RendVk14Context *ctx = (RendVk14Context *)handle;
 
@@ -972,11 +920,7 @@ rend_vk_renderer_render_pass_begin_texture(RendContextHandle handle, RendTexture
 		rend_vk_texture_transition_layout(handle, ctx->frame_resources[ctx->frame_index].command_buffer, texture, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 		width = texture->width;
 		height = texture->height;
-		if (width > ctx->swapchain.extent.width)
-			width = ctx->swapchain.extent.width;
-		if (height > ctx->swapchain.extent.height)
-			height = ctx->swapchain.extent.height;
-		rend_vk__renderer_render_pass_begin_internal(
+		rend_vk14__renderer_render_pass_begin_internal(
 				handle,
 				0, 0, 0, 0,
 				(uint64_t)texture->view,
@@ -989,7 +933,7 @@ rend_vk_renderer_render_pass_begin_texture(RendContextHandle handle, RendTexture
 }
 
 void
-rend_vk_renderer_render_pass_end(RendContextHandle handle)
+rend_vk14_renderer_render_pass_end(RendContextHandle handle)
 {
 	RendVk14Context *ctx = (RendVk14Context *)handle;
 	RASSERT(ctx->in_frame && "must end render pass inside a frame");
@@ -998,15 +942,15 @@ rend_vk_renderer_render_pass_end(RendContextHandle handle)
 }
 
 void
-rend_vk_renderer_render_pass_end_texture(RendContextHandle handle, RendTexture *texture)
+rend_vk14_renderer_render_pass_end_texture(RendContextHandle handle, RendTexture *texture)
 {
 	RendVk14Context *ctx = (RendVk14Context *)handle;
-	rend_vk_renderer_render_pass_end(handle);
+	rend_vk14_renderer_render_pass_end(handle);
 	rend_vk_texture_transition_layout(handle, ctx->frame_resources[ctx->frame_index].command_buffer, texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 void
-rend_vk_descriptor_write_buffer(RendContextHandle handle, RendBuffer ubo, uint32_t binding, uint32_t slot, uint32_t offset, uint32_t size, bool is_ubo)
+rend_vk14_descriptor_write_buffer(RendContextHandle handle, RendBuffer ubo, uint32_t binding, uint32_t slot, uint32_t offset, uint32_t size, bool is_ubo)
 {
 	RendVk14Context *ctx = (RendVk14Context *)handle;
 
@@ -1029,9 +973,8 @@ rend_vk_descriptor_write_buffer(RendContextHandle handle, RendBuffer ubo, uint32
 	vkUpdateDescriptorSets(vk_device.logical_device, 1, &descriptor_write, 0, NULL);
 }
 
-
 RendBuffer
-rend_vk_buffer_create_lifetime(RendContextHandle handle, size_t size, RendBufferType type, bool gpu, int lifetime)
+rend_vk14_buffer_create_lifetime(RendContextHandle handle, size_t size, RendBufferType type, bool gpu, int lifetime)
 {
 	RendVk14Context *ctx = (RendVk14Context *)handle;
 	int32_t index = (gpu) ? vk_device.device_index : vk_device.host_index;
@@ -1052,7 +995,7 @@ rend_vk_buffer_create_lifetime(RendContextHandle handle, size_t size, RendBuffer
 		.size = size,
 		.usage = buffer.usage,
 		.sharingMode            = is_concurrent ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE,
-		.queueFamilyIndexCount  = is_concurrent ? 2 : 1,
+		.queueFamilyIndexCount  = is_concurrent ? 2 : 0,
 		.pQueueFamilyIndices    = is_concurrent ? family : NULL,
 	};
 
@@ -1091,7 +1034,7 @@ rend_vk_buffer_create_lifetime(RendContextHandle handle, size_t size, RendBuffer
 }
 
 void
-rend_vk_buffer_destroy(RendBuffer *buffer)
+rend_vk14_buffer_destroy(RendBuffer *buffer)
 {
 	/* NOTE: this function is meant to be called by the user */
 	/* when freeing his buffers mid frame, there may be a better */
@@ -1102,7 +1045,7 @@ rend_vk_buffer_destroy(RendBuffer *buffer)
 }
 
 void
-rend_vk_buffer_copy(RendContextHandle handle, RendBuffer *dest, size_t dest_offset, RendBuffer *src, size_t src_offset, size_t bytes)
+rend_vk14_buffer_copy(RendContextHandle handle, RendBuffer *dest, size_t dest_offset, RendBuffer *src, size_t src_offset, size_t bytes)
 {
 	RASSERT(src && dest); /* check that im not sending null pointers */
 	RASSERT(src->usage & VK_BUFFER_USAGE_TRANSFER_SRC_BIT); /* source buffer must be marked as transfer src */
@@ -1159,9 +1102,8 @@ rend_vk_buffer_copy(RendContextHandle handle, RendBuffer *dest, size_t dest_offs
 	vkFreeCommandBuffers(vk_device.logical_device, ctx->upload_command_pool, 1, &transfer_cmd);
 }
 
-
 RendTexture
-rend_vk_texture_create(RendContextHandle handle, uint32_t width, uint32_t height, uint32_t depth, uint32_t mip_levels, uint32_t layers, RendFormat format)
+rend_vk14_texture_create(RendContextHandle handle, uint32_t width, uint32_t height, uint32_t depth, uint32_t mip_levels, uint32_t layers, RendFormat format)
 {
 	RASSERT(format < REND_FORMAT_COUNT && "Invalid format!");
 
@@ -1179,7 +1121,7 @@ rend_vk_texture_create(RendContextHandle handle, uint32_t width, uint32_t height
 		.depth      = safe_depth,
 		.mip_levels = safe_mips,
 		.layers     = safe_layers,
-		.format     = vk_format,
+		.format     = format,
 		.layout     = VK_IMAGE_LAYOUT_UNDEFINED,
 	};
 
@@ -1256,13 +1198,17 @@ rend_vk_texture_create(RendContextHandle handle, uint32_t width, uint32_t height
 }
 
 void
-rend_vk_texture_destroy(RendContextHandle handle, RendTexture *tex)
+rend_vk14_texture_destroy(RendContextHandle handle, RendTexture *tex)
 {
 	RendVk14Context *ctx;
 
 	RASSERT(handle && tex);
 	ctx = (RendVk14Context *)handle;
 	RASSERT(!ctx->in_frame, "must not destroy textures during a frame");
+	if (tex->borrowed) {
+		RASSERT(0 && "do not destroy color_target");
+		return;
+	}
 
 	/* in-flight CBs may still refer to this image */
 	vkDeviceWaitIdle(vk_device.logical_device);
@@ -1285,90 +1231,43 @@ rend_vk_texture_destroy(RendContextHandle handle, RendTexture *tex)
 	/* memset(tex, 0xBABE, sizeof(*tex)); */
 }
 
-static void
-rend_vk_texture_barrier(VkCommandBuffer cmd, RendTexture *texture, VkImageLayout new_layout, uint32_t src_family, uint32_t dst_family, VkAccessFlags2 src_access, VkAccessFlags2 dst_access, VkPipelineStageFlags2 src_stage, VkPipelineStageFlags2 dst_stage)
-{
-	VkImageMemoryBarrier2 barrier = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-		.oldLayout = texture->layout,
-		.newLayout = new_layout,
-		.srcQueueFamilyIndex = src_family,
-		.dstQueueFamilyIndex = dst_family,
-		.image = (VkImage)texture->handle,
-		.srcAccessMask = src_access,
-		.dstAccessMask = dst_access,
-		.srcStageMask = src_stage,
-		.dstStageMask = dst_stage,
-		.subresourceRange = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.baseMipLevel = 0,
-			.levelCount = texture->mip_levels,
-			.baseArrayLayer = 0,
-			.layerCount = texture->layers,
-		},
-	};
-	VkDependencyInfo dep = {
-		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-		.pImageMemoryBarriers = &barrier,
-		.imageMemoryBarrierCount = 1,
-	};
-	texture->layout = new_layout;
-	vkCmdPipelineBarrier2(cmd, &dep);
-}
-
 void
-rend_vk_texture_transition_layout(RendContextHandle handle, VkCommandBuffer cmd, RendTexture *texture, VkImageLayout new_layout)
-{
-	(void)handle;
-	if (texture->layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-		rend_vk_texture_barrier(cmd, texture, new_layout, VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
-			0, VK_ACCESS_2_TRANSFER_WRITE_BIT,
-			VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT);
-	} else if (texture->layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-		rend_vk_texture_barrier(cmd, texture, new_layout, VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
-			VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_ACCESS_2_SHADER_READ_BIT,
-			VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
-	} else {
-		rend_vk_texture_barrier(cmd, texture, new_layout, VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
-			VK_ACCESS_2_MEMORY_WRITE_BIT, VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT,
-			VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
-	}
-}
-
-void
-rend_vk_texture_transfer_ownership_release(RendContextHandle handle, VkCommandBuffer cmd, RendTexture *texture, uint32_t src_family, uint32_t dst_family, VkImageLayout new_layout)
-{
-	(void)handle;
-	if (texture->layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-		rend_vk_texture_barrier(cmd, texture, new_layout, src_family, dst_family,
-			VK_ACCESS_2_TRANSFER_WRITE_BIT, 0,
-			VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT);
-	} else {
-		rend_vk_texture_barrier(cmd, texture, new_layout, src_family, dst_family,
-			VK_ACCESS_2_MEMORY_WRITE_BIT, 0,
-			VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT);
-	}
-}
-
-void
-rend_vk_texture_transfer_ownership_acquire(RendContextHandle handle, VkCommandBuffer cmd, RendTexture *texture, uint32_t src_family, uint32_t dst_family, VkImageLayout new_layout)
-{
-	(void)handle;
-	if (texture->layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-		rend_vk_texture_barrier(cmd, texture, new_layout, src_family, dst_family,
-			0, VK_ACCESS_2_SHADER_READ_BIT,
-			VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
-	} else {
-		rend_vk_texture_barrier(cmd, texture, new_layout, src_family, dst_family,
-			0, VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT,
-			VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
-	}
-}
-
-void
-rend_vk_texture_copy_buffer(RendContextHandle handle, RendTexture *texture, RendBuffer *buffer)
+rend_vk14_texture_copy_buffer(RendContextHandle handle, RendTexture *texture, RendBuffer *buffer)
 {
 	RendVk14Context *ctx = (RendVk14Context *)handle;
+	VkBufferImageCopy region;
+
+	region = (VkBufferImageCopy) {0};
+	region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	region.imageSubresource.layerCount = texture->layers ? texture->layers : 1;
+	region.imageExtent.width = texture->width;
+	region.imageExtent.height = texture->height;
+	region.imageExtent.depth = texture->depth ? texture->depth : 1;
+
+	if (ctx->in_frame) {
+		VkCommandBuffer cmd;
+		VkMemoryBarrier2 mem;
+		VkDependencyInfo dep;
+
+		cmd = ctx->frame_resources[ctx->frame_index].command_buffer;
+		mem = (VkMemoryBarrier2) {
+			.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+			.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+			.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
+			.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+			.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT,
+		};
+		dep = (VkDependencyInfo) {
+			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+			.memoryBarrierCount = 1,
+			.pMemoryBarriers = &mem,
+		};
+		vkCmdPipelineBarrier2(cmd, &dep);
+		rend_vk_texture_transition_layout(handle, cmd, texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		vkCmdCopyBufferToImage(cmd, (VkBuffer)buffer->handle, (VkImage)texture->handle,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+		return;
+	}
 
 	VkCommandBuffer cmd_transfer = rend_vk_cmdbuffer_single_use_begin(ctx->upload_command_pool); {
 		rend_vk_texture_transition_layout(handle, cmd_transfer, texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
@@ -1382,14 +1281,13 @@ rend_vk_texture_copy_buffer(RendContextHandle handle, RendTexture *texture, Rend
 		rend_vk_texture_transfer_ownership_release(handle, cmd_transfer, texture, vk_device.transfer_family_index, vk_device.graphics_family_index, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	} rend_vk_cmdbuffer_single_use_end(ctx->upload_command_pool, cmd_transfer, vk_device.transfer_queue);
 
-	texture->layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 	VkCommandBuffer cmd_graphics = rend_vk_cmdbuffer_single_use_begin(ctx->graphics_command_pool); {
 		rend_vk_texture_transfer_ownership_acquire(handle, cmd_graphics, texture, vk_device.transfer_family_index, vk_device.graphics_family_index, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	} rend_vk_cmdbuffer_single_use_end(ctx->graphics_command_pool, cmd_graphics, vk_device.graphics_queue);
 }
 
 void
-rend_vk_texture_copy_to_buffer(RendContextHandle handle, RendTexture *texture, RendBuffer *buffer)
+rend_vk14_texture_copy_to_buffer(RendContextHandle handle, RendTexture *texture, RendBuffer *buffer)
 {
 	RendVk14Context *ctx;
 	VkCommandBuffer cmd;
@@ -1446,7 +1344,7 @@ rend_vk_texture_copy_to_buffer(RendContextHandle handle, RendTexture *texture, R
 }
 
 void
-rend_vk_texture_blit(RendContextHandle handle, RendTexture *src, RendTexture *dst, uint32_t src_x, uint32_t src_y, uint32_t src_w, uint32_t src_h, uint32_t dst_x, uint32_t dst_y, uint32_t dst_w, uint32_t dst_h)
+rend_vk14_texture_blit(RendContextHandle handle, RendTexture *src, RendTexture *dst, uint32_t src_x, uint32_t src_y, uint32_t src_w, uint32_t src_h, uint32_t dst_x, uint32_t dst_y, uint32_t dst_w, uint32_t dst_h)
 {
 	RendVk14Context *ctx = (RendVk14Context *)handle;
 	VkCommandBuffer cmd;
@@ -1501,64 +1399,31 @@ rend_vk_texture_blit(RendContextHandle handle, RendTexture *src, RendTexture *ds
 
 	vkCmdBlitImage2(cmd, &blit_info);
 	rend_vk_texture_transition_layout(handle, cmd, src, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	rend_vk_texture_transition_layout(handle, cmd, dst, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	if (!dst->borrowed)
+		rend_vk_texture_transition_layout(handle, cmd, dst, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 	if (standalone) {
 		rend_vk_cmdbuffer_single_use_end(ctx->graphics_command_pool, cmd, vk_device.graphics_queue);
 	}
 }
 
-static VkCommandBuffer
-rend_vk_cmdbuffer_single_use_begin(VkCommandPool pool)
-{
-	VkCommandBufferAllocateInfo alloc_info = {
-		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-		.commandPool = pool,
-		.commandBufferCount = 1,
-	};
-
-	VkCommandBuffer cmd;
-	vkAllocateCommandBuffers(vk_device.logical_device, &alloc_info, &cmd);
-
-	VkCommandBufferBeginInfo begin = {
-		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-	};
-
-	vkBeginCommandBuffer(cmd, &begin);
-
-	return cmd;
-}
-
-static void
-rend_vk_cmdbuffer_single_use_end(VkCommandPool pool, VkCommandBuffer cmd, VkQueue q)
-{
-	vkEndCommandBuffer(cmd);
-
-	VkSubmitInfo submit_info = {
-		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-		.commandBufferCount = 1,
-		.pCommandBuffers = &cmd,
-	};
-
-	vkQueueSubmit(q, 1, &submit_info, VK_NULL_HANDLE);
-	vkQueueWaitIdle(q);
-
-	vkFreeCommandBuffers(vk_device.logical_device, pool, 1, &cmd);
-}
-
 bool
-rend_vk_pipeline_create(RendContextHandle handle, RendPipeline pipeline, Rend__PipelineConfig config, uint8_t type, const uint8_t *shader1, size_t bytes1, const uint8_t *shader2, size_t bytes2, const uint8_t *shader3, size_t bytes3)
+rend_vk14_pipeline_create(RendContextHandle handle, RendPipeline pipeline, Rend__PipelineConfig config, uint8_t type, const uint8_t *shader1, size_t bytes1, const uint8_t *shader2, size_t bytes2, const uint8_t *shader3, size_t bytes3)
 {
 	uint32_t u;
 	uint32_t i;
 	RendVk14Context *ctx = (RendVk14Context *)handle;
-	pipeline->idx = ctx->pipeline_count++;
+	RendVkPipeline *vk_pipeline;
+
+	if (ctx->pipeline_count >= REND_VK_MAX_PIPELINES) {
+		RASSERT(0, "pipeline limit");
+		return false;
+	}
+	pipeline->idx = ctx->pipeline_count;
 	pipeline->backend_ctx = ctx; /* useful for when we only have RendPipeline as an argument */
 
-	RendVkPipeline *vk_pipeline = &ctx->pipelines[pipeline->idx];
-	vk_pipeline->blend_enable = false;
+	vk_pipeline = &ctx->pipelines[pipeline->idx];
+	memset(vk_pipeline, 0, sizeof *vk_pipeline);
 
 	/*
 	 * set color and depth format
@@ -1629,7 +1494,15 @@ rend_vk_pipeline_create(RendContextHandle handle, RendPipeline pipeline, Rend__P
 			.basePipelineIndex = -1,
 		};
 
-		CHECK_VK_RESULT(vkCreateComputePipelines(vk_device.logical_device, VK_NULL_HANDLE, 1, &compute_pipeline_info, vk_allocator, &vk_pipeline->handle));
+		if (vkCreateComputePipelines(vk_device.logical_device, VK_NULL_HANDLE, 1, &compute_pipeline_info, vk_allocator, &vk_pipeline->handle) != VK_SUCCESS) {
+			RASSERT(0, "vkCreateComputePipelines failed");
+			for (i = 0; i < shader_count; ++i) {
+				if (shader_modules[i] != VK_NULL_HANDLE)
+					vkDestroyShaderModule(vk_device.logical_device, shader_modules[i], vk_allocator);
+			}
+			rend_vk14_pipeline_destroy(vk_pipeline);
+			return false;
+		}
 
 		PINFO("Successfully created compute pipeline!");
 	}
@@ -1660,8 +1533,17 @@ rend_vk_pipeline_create(RendContextHandle handle, RendPipeline pipeline, Rend__P
 		multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
 		VkPipelineColorBlendAttachmentState color_blend_attachment = {0};
+		uint32_t blend;
+		VkPipeline *pipe_out[2];
+
 		color_blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 		color_blend_attachment.blendEnable = VK_FALSE;
+		color_blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+		color_blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+		color_blend_attachment.colorBlendOp = VK_BLEND_OP_ADD;
+		color_blend_attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+		color_blend_attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+		color_blend_attachment.alphaBlendOp = VK_BLEND_OP_ADD;
 
 		VkPipelineColorBlendStateCreateInfo color_blending = { VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
 		color_blending.logicOpEnable = VK_FALSE;
@@ -1738,7 +1620,22 @@ rend_vk_pipeline_create(RendContextHandle handle, RendPipeline pipeline, Rend__P
 		pipeline_info.layout = vk_pipeline->layout;
 		pipeline_info.renderPass = VK_NULL_HANDLE;
 
-		CHECK_VK_RESULT(vkCreateGraphicsPipelines(vk_device.logical_device, VK_NULL_HANDLE, 1, &pipeline_info, vk_allocator, &vk_pipeline->handle));
+		pipe_out[0] = &vk_pipeline->handle;
+		pipe_out[1] = &vk_pipeline->handle_blend;
+		for (blend = 0; blend < 2; blend++) {
+			color_blend_attachment.blendEnable = blend ? VK_TRUE : VK_FALSE;
+			if (vkCreateGraphicsPipelines(vk_device.logical_device, VK_NULL_HANDLE, 1, &pipeline_info, vk_allocator, pipe_out[blend]) != VK_SUCCESS) {
+				RASSERT(0, "vkCreateGraphicsPipelines failed");
+				if (vk_bindings) rfree(vk_bindings);
+				if (vk_attributes) rfree(vk_attributes);
+				for (i = 0; i < shader_count; ++i) {
+					if (shader_modules[i] != VK_NULL_HANDLE)
+						vkDestroyShaderModule(vk_device.logical_device, shader_modules[i], vk_allocator);
+				}
+				rend_vk14_pipeline_destroy(vk_pipeline);
+				return false;
+			}
+		}
 
 		if (vk_bindings) rfree(vk_bindings);
 		if (vk_attributes) rfree(vk_attributes);
@@ -1752,23 +1649,24 @@ rend_vk_pipeline_create(RendContextHandle handle, RendPipeline pipeline, Rend__P
 		}
 	}
 
+	ctx->pipeline_count++;
 	return true;
 }
 
-
 void
-rend_vk_pipeline_bind(RendPipeline pipeline)
+rend_vk14_pipeline_bind(RendPipeline pipeline)
 {
 	RendVk14Context *ctx = pipeline->backend_ctx;
 	RendVkPipeline vk_pipeline = ctx->pipelines[pipeline->idx];
 	VkCommandBuffer cmd = ctx->frame_resources[ctx->frame_index].command_buffer;
 	VkPipelineBindPoint bind_point = (pipeline->type == REND__PIPELINE_COMPUTE) ? VK_PIPELINE_BIND_POINT_COMPUTE : VK_PIPELINE_BIND_POINT_GRAPHICS;
-	vkCmdBindPipeline(cmd, bind_point, vk_pipeline.handle);
+	VkPipeline handle = (vk_pipeline.blend_enable && vk_pipeline.handle_blend) ? vk_pipeline.handle_blend : vk_pipeline.handle;
+	vkCmdBindPipeline(cmd, bind_point, handle);
 	vkCmdBindDescriptorSets(cmd, bind_point, vk_pipeline.layout, 0, 1, &ctx->desc_set, 0, NULL);
 }
 
 void
-rend_vk_pipeline_push_constants(RendPipeline pipeline, void *push_data, size_t size)
+rend_vk14_pipeline_push_constants(RendPipeline pipeline, void *push_data, size_t size)
 {
 	RASSERT(pipeline && push_data);
 
@@ -1779,7 +1677,7 @@ rend_vk_pipeline_push_constants(RendPipeline pipeline, void *push_data, size_t s
 }
 
 void
-rend_vk_pipeline_bind_vertex_buffer(RendPipeline pipeline, uint32_t binding, RendBuffer buffer, size_t offset)
+rend_vk14_pipeline_bind_vertex_buffer(RendPipeline pipeline, uint32_t binding, RendBuffer buffer, size_t offset)
 {
 	RendVk14Context *ctx = pipeline->backend_ctx;
 	VkBuffer buf = (VkBuffer)(uintptr_t)buffer.handle;
@@ -1790,7 +1688,7 @@ rend_vk_pipeline_bind_vertex_buffer(RendPipeline pipeline, uint32_t binding, Ren
 }
 
 void
-rend_vk_pipeline_bind_index_buffer(RendPipeline pipeline, RendBuffer buffer, size_t offset, RendIndexType index_type)
+rend_vk14_pipeline_bind_index_buffer(RendPipeline pipeline, RendBuffer buffer, size_t offset, RendIndexType index_type)
 {
 	RendVk14Context *ctx = pipeline->backend_ctx;
 	VkBuffer buf = (VkBuffer)(uintptr_t)buffer.handle;
@@ -1802,7 +1700,7 @@ rend_vk_pipeline_bind_index_buffer(RendPipeline pipeline, RendBuffer buffer, siz
 }
 
 void
-rend_vk_descriptor_write_texture(RendContextHandle handle, RendTexture *texture, uint32_t binding, uint32_t slot)
+rend_vk14_descriptor_write_texture(RendContextHandle handle, RendTexture *texture, uint32_t binding, uint32_t slot)
 {
 	RendVk14Context *vk_ctx = (RendVk14Context *)handle;
 
@@ -1826,7 +1724,7 @@ rend_vk_descriptor_write_texture(RendContextHandle handle, RendTexture *texture,
 }
 
 void
-rend_vk_pipeline_dispatch(RendPipeline pipeline, uint32_t x, uint32_t y, uint32_t z)
+rend_vk14_pipeline_dispatch(RendPipeline pipeline, uint32_t x, uint32_t y, uint32_t z)
 {
 	RendVk14Context *ctx = pipeline->backend_ctx;
 	VkCommandBuffer cmd = ctx->frame_resources[ctx->frame_index].command_buffer;
@@ -1834,7 +1732,7 @@ rend_vk_pipeline_dispatch(RendPipeline pipeline, uint32_t x, uint32_t y, uint32_
 }
 
 void
-rend_vk_pipeline_draw(RendPipeline pipeline, size_t count, uint32_t instance_count)
+rend_vk14_pipeline_draw(RendPipeline pipeline, size_t count, uint32_t instance_count)
 {
 	RendVk14Context *ctx = pipeline->backend_ctx;
 	VkCommandBuffer cmd = ctx->frame_resources[ctx->frame_index].command_buffer;
@@ -1842,7 +1740,7 @@ rend_vk_pipeline_draw(RendPipeline pipeline, size_t count, uint32_t instance_cou
 }
 
 void
-rend_vk_pipeline_draw_indexed(RendPipeline pipeline, uint32_t index_count, uint32_t first_index, int32_t vertex_offset, uint32_t instance_count)
+rend_vk14_pipeline_draw_indexed(RendPipeline pipeline, uint32_t index_count, uint32_t first_index, int32_t vertex_offset, uint32_t instance_count)
 {
 	RendVk14Context *ctx = pipeline->backend_ctx;
 	VkCommandBuffer cmd = ctx->frame_resources[ctx->frame_index].command_buffer;
@@ -1850,52 +1748,37 @@ rend_vk_pipeline_draw_indexed(RendPipeline pipeline, uint32_t index_count, uint3
 }
 
 void
-rend_vk_pipeline_set_blend(RendPipeline pipeline, bool blend)
+rend_vk14_pipeline_set_blend(RendPipeline pipeline, bool blend)
 {
 	RendVk14Context *ctx = pipeline->backend_ctx;
 	RendVkPipeline *vk_pipeline = &ctx->pipelines[pipeline->idx];
+
 	vk_pipeline->blend_enable = blend;
+	if (ctx->in_frame && pipeline->type != REND__PIPELINE_COMPUTE)
+		rend_vk14_pipeline_bind(pipeline);
 }
-
-VKAPI_ATTR VkBool32 VKAPI_CALL
-rend_vk_debug_func(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity, VkDebugUtilsMessageTypeFlagsEXT message_types, const VkDebugUtilsMessengerCallbackDataEXT *callback_data, void *user_data)
-{
-	switch (message_severity) {
-		default:
-		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-			PERROR(callback_data->pMessage);
-			break;
-		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-			PWARN(callback_data->pMessage);
-			break;
-		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-			PINFO(callback_data->pMessage);
-			break;
-		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-			PTRACE(callback_data->pMessage);
-			break;
-	}
-	return VK_FALSE;
-}
-
-
 
 static void
-rend_vk_pipeline_destroy(RendVkPipeline *pipeline)
+rend_vk14_pipeline_destroy(RendVkPipeline *pipeline)
 {
 	VkDevice dev = vk_device.logical_device;
 
 	if (pipeline->handle != VK_NULL_HANDLE) {
 		vkDestroyPipeline(dev, pipeline->handle, vk_allocator);
+		pipeline->handle = VK_NULL_HANDLE;
 	}
-
+	if (pipeline->handle_blend != VK_NULL_HANDLE) {
+		vkDestroyPipeline(dev, pipeline->handle_blend, vk_allocator);
+		pipeline->handle_blend = VK_NULL_HANDLE;
+	}
 	if (pipeline->layout != VK_NULL_HANDLE) {
 		vkDestroyPipelineLayout(dev, pipeline->layout, vk_allocator);
+		pipeline->layout = VK_NULL_HANDLE;
 	}
 }
 
 static VkExtent2D
-rend_vk_surface_extent(RendVk14Context *ctx, const VkSurfaceCapabilitiesKHR *caps)
+rend_vk14_surface_extent(RendVk14Context *ctx, const VkSurfaceCapabilitiesKHR *caps)
 {
 	VkExtent2D extent;
 	VkExtent2D min;
@@ -1919,7 +1802,7 @@ rend_vk_surface_extent(RendVk14Context *ctx, const VkSurfaceCapabilitiesKHR *cap
 }
 
 static bool
-rend_vk_offscreen_create(RendVk14Context *ctx, uint32_t width, uint32_t height, RendFormat format)
+rend_vk14_offscreen_create(RendVk14Context *ctx, uint32_t width, uint32_t height, RendFormat format)
 {
 	RendVkImage color;
 	RendMemory color_mem;
@@ -1983,12 +1866,16 @@ rend_vk_offscreen_create(RendVk14Context *ctx, uint32_t width, uint32_t height, 
 	ctx->swapchain.format.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 	ctx->swapchain.extent.width = width;
 	ctx->swapchain.extent.height = height;
-	ctx->swapchain.present_semaphores = 0;
+	ctx->color_rend_format = format;
+	if (!rend_vk14_color_targets_rebuild(ctx)) {
+		rend_vk14_offscreen_destroy(ctx);
+		return false;
+	}
 
 	if (!rend_vk_device_detect_depth_format(&vk_device)) {
 		vk_device.depth_format = VK_FORMAT_UNDEFINED;
 		PERROR("Failed to find a supported depth buffer format!");
-		rend_vk_offscreen_destroy(ctx);
+		rend_vk14_offscreen_destroy(ctx);
 		return false;
 	}
 
@@ -2004,7 +1891,7 @@ rend_vk_offscreen_create(RendVk14Context *ctx, uint32_t width, uint32_t height, 
 			VK_SHARING_MODE_EXCLUSIVE);
 	if (!ctx->swapchain.depth_attachment.handle) {
 		PERROR("Failed to create offscreen depth image.");
-		rend_vk_offscreen_destroy(ctx);
+		rend_vk14_offscreen_destroy(ctx);
 		return false;
 	}
 
@@ -2018,7 +1905,7 @@ rend_vk_offscreen_create(RendVk14Context *ctx, uint32_t width, uint32_t height, 
 			VK_IMAGE_ASPECT_DEPTH_BIT);
 	if (!ctx->swapchain.depth_attachment.view) {
 		PERROR("Failed to create offscreen depth view.");
-		rend_vk_offscreen_destroy(ctx);
+		rend_vk14_offscreen_destroy(ctx);
 		return false;
 	}
 
@@ -2026,11 +1913,12 @@ rend_vk_offscreen_create(RendVk14Context *ctx, uint32_t width, uint32_t height, 
 }
 
 static void
-rend_vk_offscreen_destroy(RendVk14Context *ctx)
+rend_vk14_offscreen_destroy(RendVk14Context *ctx)
 {
 	if (!ctx)
 		return;
 
+	rend_vk14_color_targets_free(ctx);
 	if (ctx->swapchain.views) {
 		rfree(ctx->swapchain.views);
 		ctx->swapchain.views = 0;
@@ -2045,7 +1933,7 @@ rend_vk_offscreen_destroy(RendVk14Context *ctx)
 }
 
 static bool
-rend_vk_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain, VkSwapchainKHR old_swapchain)
+rend_vk14_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain, VkSwapchainKHR old_swapchain)
 {
 	uint32_t i;
 	RASSERT(ctx && "No context provided.");
@@ -2057,23 +1945,25 @@ rend_vk_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain, VkSwa
 	uint32_t queue_family_indices[2];
 
 	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk_device.physical_device, ctx->surface, &surface_caps);
-	swapchain_extent = rend_vk_surface_extent(ctx, &surface_caps);
+	swapchain_extent = rend_vk14_surface_extent(ctx, &surface_caps);
 
-	ctx->max_frames_in_flight = REND_MIN_FRAMES_IN_FLIGHT;
-
-	if (surface_caps.minImageCount > ctx->max_frames_in_flight) {
-		ctx->max_frames_in_flight = surface_caps.minImageCount;
-	}
-
-	/* maxImageCount == 0 means there is no maximum */
-	if (surface_caps.maxImageCount > 0 && surface_caps.maxImageCount < ctx->max_frames_in_flight) {
-		ctx->max_frames_in_flight = surface_caps.maxImageCount;
-	}
-	if (ctx->max_frames_in_flight > REND_MAX_FRAMES_IN_FLIGHT) {
-		ctx->max_frames_in_flight = REND_MAX_FRAMES_IN_FLIGHT;
-	}
 	if (ctx->max_frames_in_flight == 0) {
-		ctx->max_frames_in_flight = 1;
+		ctx->max_frames_in_flight = REND_MIN_FRAMES_IN_FLIGHT;
+
+		if (surface_caps.minImageCount > ctx->max_frames_in_flight) {
+			ctx->max_frames_in_flight = surface_caps.minImageCount;
+		}
+
+		/* maxImageCount == 0 means there is no maximum */
+		if (surface_caps.maxImageCount > 0 && surface_caps.maxImageCount < ctx->max_frames_in_flight) {
+			ctx->max_frames_in_flight = surface_caps.maxImageCount;
+		}
+		if (ctx->max_frames_in_flight > REND_MAX_FRAMES_IN_FLIGHT) {
+			ctx->max_frames_in_flight = REND_MAX_FRAMES_IN_FLIGHT;
+		}
+		if (ctx->max_frames_in_flight == 0) {
+			ctx->max_frames_in_flight = 1;
+		}
 	}
 
 	bool found = false;
@@ -2185,19 +2075,39 @@ rend_vk_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain, VkSwa
 	}
 
 	swapchain->image_count = 0;
-	CHECK_VK_RESULT(vkGetSwapchainImagesKHR(vk_device.logical_device, swapchain->handle, &swapchain->image_count, 0));
-
-	if (!swapchain->images) {
-		swapchain->images = rmalloc(swapchain->image_count * sizeof(*swapchain->images));
-	}
-	if (!swapchain->views) {
-		swapchain->views = rmalloc(swapchain->image_count * sizeof(*swapchain->views));
-	}
-	if (!swapchain->present_semaphores) {
-		swapchain->present_semaphores = rmalloc(swapchain->image_count * sizeof(*swapchain->present_semaphores));
+	if (vkGetSwapchainImagesKHR(vk_device.logical_device, swapchain->handle, &swapchain->image_count, 0) != VK_SUCCESS) {
+		vkDestroySwapchainKHR(vk_device.logical_device, swapchain->handle, vk_allocator);
+		swapchain->handle = VK_NULL_HANDLE;
+		return false;
 	}
 
-	CHECK_VK_RESULT( vkGetSwapchainImagesKHR(vk_device.logical_device, swapchain->handle, &swapchain->image_count, swapchain->images));
+	swapchain->images = rmalloc(swapchain->image_count * sizeof(*swapchain->images));
+	swapchain->views = rmalloc(swapchain->image_count * sizeof(*swapchain->views));
+	swapchain->present_semaphores = rmalloc(swapchain->image_count * sizeof(*swapchain->present_semaphores));
+	if (!swapchain->images || !swapchain->views || !swapchain->present_semaphores) {
+		rfree(swapchain->images);
+		rfree(swapchain->views);
+		rfree(swapchain->present_semaphores);
+		swapchain->images = 0;
+		swapchain->views = 0;
+		swapchain->present_semaphores = 0;
+		vkDestroySwapchainKHR(vk_device.logical_device, swapchain->handle, vk_allocator);
+		swapchain->handle = VK_NULL_HANDLE;
+		return false;
+	}
+	memset(swapchain->present_semaphores, 0, swapchain->image_count * sizeof(*swapchain->present_semaphores));
+
+	if (vkGetSwapchainImagesKHR(vk_device.logical_device, swapchain->handle, &swapchain->image_count, swapchain->images) != VK_SUCCESS) {
+		rfree(swapchain->images);
+		rfree(swapchain->views);
+		rfree(swapchain->present_semaphores);
+		swapchain->images = 0;
+		swapchain->views = 0;
+		swapchain->present_semaphores = 0;
+		vkDestroySwapchainKHR(vk_device.logical_device, swapchain->handle, vk_allocator);
+		swapchain->handle = VK_NULL_HANDLE;
+		return false;
+	}
 
 	for (i = 0; i < swapchain->image_count; i++) {
 		VkSemaphoreCreateInfo sem_info;
@@ -2212,11 +2122,40 @@ rend_vk_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain, VkSwa
 		view_info.subresourceRange.baseArrayLayer = 0;
 		view_info.subresourceRange.layerCount = 1;
 
-		CHECK_VK_RESULT(vkCreateImageView(vk_device.logical_device, &view_info, vk_allocator, &swapchain->views[i]));
+		if (vkCreateImageView(vk_device.logical_device, &view_info, vk_allocator, &swapchain->views[i]) != VK_SUCCESS) {
+			uint32_t j;
+			for (j = 0; j < i; j++) {
+				vkDestroyImageView(vk_device.logical_device, swapchain->views[j], vk_allocator);
+				vkDestroySemaphore(vk_device.logical_device, swapchain->present_semaphores[j], vk_allocator);
+			}
+			rfree(swapchain->images);
+			rfree(swapchain->views);
+			rfree(swapchain->present_semaphores);
+			swapchain->images = 0;
+			swapchain->views = 0;
+			swapchain->present_semaphores = 0;
+			vkDestroySwapchainKHR(vk_device.logical_device, swapchain->handle, vk_allocator);
+			swapchain->handle = VK_NULL_HANDLE;
+			return false;
+		}
 
 		sem_info = (VkSemaphoreCreateInfo){ VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
 		if (vkCreateSemaphore(vk_device.logical_device, &sem_info, vk_allocator, &swapchain->present_semaphores[i]) != VK_SUCCESS) {
+			uint32_t j;
 			PERROR("Unable to create present semaphore #%u!", i);
+			vkDestroyImageView(vk_device.logical_device, swapchain->views[i], vk_allocator);
+			for (j = 0; j < i; j++) {
+				vkDestroyImageView(vk_device.logical_device, swapchain->views[j], vk_allocator);
+				vkDestroySemaphore(vk_device.logical_device, swapchain->present_semaphores[j], vk_allocator);
+			}
+			rfree(swapchain->images);
+			rfree(swapchain->views);
+			rfree(swapchain->present_semaphores);
+			swapchain->images = 0;
+			swapchain->views = 0;
+			swapchain->present_semaphores = 0;
+			vkDestroySwapchainKHR(vk_device.logical_device, swapchain->handle, vk_allocator);
+			swapchain->handle = VK_NULL_HANDLE;
 			return false;
 		}
 	}
@@ -2224,7 +2163,9 @@ rend_vk_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain, VkSwa
 	/* depth resources */
 	if (!rend_vk_device_detect_depth_format(&vk_device)) {
 		vk_device.depth_format = VK_FORMAT_UNDEFINED;
-		PFATAL("Failed to find a supported depth buffer format!");
+		PERROR("Failed to find a supported depth buffer format!");
+		rend_vk14_swapchain_destroy(ctx, swapchain);
+		return false;
 	}
 
 	swapchain->depth_attachment = rend_vk_image_create(
@@ -2260,7 +2201,7 @@ rend_vk_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain, VkSwa
 }
 
 static void
-rend_vk_swapchain_destroy(RendVk14Context *ctx, RendVkSwapchain *swapchain)
+rend_vk14_swapchain_destroy(RendVk14Context *ctx, RendVkSwapchain *swapchain)
 {
 	uint32_t i;
 
@@ -2298,52 +2239,95 @@ rend_vk_swapchain_destroy(RendVk14Context *ctx, RendVkSwapchain *swapchain)
 }
 
 static bool
-rend_vk_swapchain_recreate(RendVk14Context *ctx)
+rend_vk14_swapchain_recreate(RendVk14Context *ctx)
 {
 	RendVkSwapchain old;
 	RendVkSwapchain created;
 
 	old = ctx->swapchain;
 	memset(&created, 0, sizeof created);
-	if (!rend_vk_swapchain_create(ctx, &created, old.handle))
+	if (!rend_vk14_swapchain_create(ctx, &created, old.handle))
 		return false;
-	rend_vk_swapchain_destroy(ctx, &old);
+	rend_vk14_swapchain_destroy(ctx, &old);
 	ctx->swapchain = created;
+	ctx->color_rend_format = rend_vk14_format_from_vk(created.format.format);
+	return rend_vk14_color_targets_rebuild(ctx);
+}
+
+static RendFormat
+rend_vk14_format_from_vk(VkFormat fmt)
+{
+	uint32_t i;
+
+	if (fmt == VK_FORMAT_UNDEFINED)
+		return REND_FORMAT_UNDEFINED;
+	for (i = 1; i < REND_FORMAT_COUNT; i++) {
+		if (vk_format_from_rend_format[i] == fmt)
+			return (RendFormat)i;
+	}
+	return REND_FORMAT_UNDEFINED;
+}
+
+static void
+rend_vk14_color_targets_free(RendVk14Context *ctx)
+{
+	if (!ctx)
+		return;
+	rfree(ctx->color_targets);
+	ctx->color_targets = NULL;
+	ctx->color_target_count = 0;
+}
+
+static bool
+rend_vk14_color_targets_rebuild(RendVk14Context *ctx)
+{
+	uint32_t i;
+	RendTexture *targets;
+
+	rend_vk14_color_targets_free(ctx);
+	if (!ctx->swapchain.image_count || !ctx->swapchain.images || !ctx->swapchain.views)
+		return false;
+
+	targets = rmalloc(ctx->swapchain.image_count * sizeof *targets);
+	if (!targets)
+		return false;
+	memset(targets, 0, ctx->swapchain.image_count * sizeof *targets);
+
+	for (i = 0; i < ctx->swapchain.image_count; i++) {
+		targets[i].handle = (uint64_t)ctx->swapchain.images[i];
+		targets[i].view = (uint64_t)ctx->swapchain.views[i];
+		targets[i].width = ctx->swapchain.extent.width;
+		targets[i].height = ctx->swapchain.extent.height;
+		targets[i].depth = 1;
+		targets[i].mip_levels = 1;
+		targets[i].layers = 1;
+		targets[i].format = ctx->color_rend_format;
+		targets[i].layout = VK_IMAGE_LAYOUT_UNDEFINED;
+		targets[i].backend = REND_BACKEND_VULKAN_14;
+		targets[i].borrowed = 1;
+		targets[i].ctx = ctx;
+		targets[i].usage = ctx->offscreen
+			? (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+			   VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT)
+			: (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+	}
+
+	ctx->color_targets = targets;
+	ctx->color_target_count = ctx->swapchain.image_count;
 	return true;
 }
 
-static VkShaderModule
-rend_vk_shader_module_create(const void *data, size_t size)
+static RendTexture *
+rend_vk14_color_target_at(RendVk14Context *ctx)
 {
-
-	VkShaderModuleCreateInfo create_info = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-	create_info.codeSize = size;
-	create_info.pCode = (const uint32_t *)data;
-
-	VkShaderModule module;
-	VkResult res = vkCreateShaderModule(vk_device.logical_device, &create_info, vk_allocator, &module);
-
-	if (res != VK_SUCCESS) {
-		PWARN("Failed to create shader module for %p", data);
-		return VK_NULL_HANDLE;
-	}
-
-	return module;
+	if (!ctx || !ctx->color_targets || ctx->image_index >= ctx->color_target_count)
+		return NULL;
+	return &ctx->color_targets[ctx->image_index];
 }
 
-static uint32_t
-rend_vk_get_heap_index(uint32_t memory_type_bits, uint32_t preferred_index)
+RendTexture *
+rend_vk14_color_target(RendContextHandle handle)
 {
-	uint32_t i;
-	if (memory_type_bits & (1u << preferred_index)) {
-		return preferred_index;
-	}
-
-	for (i = 0; i < 32; i++) {
-		if (memory_type_bits & (1u << i)) {
-			return i;
-		}
-	}
-
-	return UINT32_MAX;
+	return rend_vk14_color_target_at((RendVk14Context *)handle);
 }
+

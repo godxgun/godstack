@@ -1,6 +1,7 @@
 #include "rend.h"
 #include "peak.c"
 #include "rend.c"
+#include "demos/headless.h"
 #include <stddef.h>
 #include <string.h>
 
@@ -53,26 +54,42 @@ load_spv(const char *a, const char *b, unsigned long *size)
     return peak_file_alloc(b, size);
 }
 
-int main() {
-
-    if (!peak_init()) {
-        PFATAL("Failed to init Peak!");
-        return 1;
-    }
-
-    win = peak_window_open("demo", 800, 600, 0);
-    if (!win.running) {
-        PFATAL("Failed to open a window!");
-        return 1;
-    }
-
-    // bindless setup
+int main(int argc, char **argv) {
+    int headless;
+    int frames;
+    int frame_i;
+    const char *ppm;
+    uint32_t width = 800;
+    uint32_t height = 600;
     RendBindingInfo bind_info = {0};
-    RendRenderer renderer = rend_renderer_create(&win, REND_BACKEND_AUTO, NULL, vsync, &bind_info);
+    RendRenderer renderer;
+
+    headless = headless_parse(argc, argv, &frames, &ppm);
+    memset(&win, 0, sizeof win);
+
+    if (!headless) {
+        if (!peak_init()) {
+            PFATAL("Failed to init Peak!");
+            return 1;
+        }
+
+        win = peak_window_open("demo", width, height, 0);
+        if (!win.running) {
+            PFATAL("Failed to open a window!");
+            return 1;
+        }
+    }
+
+    if (headless)
+        renderer = rend_renderer_create_offscreen(width, height, REND_FORMAT_R8G8B8A8_UNORM, REND_BACKEND_AUTO, &bind_info);
+    else
+        renderer = rend_renderer_create(&win, REND_BACKEND_AUTO, NULL, vsync, &bind_info);
     if (!renderer) {
         PFATAL("Failed to create renderer!");
-        peak_window_close(&win);
-        peak_quit();
+        if (!headless) {
+            peak_window_close(&win);
+            peak_quit();
+        }
         return 1;
     }
 
@@ -136,12 +153,17 @@ int main() {
     uint64_t dt_ns = (uint64_t) (dt * NANOS_PER_SEC);
 
     uint32_t mode = 2;
+    frame_i = 0;
     while (mode > 0) {
-
-        uint64_t start = peak_get_time();
-
+        uint64_t start;
         PeakEvent ev;
-        while (peak_window_epoll(&win, &ev)) {
+
+        if (headless && frame_i >= frames)
+            break;
+
+        start = peak_get_time();
+
+        while (!headless && peak_window_epoll(&win, &ev)) {
             if (ev.type == PEAK_EVENT_WINDOW_CLOSE) {
                 mode -= 1;
                 break;
@@ -174,7 +196,7 @@ int main() {
                 src_grid = dst_grid;
                 dst_grid = temp;
 
-                memset(src_grid->mapped_memory, 0, grid_buffer_size);
+                memset(rend_buffer_mapped(src_grid), 0, grid_buffer_size);
 
             } else {
                 /*
@@ -200,12 +222,25 @@ int main() {
             } rend_renderer_render_pass_end(renderer);
 
             rend_renderer_frame_end(renderer, NULL);
-        } 
-
-        uint64_t delta_ns = peak_get_time() - start;
-        if (delta_ns < dt_ns) {
-            peak_sleep_ns(dt_ns - delta_ns);
         }
+
+        if (!headless) {
+            uint64_t delta_ns = peak_get_time() - start;
+            if (delta_ns < dt_ns)
+                peak_sleep_ns(dt_ns - delta_ns);
+        }
+        frame_i++;
+    }
+
+    if (headless && !headless_finish(renderer, width, height, REND_FORMAT_R8G8B8A8_UNORM, ppm)) {
+        free(initial_particles);
+        free(initial_grid);
+        rend_buffer_destroy(&particle_buf);
+        rend_buffer_destroy(&src_buf);
+        rend_buffer_destroy(&dst_buf);
+        rend_renderer_destroy(renderer);
+        peak_debug_memory_report();
+        return 1;
     }
 
     free(initial_particles);
@@ -216,10 +251,11 @@ int main() {
     rend_buffer_destroy(&dst_buf);
 
     rend_renderer_destroy(renderer);
-    // rend_quit();
 
-    peak_window_close(&win);
-    peak_quit();
+    if (!headless) {
+        peak_window_close(&win);
+        peak_quit();
+    }
 
     peak_debug_memory_report();
     return 0;

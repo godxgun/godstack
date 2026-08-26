@@ -10,6 +10,7 @@
 #include "rend.c"
 #include "grit.h"
 #include "grit.c"
+#include "demos/headless.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -456,7 +457,7 @@ snake_mvp(float *mvp, uint32_t fb_w, uint32_t fb_h)
 }
 
 int
-main(void)
+main(int argc, char **argv)
 {
     PeakWindow win;
     PeakEvent ev;
@@ -486,25 +487,45 @@ main(void)
     float dt;
     float move_t;
     int running;
+    int headless;
+    int frames;
+    int frame_i;
+    const char *ppm;
+    uint32_t width;
+    uint32_t height;
 
-    if (!peak_init()) {
-        PFATAL("Failed to init Peak!");
-        return 1;
-    }
+    width = 960;
+    height = 720;
+    memset(&win, 0, sizeof win);
+    headless = headless_parse(argc, argv, &frames, &ppm);
 
-    win = peak_window_open("snake", 960, 720, 0);
-    if (!win.running) {
-        PFATAL("Failed to open a window!");
-        peak_quit();
-        return 1;
+    if (!headless) {
+        if (!peak_init()) {
+            PFATAL("Failed to init Peak!");
+            return 1;
+        }
+
+        win = peak_window_open("snake", width, height, 0);
+        if (!win.running) {
+            PFATAL("Failed to open a window!");
+            peak_quit();
+            return 1;
+        }
+        width = win.width;
+        height = win.height;
     }
 
     memset(&bind_info, 0, sizeof bind_info);
-    renderer = rend_renderer_create(&win, REND_BACKEND_AUTO, NULL, true, &bind_info);
+    if (headless)
+        renderer = rend_renderer_create_offscreen(width, height, REND_FORMAT_R8G8B8A8_UNORM, REND_BACKEND_AUTO, &bind_info);
+    else
+        renderer = rend_renderer_create(&win, REND_BACKEND_AUTO, NULL, true, &bind_info);
     if (!renderer) {
         PFATAL("Failed to create renderer!");
-        peak_window_close(&win);
-        peak_quit();
+        if (!headless) {
+            peak_window_close(&win);
+            peak_quit();
+        }
         return 1;
     }
 
@@ -573,7 +594,7 @@ main(void)
     }
 
     game.body = grit_darray_create(16, sizeof (SnakeCell));
-    grit_rng_seed(&game.rng, peak_get_time());
+    grit_rng_seed(&game.rng, headless ? 1ull : peak_get_time());
     snake_reset(&game);
 
     running = 1;
@@ -581,15 +602,23 @@ main(void)
     step = SNAKE_STEP_START;
     t0 = peak_get_time();
     frame_t = t0;
+    frame_i = 0;
     while (running) {
-        now = peak_get_time();
-        dt = (float)(now - frame_t) / (float)NANOS_PER_SEC;
-        frame_t = now;
-        if (dt > 0.05f)
-            dt = 0.05f;
-        time = (float)(now - t0) / (float)NANOS_PER_SEC;
+        if (headless) {
+            if (frame_i >= frames)
+                break;
+            dt = 1.0f / 60.0f;
+            time = (float)frame_i * dt;
+        } else {
+            now = peak_get_time();
+            dt = (float)(now - frame_t) / (float)NANOS_PER_SEC;
+            frame_t = now;
+            if (dt > 0.05f)
+                dt = 0.05f;
+            time = (float)(now - t0) / (float)NANOS_PER_SEC;
+        }
 
-        while (peak_window_epoll(&win, &ev)) {
+        while (!headless && peak_window_epoll(&win, &ev)) {
             if (ev.type == PEAK_EVENT_WINDOW_CLOSE) {
                 running = 0;
                 break;
@@ -651,7 +680,7 @@ main(void)
 
         inst_count = snake_fill_instances(&game, instances, time, move_t);
         rend_buffer_write(renderer, &inst_buf, instances, inst_count * sizeof *instances, 0);
-        snake_mvp(pc.mvp, win.width, win.height);
+        snake_mvp(pc.mvp, width, height);
 
         if (rend_renderer_frame_begin(renderer)) {
             rend_renderer_render_pass_begin(renderer, 0.04f, 0.05f, 0.06f, 1.0f);
@@ -664,15 +693,21 @@ main(void)
             rend_renderer_render_pass_end(renderer);
             rend_renderer_frame_end(renderer, NULL);
         }
+        frame_i++;
     }
+
+    if (headless && !headless_finish(renderer, width, height, REND_FORMAT_R8G8B8A8_UNORM, ppm))
+        running = 0;
 
     grit_darray_destroy(&game.body);
     rend_buffer_destroy(&vert_buf);
     rend_buffer_destroy(&ind_buf);
     rend_buffer_destroy(&inst_buf);
     rend_renderer_destroy(renderer);
-    peak_window_close(&win);
-    peak_quit();
+    if (!headless) {
+        peak_window_close(&win);
+        peak_quit();
+    }
     rend_quit();
-    return 0;
+    return (headless && running == 0) ? 1 : 0;
 }

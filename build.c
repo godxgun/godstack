@@ -125,6 +125,21 @@ build_cool_demo(void)
 }
 
 static bool
+build_term_demo(void)
+{
+    Poof_CC cc = {0};
+    poof_mkdir("demos/term");
+    poof_cc_init(&cc, POOF_CC_GCC | POOF_CC_CLANG, POOF_TARGET_HOST);
+    cc.debug_mode = true;
+    cc.optimization = POOF_O0;
+    cc.output = "demos/term/demo";
+    poof_cmd_append(&cc.inputs, "demos/term/demo.c");
+    poof_cmd_append(&cc.includes, ".", "Term");
+    poof_cmd_append(&cc.extra_flags, "-std=c99", "-Wall", "-Werror");
+    return poof_cc_run(&cc);
+}
+
+static bool
 build_rend_demos(void)
 {
     poof_mkdir("demos/compute");
@@ -158,15 +173,75 @@ build_rend_demos(void)
     return poof_batch_run(&batch, "Rend Demos");
 }
 
+static bool
+run_one(Poof_Cmd *cmd)
+{
+    bool ok;
+    ok = poof_cmd_run(cmd);
+    poof_cmd_free(cmd);
+    return ok;
+}
+
+static bool
+run_tests(void)
+{
+    Poof_Cmd cmd;
+
+    cmd = (Poof_Cmd){0};
+    poof_cmd_append(&cmd, "./Fuse/fuse_test");
+    if (!run_one(&cmd)) return false;
+
+    cmd = (Poof_Cmd){0};
+    poof_cmd_append(&cmd, "./demos/grit/demo");
+    if (!run_one(&cmd)) return false;
+
+    cmd = (Poof_Cmd){0};
+    poof_cmd_append(&cmd, "./demos/term/demo");
+    if (!run_one(&cmd)) return false;
+
+    cmd = (Poof_Cmd){0};
+    poof_cmd_append(&cmd, "sh", "-c", "./demos/doc-generator/doc_generator Cool/cool.h >/dev/null");
+    if (!run_one(&cmd)) return false;
+
+    cmd = (Poof_Cmd){0};
+    poof_cmd_append(&cmd, "./demos/compute/rend_compute_demo", "--headless");
+    if (!run_one(&cmd)) return false;
+
+    cmd = (Poof_Cmd){0};
+    poof_cmd_append(&cmd, "./demos/teapot/rend_teapot", "--headless");
+    if (!run_one(&cmd)) return false;
+
+    cmd = (Poof_Cmd){0};
+    poof_cmd_append(&cmd, "./demos/snake/snake", "--headless");
+    if (!run_one(&cmd)) return false;
+
+    cmd = (Poof_Cmd){0};
+    poof_cmd_append(&cmd, "./demos/dashboard/dashboard", "--headless");
+    if (!run_one(&cmd)) return false;
+
+    return true;
+}
+
 int
 main(int argc, char **argv)
 {
+    int test;
+    int i;
+
     POOF_GO_REBUILD_URSELF(argc, argv);
+
+    test = 0;
+    for (i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "test") == 0)
+            test = 1;
+    }
 
     if (!build_peak_demos()) return 1;
     if (!build_fuse_test()) return 1;
     if (!build_grit_demo()) return 1;
+    if (!build_term_demo()) return 1;
     if (!build_cool_demo()) return 1;
     if (!build_rend_demos()) return 1;
+    if (test && !run_tests()) return 1;
     return 0;
 }
