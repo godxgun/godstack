@@ -126,6 +126,12 @@ static int peak_platform_pending(PeakWindowInternal *intern);
 static int peak_internal_winmm_load(void);
 static void peak_internal_win32_audio_fill(int i);
 static DWORD WINAPI peak_internal_win32_audio_thread(LPVOID arg);
+static int peak_platform_audio_start(uint32_t channels, uint32_t rate, void (*fill)(int16_t *out, size_t frames, void *userdata), void *userdata);
+static uint64_t peak_platform_get_time(void);
+static void peak_platform_sleep_ns(int64_t ns);
+static const char **peak_platform_vulkan_get_extensions(uint32_t *count);
+static int peak_platform_vulkan_create_surface(PeakWindowInternal *intern, void *instance, const void *allocator, void *out_surface);
+static void peak_platform_audio_stop(void);
 
 static PeakWin32 peak_win32;
 static PeakUser32Api peak_user32;
@@ -211,7 +217,7 @@ peak_internal_win32_buffer(struct peak_win32_win *w, uint32_t width, uint32_t he
 {
 	uint32_t *buffer;
 
-	if (!(buffer = calloc((size_t)width * height, sizeof(*buffer))))
+	if (!(buffer = calloc((size_t)width * height, sizeof *buffer)))
 		return 0;
 	free(w->buffer);
 	w->buffer = buffer;
@@ -238,7 +244,7 @@ peak_internal_win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 
 	switch (msg) {
 	case WM_CLOSE:
-		memset(&ev, 0, sizeof(ev));
+		memset(&ev, 0, sizeof ev);
 		ev.type = PEAK_EVENT_WINDOW_CLOSE;
 		peak_q_push(&w->q, ev);
 		return 0;
@@ -253,7 +259,7 @@ peak_internal_win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 			return 0;
 		if (!peak_internal_win32_buffer(w, width, height))
 			return 0;
-		memset(&ev, 0, sizeof(ev));
+		memset(&ev, 0, sizeof ev);
 		ev.type = PEAK_EVENT_WINDOW_RESIZE;
 		ev.resize.width = w->width;
 		ev.resize.height = w->height;
@@ -264,7 +270,7 @@ peak_internal_win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 	case WM_KEYUP: /* FALLTHROUGH */
 	case WM_SYSKEYDOWN: /* FALLTHROUGH */
 	case WM_SYSKEYUP:
-		memset(&ev, 0, sizeof(ev));
+		memset(&ev, 0, sizeof ev);
 		ev.type = (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN) ? PEAK_EVENT_KEY_DOWN : PEAK_EVENT_KEY_UP;
 		ev.key.key = peak_internal_win32_key_map(wparam);
 		ev.key.mod = peak_internal_win32_mod_map();
@@ -277,7 +283,7 @@ peak_internal_win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 	case WM_RBUTTONUP: /* FALLTHROUGH */
 	case WM_MBUTTONDOWN: /* FALLTHROUGH */
 	case WM_MBUTTONUP:
-		memset(&ev, 0, sizeof(ev));
+		memset(&ev, 0, sizeof ev);
 		ev.type = PEAK_EVENT_POINTER;
 		ev.pointer.x = (float)(short)LOWORD(lparam);
 		ev.pointer.y = (float)(short)HIWORD(lparam);
@@ -339,8 +345,8 @@ peak_platform_init(void)
 		}
 	}
 	if (!peak_win32.class_reg) {
-		memset(&wc, 0, sizeof(wc));
-		wc.cbSize = sizeof(wc);
+		memset(&wc, 0, sizeof wc);
+		wc.cbSize = sizeof wc;
 		wc.style = CS_OWNDC;
 		wc.lpfnWndProc = peak_internal_win32_wndproc;
 		wc.hInstance = GetModuleHandleA(NULL);
@@ -377,7 +383,7 @@ peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uin
 	if (!peak_user32.CreateWindowExA && !peak_platform_init())
 		return intern;
 
-	if (!(w = calloc(1, sizeof(*w))))
+	if (!(w = calloc(1, sizeof *w)))
 		return intern;
 	if (!peak_internal_win32_buffer(w, width, height)) {
 		free(w);
@@ -459,8 +465,8 @@ peak_platform_window_present(PeakWindowInternal *intern)
 	if (!w || !w->hwnd || !w->hdc || !w->buffer)
 		return;
 
-	memset(&bmi, 0, sizeof(bmi));
-	bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+	memset(&bmi, 0, sizeof bmi);
+	bmi.bmiHeader.biSize = sizeof (BITMAPINFOHEADER);
 	bmi.bmiHeader.biWidth = (LONG)w->width;
 	bmi.bmiHeader.biHeight = -(LONG)w->height;
 	bmi.bmiHeader.biPlanes = 1;
@@ -534,7 +540,7 @@ peak_internal_win32_audio_fill(int i)
 	memset(peak_audio.pcm[i], 0, peak_audio.bytes);
 	if (peak_audio.fill)
 		peak_audio.fill(peak_audio.pcm[i], PEAK_AUDIO_FRAMES, peak_audio.userdata);
-	peak_winmm.waveOutWrite(peak_audio.out, &peak_audio.hdr[i], sizeof(WAVEHDR));
+	peak_winmm.waveOutWrite(peak_audio.out, &peak_audio.hdr[i], sizeof (WAVEHDR));
 }
 
 static DWORD WINAPI
@@ -572,7 +578,7 @@ peak_platform_audio_start(uint32_t channels, uint32_t rate, void (*fill)(int16_t
 	if (!peak_internal_winmm_load())
 		return 0;
 
-	memset(&fmt, 0, sizeof(fmt));
+	memset(&fmt, 0, sizeof fmt);
 	fmt.wFormatTag = WAVE_FORMAT_PCM;
 	fmt.nChannels = (WORD)channels;
 	fmt.nSamplesPerSec = rate;
@@ -591,7 +597,7 @@ peak_platform_audio_start(uint32_t channels, uint32_t rate, void (*fill)(int16_t
 	}
 
 	peak_audio.channels = channels;
-	peak_audio.bytes = (uint32_t)channels * PEAK_AUDIO_FRAMES * sizeof(int16_t);
+	peak_audio.bytes = (uint32_t)channels * PEAK_AUDIO_FRAMES * sizeof (int16_t);
 	peak_audio.fill = fill;
 	peak_audio.userdata = userdata;
 	peak_audio.run = 1;
@@ -599,10 +605,10 @@ peak_platform_audio_start(uint32_t channels, uint32_t rate, void (*fill)(int16_t
 	for (i = 0; i < PEAK_AUDIO_BUFFERS; i++) {
 		if (!(peak_audio.pcm[i] = calloc(1, peak_audio.bytes)))
 			goto fail;
-		memset(&peak_audio.hdr[i], 0, sizeof(peak_audio.hdr[i]));
+		memset(&peak_audio.hdr[i], 0, sizeof peak_audio.hdr[i]);
 		peak_audio.hdr[i].lpData = (LPSTR)peak_audio.pcm[i];
 		peak_audio.hdr[i].dwBufferLength = peak_audio.bytes;
-		if (peak_winmm.waveOutPrepareHeader(peak_audio.out, &peak_audio.hdr[i], sizeof(WAVEHDR)) != MMSYSERR_NOERROR)
+		if (peak_winmm.waveOutPrepareHeader(peak_audio.out, &peak_audio.hdr[i], sizeof (WAVEHDR)) != MMSYSERR_NOERROR)
 			goto fail;
 		peak_audio.hdr[i].dwFlags |= WHDR_DONE;
 	}
@@ -624,6 +630,7 @@ static uint64_t
 peak_platform_get_time(void)
 {
 	LARGE_INTEGER count, freq;
+
 	QueryPerformanceCounter(&count);
 	QueryPerformanceFrequency(&freq);
 	return (uint64_t)((count.QuadPart * 1000000000ull) / freq.QuadPart);
@@ -632,7 +639,8 @@ peak_platform_get_time(void)
 static void
 peak_platform_sleep_ns(int64_t ns)
 {
-	if (ns <= 0) return;
+	if (ns <= 0)
+		return;
 	Sleep((DWORD)(ns / 1000000));
 }
 
@@ -643,7 +651,8 @@ peak_platform_vulkan_get_extensions(uint32_t *count)
 		"VK_KHR_surface",
 		"VK_KHR_win32_surface",
 	};
-	if (count) *count = 2;
+	if (count)
+		*count = 2;
 	return exts;
 }
 
@@ -653,15 +662,20 @@ peak_platform_vulkan_create_surface(PeakWindowInternal *intern, void *instance, 
 #ifdef PEAK_VULKAN
 	struct peak_win32_win *w;
 	VkWin32SurfaceCreateInfoKHR ci;
+
 	w = intern ? intern->w : NULL;
-	if (!w || !w->hwnd) return 0;
+	if (!w || !w->hwnd)
+		return 0;
 	memset(&ci, 0, sizeof ci);
 	ci.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
 	ci.hwnd = w->hwnd;
 	ci.hinstance = GetModuleHandleA(NULL);
 	return vkCreateWin32SurfaceKHR((VkInstance)instance, &ci, (const VkAllocationCallbacks *)allocator, (VkSurfaceKHR *)out_surface) == VK_SUCCESS;
 #else
-	(void)intern; (void)instance; (void)allocator; (void)out_surface;
+	(void)intern;
+	(void)instance;
+	(void)allocator;
+	(void)out_surface;
 	return 0;
 #endif
 }
@@ -683,10 +697,10 @@ peak_platform_audio_stop(void)
 		peak_winmm.waveOutReset(peak_audio.out);
 		for (i = 0; i < PEAK_AUDIO_BUFFERS; i++) {
 			if (peak_audio.hdr[i].dwFlags & WHDR_PREPARED)
-				peak_winmm.waveOutUnprepareHeader(peak_audio.out, &peak_audio.hdr[i], sizeof(WAVEHDR));
+				peak_winmm.waveOutUnprepareHeader(peak_audio.out, &peak_audio.hdr[i], sizeof (WAVEHDR));
 			free(peak_audio.pcm[i]);
 			peak_audio.pcm[i] = NULL;
-			memset(&peak_audio.hdr[i], 0, sizeof(peak_audio.hdr[i]));
+			memset(&peak_audio.hdr[i], 0, sizeof peak_audio.hdr[i]);
 		}
 		peak_winmm.waveOutClose(peak_audio.out);
 		peak_audio.out = NULL;

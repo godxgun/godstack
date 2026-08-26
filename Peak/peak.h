@@ -18,7 +18,7 @@
 
 #define PEAK_MAJOR "0"
 #define PEAK_MINOR "6"
-#define PEAK_PATCH "2"
+#define PEAK_PATCH "3"
 
 /* CHANGE LOG 
  * 0.0.0 - @vasco - prototyping
@@ -41,6 +41,7 @@
  * 0.6.0 - @vasco - macos (Cocoa/Metal/AudioQueue)
  * 0.6.1 - @vasco - PEAK_WINDOW_TRANSPARENT (X11 ARGB visual)
  * 0.6.2 - @vasco - PEAK_HANDLE, pty, wait, sock, job, mirror ring
+ * 0.6.3 - @vasco - win32 sizeof style; platform fn prototypes
  */
 
 #define NANOS_PER_SEC 1000000000ull
