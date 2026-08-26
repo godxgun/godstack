@@ -10,7 +10,7 @@ Collection of modular and minimal libraries used by our software.
 
 | Name   | Version | Description                                |
 | ------ | ------- | ------------------------------------------ |
-| Poof   | 0.1.3   | Build system.                              |
+| Poof   | 0.1.4   | Build system.                              |
 | Peak   | 0.6.2   | Platform library that automatically links the correct system libraries. |
 | Grit   | 0.2.1   | Utilities: allocators, math, rng, software raster.  |
 | Fuse   | 0.8.0   | Immediate-mode UI command buffer.          |

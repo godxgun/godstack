@@ -16,15 +16,19 @@
 #if !defined(_WIN32) && !defined(_POSIX_C_SOURCE)
 #define _POSIX_C_SOURCE 200809L
 #endif
+#if defined(__APPLE__) && !defined(_DARWIN_C_SOURCE)
+#define _DARWIN_C_SOURCE
+#endif
 
 #define POOF_MAJOR 0
 #define POOF_MINOR 1
-#define POOF_PATCH 3
+#define POOF_PATCH 4
 
 /* CHANGE LOG
  * 0.1.1 - @vasco - rebuild finds poof.h from more paths
  * 0.1.2 - @vasco - include poof.c; no POOF_IMPLEMENTATION
  * 0.1.3 - @vasco - macos clang -x objective-c before sources
+ * 0.1.4 - @vasco - macos _SC_NPROCESSORS_ONLN via _DARWIN_C_SOURCE
  */
 
 #include <stdint.h>
