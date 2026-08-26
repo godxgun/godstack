@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#if defined(PEAK_WIN32) || defined(PEAK_WEB)
+#if defined(PEAK_WIN32) || defined(PEAK_WEB) || defined(PEAK_MACOS)
 #define PEAK_Q 64
 
 typedef struct {
@@ -35,6 +35,8 @@ peak_q_pop(PeakQ *q, PeakEvent *ev)
 #include "p_win32.c"
 #elif defined(PEAK_LINUX)
 #include "p_linux.c"
+#elif defined(PEAK_MACOS)
+#include "p_macos.c"
 #elif defined(PEAK_WEB)
 #include "p_emscripten.c"
 #endif

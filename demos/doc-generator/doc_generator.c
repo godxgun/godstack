@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200809L
+
 /*
  * This simple demo illustrates how I use this library to generate my documentation.
  * Could be used either statically or live because it's as simple as executing doc_generator
@@ -7,8 +9,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
-#include "../cool.h"
-#include "../cool.c"
+#include "cool.h"
+#include "cool.c"
 
 #include "view.cool.c"
 

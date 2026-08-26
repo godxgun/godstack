@@ -226,6 +226,12 @@ poof__cc_build_cmd(const Poof_CC *cc, uint8_t target_platform, bool multi_target
         poof_cmd_append(&cmd, strdup(buf));
     }
 
+    /* AppKit is ObjC. -x is positional and must precede the source. */
+    if (target_platform == POOF_TARGET_MACOS && !is_msvc) {
+        poof_cmd_append(&cmd, "-x");
+        poof_cmd_append(&cmd, "objective-c");
+    }
+
     // Input files
     for (size_t i = 0; i < cc->inputs.count; ++i) {
         poof_cmd_append(&cmd, cc->inputs.items[i]);

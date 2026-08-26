@@ -110,6 +110,21 @@ build_grit_demo(void)
 }
 
 static bool
+build_cool_demo(void)
+{
+    Poof_CC cc = {0};
+    poof_mkdir("demos/doc-generator");
+    poof_cc_init(&cc, POOF_CC_GCC | POOF_CC_CLANG, POOF_TARGET_HOST);
+    cc.debug_mode = true;
+    cc.optimization = POOF_O0;
+    cc.output = "demos/doc-generator/doc_generator";
+    poof_cmd_append(&cc.inputs, "demos/doc-generator/doc_generator.c");
+    poof_cmd_append(&cc.includes, ".", "Cool");
+    poof_cmd_append(&cc.extra_flags, "-std=c99", "-Wall", "-Werror");
+    return poof_cc_run(&cc);
+}
+
+static bool
 build_rend_demos(void)
 {
     poof_mkdir("demos/compute");
@@ -151,6 +166,7 @@ main(int argc, char **argv)
     if (!build_peak_demos()) return 1;
     if (!build_fuse_test()) return 1;
     if (!build_grit_demo()) return 1;
+    if (!build_cool_demo()) return 1;
     if (!build_rend_demos()) return 1;
     return 0;
 }

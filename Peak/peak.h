@@ -17,8 +17,8 @@
 #endif
 
 #define PEAK_MAJOR "0"
-#define PEAK_MINOR "5"
-#define PEAK_PATCH "9"
+#define PEAK_MINOR "6"
+#define PEAK_PATCH "0"
 
 /* CHANGE LOG 
  * 0.0.0 - @vasco - prototyping
@@ -38,6 +38,7 @@
  * 0.5.7 - @vasco - peak_window_fd; X11 ConnectionNumber
  * 0.5.8 - @vasco - peak_window_pending; XPending so idle poll can sleep
  * 0.5.9 - @vasco - wheel up/down as PeakPointerType (X11 Button4/5)
+ * 0.6.0 - @vasco - macos (Cocoa/Metal/AudioQueue)
  */
 
 #define NANOS_PER_SEC 1000000000ull
@@ -90,6 +91,8 @@
 #define VK_USE_PLATFORM_XLIB_KHR
 #elif defined(PEAK_WIN32) && !defined(VK_USE_PLATFORM_WIN32_KHR)
 #define VK_USE_PLATFORM_WIN32_KHR
+#elif defined(PEAK_MACOS) && !defined(VK_USE_PLATFORM_METAL_EXT)
+#define VK_USE_PLATFORM_METAL_EXT
 #endif
 #endif
 

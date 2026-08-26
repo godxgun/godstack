@@ -10,8 +10,8 @@ Collection of modular and minimal libraries used by our games.
 
 | Name   | Version | Description                                |
 | ------ | ------- | ------------------------------------------ |
-| Poof   | 0.1.2   | Build system.                              |
-| Peak   | 0.5.9   | Platform library that automatically links the correct system libraries. |
+| Poof   | 0.1.3   | Build system.                              |
+| Peak   | 0.6.0   | Platform library that automatically links the correct system libraries. |
 | Grit   | 0.2.1   | Utilities: allocators, math, rng, software raster.  |
 | Fuse   | 0.8.0   | Immediate-mode UI command buffer.          |
 | Term   | 0.3.3   | Cell-grid terminal emulator.               |

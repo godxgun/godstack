@@ -19,11 +19,12 @@
 
 #define POOF_MAJOR 0
 #define POOF_MINOR 1
-#define POOF_PATCH 2
+#define POOF_PATCH 3
 
 /* CHANGE LOG
  * 0.1.1 - @vasco - rebuild finds poof.h from more paths
  * 0.1.2 - @vasco - include poof.c; no POOF_IMPLEMENTATION
+ * 0.1.3 - @vasco - macos clang -x objective-c before sources
  */
 
 #include <stdint.h>
