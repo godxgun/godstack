@@ -7,3 +7,7 @@ COOL void Api(char *name, char *func, char *desc) {
         </div>
     </div>
 }
+
+COOL void LibLink(char *name) {
+    <a class="lib" href="/{ name }">{ name }</a>
+}

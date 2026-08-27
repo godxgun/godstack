@@ -19,7 +19,11 @@ COOL void Api(char *name, char *func, char *desc) {
 }
 ```
 
-Call `compiler.py` to get `view.cool.c` and include it into your code.
+Call `cool_transpiler` to get `view.cool.c` and include it into your code.
+
+```
+./bin/cool_transpiler view.cool -o view.cool.c
+```
 
 ```c
 #include "views.cool.c" // include server side components directly

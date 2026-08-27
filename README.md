@@ -8,15 +8,26 @@
 
 Collection of modular and minimal libraries used by our software.
 
+## Core
 | Name   | Version | Description                                |
 | ------ | ------- | ------------------------------------------ |
 | Poof   | 0.1.4   | Build system.                              |
 | Peak   | 0.7.0   | Platform library that automatically links the correct system libraries. |
-| Grit   | 0.2.1   | Utilities: allocators, math, rng, software raster.  |
 | Fuse   | 0.8.0   | Immediate-mode UI command buffer.          |
-| Term   | 0.4.3   | Cell-grid terminal emulator.               |
 | Rend   | 1.6.2   | Modern graphics API layer.                 |
-| Cool   | 0.0.3   | Render HTML by calling functions.          |
+
+## Utilities
+| Name   | Version | Description                                |
+| ------ | ------- | ------------------------------------------ |
+| Grit   | 0.2.1   | Allocators, math, rng, software raster.    |
+| Cast   | 0.0.0   | C parser.                                  |
+| Term   | 0.4.3   | Cell-grid terminal emulator as seen in [VT](https://github.com/vascoalvesxyz/vt) |
+
+## Web Related
+| Name   | Version | Description                                |
+| ------ | ------- | ------------------------------------------ |
+| Cool   | 0.0.3   | HTML templating.                           |
+| Wire   | 0.1.0   | HTTP server.                               |
 
 ## Installing
 

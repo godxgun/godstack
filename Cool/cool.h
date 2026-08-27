@@ -70,8 +70,8 @@
 
 /* CHANGE LOG
  * 0.0.0 - @vasco - server-side HTML from C functions
- * 0.0.1 - COOL_OUTPUT override, cool_html_txt scans *s;
- *         drop unused URL table, stub cool_html / cool_htmlf, cool_sv_write
+ * 0.0.1 - @vasco - COOL_OUTPUT override, cool_html_txt scans *s;
+ *                  drop unused URL table, stub cool_html / cool_htmlf, cool_sv_write
  * 0.0.2 - @vasco - include cool.c
  * 0.0.3 - @vasco - html_txt escape without nested raw
  */

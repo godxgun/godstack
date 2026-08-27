@@ -119,7 +119,7 @@ build_cool_demo(void)
     cc.optimization = POOF_O0;
     cc.output = "demos/doc-generator/doc_generator";
     poof_cmd_append(&cc.inputs, "demos/doc-generator/doc_generator.c");
-    poof_cmd_append(&cc.includes, ".", "Cool");
+    poof_cmd_append(&cc.includes, ".", "Cool", "Wire");
     poof_cmd_append(&cc.extra_flags, "-std=c99", "-Wall", "-Werror");
     return poof_cc_run(&cc);
 }
@@ -174,6 +174,36 @@ build_rend_demos(void)
 }
 
 static bool
+build_cast_test(void)
+{
+    Poof_CC cc = {0};
+    poof_cc_init(&cc, POOF_CC_GCC | POOF_CC_CLANG, POOF_TARGET_HOST);
+    cc.debug_mode = true;
+    cc.optimization = POOF_O0;
+    cc.output = "Cast/cast_test";
+    poof_cmd_append(&cc.inputs, "Cast/cast_test.c");
+    poof_cmd_append(&cc.includes, "Cast");
+    poof_cmd_append(&cc.defines, "CAST_DEBUG");
+    poof_cmd_append(&cc.extra_flags, "-std=c99", "-Wall", "-Werror");
+    return poof_cc_run(&cc);
+}
+
+static bool
+build_cool_transpiler(void)
+{
+    Poof_CC cc = {0};
+    poof_mkdir("bin");
+    poof_cc_init(&cc, POOF_CC_GCC | POOF_CC_CLANG, POOF_TARGET_HOST);
+    cc.debug_mode = true;
+    cc.optimization = POOF_O0;
+    cc.output = "bin/cool_transpiler";
+    poof_cmd_append(&cc.inputs, "Cool/cool_transpiler.c");
+    poof_cmd_append(&cc.includes, "Cast");
+    poof_cmd_append(&cc.extra_flags, "-std=c99", "-Wall", "-Werror");
+    return poof_cc_run(&cc);
+}
+
+static bool
 build_rend_cpu_test(void)
 {
     Poof_CC cc = {0};
@@ -208,6 +238,15 @@ run_tests(void)
 
     cmd = (Poof_Cmd){0};
     poof_cmd_append(&cmd, "./Fuse/fuse_test");
+    if (!run_one(&cmd)) return false;
+
+    cmd = (Poof_Cmd){0};
+    poof_cmd_append(&cmd, "./Cast/cast_test");
+    if (!run_one(&cmd)) return false;
+
+    cmd = (Poof_Cmd){0};
+    poof_cmd_append(&cmd, "sh", "-c",
+        "./bin/cool_transpiler demos/doc-generator/view.cool | cmp -s - demos/doc-generator/view.cool.c");
     if (!run_one(&cmd)) return false;
 
     cmd = (Poof_Cmd){0};
@@ -265,6 +304,8 @@ main(int argc, char **argv)
     if (!build_term_demo()) return 1;
     if (!build_cool_demo()) return 1;
     if (!build_rend_demos()) return 1;
+    if (!build_cast_test()) return 1;
+    if (!build_cool_transpiler()) return 1;
     if (!build_rend_cpu_test()) return 1;
     if (test && !run_tests()) return 1;
     return 0;

@@ -8,3 +8,12 @@ void Api(char *name, char *func, char *desc) {
     cool_html_raw(COOL_SV("\n        </div>\n    </div>\n"));
 }
 
+
+void LibLink(char *name) {
+    cool_html_raw(COOL_SV("    <a class=\"lib\" href=\"/"));
+    cool_html_txt(name, strlen(name));
+    cool_html_raw(COOL_SV("\">"));
+    cool_html_txt(name, strlen(name));
+    cool_html_raw(COOL_SV("</a>\n"));
+}
+
