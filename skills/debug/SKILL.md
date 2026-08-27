@@ -23,12 +23,34 @@ Fewer failure points beat more checks.
 
 Propose those cuts. Do not apply until the user agrees.
 
+# Assert, don't guard
+
+Default is `MASSERT`. Not `if (!p) return`.
+
+- Contract is already forbidden by assert. Do not also handle it.
+- After `MASSERT(p)`, use `p`. No second `if (!p)`.
+- Do not add a release-only guard "in case the assert is off".
+- `if` / `return false` / `NULL` only when the failure is real at runtime
+  (device lost, skip a frame, init that can fail on a good machine).
+
+Wrong:
+
+    MASSERT(obj && obj->ctx, "Invalid obj.");
+    if (!obj)
+        return;
+
+Right:
+
+    MASSERT(obj && obj->ctx, "Invalid obj.");
+    obj->ctx->...
+
 # Debug vs release
 
 `MOD_DEBUG` on: crash at the fault.
 `MOD_DEBUG` off: do not crash. User-visible failure is `false`, `NULL`, or a safe stub.
 
-- Contract (caller broke the API) — `MASSERT`. Debug abort, release no-op.
+- Contract (caller broke the API) — `MASSERT` only. Debug abort, release no-op.
+  Then assume. No matching guard.
 - Recoverable (skip a frame) — return `false` / `NULL` / stub. Same in both.
 - Non-recoverable (init failed, cannot continue) — debug crash, release `return false` / `NULL` so the caller can shut down.
 - Unfinished path — `MOD_TODO`. Always abort. Do not ship.
@@ -63,14 +85,10 @@ Do not invent a second set. Reuse the module's existing macros.
 
 - `MASSERT(p)` / `MASSERT(p, "why")` — caller contract. NULL handle, wrong phase, missing hook.
 - `MOD__WARN(...)` — continue, but say so.
-- Return `false` / `NULL` / stub — recoverable, or the release path of a non-recoverable failure.
+- Return `false` / `NULL` / stub — recoverable runtime failure only, or the release path of a non-recoverable failure.
 - `MOD_TODO` — a path that must not run yet.
 
-Do not wrap every call. Release still needs a path:
-
-    MASSERT(obj && obj->ctx, "Invalid obj.");
-    if (!obj)
-        return;
+Do not wrap every call. Assert at the boundary, then assume.
 
 Non-recoverable (init, cannot continue). Debug never reaches `return`:
 

@@ -12,7 +12,7 @@
 
 #define REND_MAJOR 1  // breaking API changes
 #define REND_MINOR 5  // non-breaking features
-#define REND_PATCH 0  // non-breaking patches and bug fixes
+#define REND_PATCH 1  // non-breaking patches and bug fixes
                     
 #ifndef PEAK_VULKAN
 #define PEAK_VULKAN
@@ -308,6 +308,7 @@ enum RendBufferType_t {
  * 1.3.0 - @vasco - rend_renderer_color_target: borrowed default color + extent/format
  * 1.4.0 - @vasco - rend_buffer_mapped; texture_id / set_blend; reuse staging
  * 1.5.0 - @vasco - in-frame buffer to texture; blit-only present
+ * 1.5.1 - @vasco - no per-frame surface query; SUBOPTIMAL recreates once; host arena stays
  */
 
 /*

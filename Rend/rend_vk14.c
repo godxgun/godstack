@@ -9,6 +9,7 @@
  * * 1.3.0 - @vasco - wrap swapchain/offscreen images as borrowed RendTexture
  * * 1.4.0 - @vasco - window pass uses color_target; drop renderer_read
  * * 1.5.0 - @vasco - in-frame copy_buffer; blit-only present barrier
+ * * 1.5.1 - @vasco - no per-frame surface query; SUBOPTIMAL recreates once; host arena stays
  */
 
 #include <stdbool.h>
@@ -81,6 +82,9 @@ typedef struct RendVk14Context {
 	uint32_t image_index;
 
 	bool require_swapchain_recreation;
+	bool swapchain_suboptimal;
+	uint32_t window_w;
+	uint32_t window_h;
 
 	bool vsync;
 	bool in_frame;
@@ -527,19 +531,10 @@ rend_vk14_renderer_frame_begin(RendContextHandle handle)
 		if (ctx->window && (ctx->window->width == 0 || ctx->window->height == 0))
 			return false;
 
-		if (!ctx->offscreen) {
-			VkSurfaceCapabilitiesKHR caps;
-			VkExtent2D extent;
-
-			if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk_device.physical_device, ctx->surface, &caps) != VK_SUCCESS)
-				return false;
-			if (caps.currentExtent.width == 0 || caps.currentExtent.height == 0)
-				return false;
-			extent = rend_vk14_surface_extent(ctx, &caps);
-			if (extent.width != ctx->swapchain.extent.width ||
-					extent.height != ctx->swapchain.extent.height)
-				ctx->require_swapchain_recreation = true;
-		}
+		if (!ctx->offscreen && ctx->window &&
+				(ctx->window->width != ctx->window_w ||
+				 ctx->window->height != ctx->window_h))
+			ctx->require_swapchain_recreation = true;
 
 		if (!ctx->offscreen && ctx->require_swapchain_recreation) {
 			PDEBUG("[REND] Awaiting device...");
@@ -588,9 +583,14 @@ rend_vk14_renderer_frame_begin(RendContextHandle handle)
 				continue;
 			}
 			if (acquire_image == VK_SUBOPTIMAL_KHR) {
-				ctx->require_swapchain_recreation = true;
+				if (!ctx->swapchain_suboptimal) {
+					ctx->require_swapchain_recreation = true;
+					ctx->swapchain_suboptimal = true;
+				}
 			} else if (acquire_image != VK_SUCCESS) {
 				return false;
+			} else {
+				ctx->swapchain_suboptimal = false;
 			}
 		}
 
@@ -691,8 +691,6 @@ rend_vk14_renderer_frame_end(RendContextHandle handle, float *delta)
 {
 	RendVk14Context *ctx = (RendVk14Context *)handle;
 	RendTexture *color_end;
-	struct timespec now;
-	float dt;
 
 	RASSERT(ctx, "Uninitialized renderer.");
 
@@ -803,28 +801,34 @@ rend_vk14_renderer_frame_end(RendContextHandle handle, float *delta)
 		VkResult present_res;
 
 		present_res = vkQueuePresentKHR(vk_device.present_queue, &present_info);
-		if (present_res == VK_ERROR_OUT_OF_DATE_KHR || present_res == VK_SUBOPTIMAL_KHR)
+		if (present_res == VK_ERROR_OUT_OF_DATE_KHR)
 			ctx->require_swapchain_recreation = true;
+		else if (present_res == VK_SUBOPTIMAL_KHR && !ctx->swapchain_suboptimal) {
+			ctx->require_swapchain_recreation = true;
+			ctx->swapchain_suboptimal = true;
+		}
 	}
 
 	ctx->frame++;
 	ctx->in_frame = false;
 
-	clock_gettime(CLOCK_MONOTONIC, &now);
-	if (ctx->has_frame_time) {
-		dt = (float)(now.tv_sec - ctx->frame_time.tv_sec) +
-			(float)(now.tv_nsec - ctx->frame_time.tv_nsec) * 1e-9f;
-	} else {
-		dt = 0.f;
-	}
-	ctx->frame_time = now;
-	ctx->has_frame_time = true;
-	if (delta)
-		*delta = dt;
+	if (delta) {
+		struct timespec now;
+		float dt;
 
-	/* clear host mapped memory */
+		clock_gettime(CLOCK_MONOTONIC, &now);
+		if (ctx->has_frame_time) {
+			dt = (float)(now.tv_sec - ctx->frame_time.tv_sec) +
+				(float)(now.tv_nsec - ctx->frame_time.tv_nsec) * 1e-9f;
+		} else {
+			dt = 0.f;
+		}
+		ctx->frame_time = now;
+		ctx->has_frame_time = true;
+		*delta = dt;
+	}
+
 	rend_vk_arena_clear_all(&ctx->arena_frame);
-	rend_vk_arena_clear(&ctx->arena_persistent, vk_device.host_index);
 }
 
 static inline void
@@ -1991,33 +1995,31 @@ rend_vk14_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain, VkS
 	 * We also may want immediate mode if we want to disable VSYNC.
 	 */
 
-	/* default present mode */
+	/* vsync: MAILBOX else FIFO. no vsync: IMMEDIATE else MAILBOX else FIFO. */
 	VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
+	VkPresentModeKHR preferred = ctx->vsync ? VK_PRESENT_MODE_MAILBOX_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
+	VkPresentModeKHR second = ctx->vsync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_MAILBOX_KHR;
+	int have_pref = 0;
+	int have_second = 0;
+	const char *mode_name = "FIFO";
 	for (i = 0; i < vk_device.swapchain_support.present_mode_count; i++) {
 		VkPresentModeKHR pres = vk_device.swapchain_support.present_modes[i];
-		/* preferred format is mailbox */
-		if (ctx->vsync) {
-			if (pres == VK_PRESENT_MODE_MAILBOX_KHR) {
-				present_mode = pres;
-				break;
-			}
-		} else {
-			if (pres == VK_PRESENT_MODE_IMMEDIATE_KHR) {
-				present_mode = pres;
-				break;
-			}
-		}
+		if (pres == preferred)
+			have_pref = 1;
+		if (pres == second)
+			have_second = 1;
 	}
-
-#ifdef REND_DEBUG
-	static const char* present_mode_names[] = {
-		[VK_PRESENT_MODE_IMMEDIATE_KHR] = "IMMEDIATE",
-		[VK_PRESENT_MODE_MAILBOX_KHR] = "MAILBOX",
-		[VK_PRESENT_MODE_FIFO_KHR] = "FIFO",
-		[VK_PRESENT_MODE_FIFO_RELAXED_KHR] = "FIFO_RELAXED"
-	};
-	PDEBUG("Present mode %s was chosen!", present_mode_names[present_mode]);
-#endif
+	if (have_pref)
+		present_mode = preferred;
+	else if (have_second)
+		present_mode = second;
+	if (present_mode == VK_PRESENT_MODE_IMMEDIATE_KHR)
+		mode_name = "IMMEDIATE";
+	else if (present_mode == VK_PRESENT_MODE_MAILBOX_KHR)
+		mode_name = "MAILBOX";
+	else if (present_mode == VK_PRESENT_MODE_FIFO_RELAXED_KHR)
+		mode_name = "FIFO_RELAXED";
+	PINFO("Present mode %s", mode_name);
 
 	uint32_t img_count = surface_caps.minImageCount + 1;
 	if (surface_caps.maxImageCount > 0 && img_count > surface_caps.maxImageCount) {
@@ -2197,6 +2199,10 @@ rend_vk14_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain, VkS
 			);
 
 	swapchain->extent = swapchain_extent;
+	if (ctx->window) {
+		ctx->window_w = ctx->window->width;
+		ctx->window_h = ctx->window->height;
+	}
 	return true;
 }
 

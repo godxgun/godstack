@@ -1725,28 +1725,63 @@ term_feed(Term *t, const char *bytes, size_t len)
 }
 
 void
-term_feed_ascii(Term *t, const char *bytes, size_t len)
+term_feed_printable(Term *t, const char *bytes, size_t len)
 {
+    /* NOTE(vasco): 0x20-0x7E only. Ground state. */
     size_t i;
 
-    TASSERT(t, "Invalid term.");
-    if (!t || !bytes || !len)
+    TASSERT(t && bytes, "Invalid term.");
+    TASSERT(!(t->state & TERM_ESC_START) && !t->utf8_rem);
+    if (!len)
         return;
-    if ((t->state & TERM_ESC_START) || t->utf8_rem) {
-        term_feed(t, bytes, len);
-        return;
-    }
 
     for (i = 0; i < len; i++) {
         unsigned char ch = (unsigned char)bytes[i];
 
-        if (ch == '\n')
-            term_lf(t);
-        else if (ch == '\r')
-            term_move_to(t, 0, t->cursor.y);
-        else {
-            t->last_ch = ch;
-            term_putc(t, ch);
-        }
+        TASSERT(ch >= 0x20 && ch < 0x7F);
+        t->last_ch = ch;
+        term_putc(t, ch);
     }
+}
+
+void
+term_feed_utf8(Term *t, const char *bytes, size_t len)
+{
+    /* NOTE(vasco): complete UTF-8, high bytes only. Ground state. */
+    size_t i;
+
+    TASSERT(t && bytes, "Invalid term.");
+    TASSERT(!(t->state & TERM_ESC_START) && !t->utf8_rem);
+    if (!len)
+        return;
+
+    for (i = 0; i < len; i++) {
+        unsigned char ch = (unsigned char)bytes[i];
+        uint32_t cp;
+        int st;
+
+        TASSERT(ch >= 0x80);
+        st = term_utf8_consume(t, ch, &cp);
+        if (st == 0)
+            continue;
+        TASSERT(st == 1);
+        t->last_ch = cp;
+        term_putc(t, cp);
+    }
+    TASSERT(!t->utf8_rem);
+}
+
+void
+term_feed_escape(Term *t, const char *bytes, size_t len)
+{
+    /* NOTE(vasco): C0 / ESC / CSI / OSC. 7-bit. Complete sequences. Ground state. */
+    size_t i;
+
+    TASSERT(t && bytes, "Invalid term.");
+    TASSERT(!(t->state & TERM_ESC_START) && !t->utf8_rem);
+    if (!len)
+        return;
+    TASSERT((unsigned char)bytes[0] < 0x20 || (unsigned char)bytes[0] == 0x7F);
+    for (i = 0; i < len; i++)
+        term_char_feed(t, (unsigned char)bytes[i]);
 }

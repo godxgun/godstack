@@ -24,8 +24,8 @@
 #define TERM_H
 
 #define TERM_MAJOR 0
-#define TERM_MINOR 3
-#define TERM_PATCH 7
+#define TERM_MINOR 4
+#define TERM_PATCH 1
 
 /* CHANGE LOG
  * 0.1.0 - @vasco - extract from vt: feed, grid, live CSI
@@ -39,6 +39,8 @@
  * 0.3.6 - @vasco - term_init_on / term_resize_on: external screen/alt storage
  * 0.3.7 - @vasco - dirty putc, LF=IND, DECSTBM 1-line, CUU/CUD margins,
  *                  DECALN, RIS, ACS G0, resize_on adopt; TERM_MAX
+ * 0.4.0 - @vasco - typed feed: printable / utf8 / escape / any
+ * 0.4.1 - @vasco - printable is 0x20-0x7E; utf8 is high bytes; CR/LF is escape
  */
 
 #include <assert.h>
@@ -190,8 +192,10 @@ void term_destroy(Term *t);
 void term_resize(Term *t, uint32_t cols, uint32_t rows);
 void term_resize_on(Term *t, uint32_t cols, uint32_t rows,
     TermCell *screen, TermCell *alt, uint32_t cap);
-void term_feed(Term *t, const char *bytes, size_t len);
-void term_feed_ascii(Term *t, const char *bytes, size_t len); /* no ESC, no UTF-8; CR/LF/putc only */
+void term_feed(Term *t, const char *bytes, size_t len); /* any; vt avoids this */
+void term_feed_printable(Term *t, const char *bytes, size_t len); /* 0x20-0x7E */
+void term_feed_utf8(Term *t, const char *bytes, size_t len); /* complete UTF-8, high bytes */
+void term_feed_escape(Term *t, const char *bytes, size_t len); /* C0 / ESC / CSI / OSC; 7-bit */
 TermScreen *term_screen(Term *t);
 uint32_t term_hist_count(const Term *t);
 const TermCell *term_hist_line(const Term *t, uint32_t back);
