@@ -1,9 +1,33 @@
-/* ===========================================================================   
+/* ===========================================================================
  * PEAK - Copyright @ Vasco Alves - See LICENSE at the end of file.
- * 
+ *
  * Platform layer.
  * It just works, don't think about it too much.
- *   
+ *
+ * PREFIX: PEAK (macros)  Peak (types)  peak_ (functions)
+ *
+ * MACRO FLAGS (you define):
+ * - PEAK_VULKAN         Vulkan WSI. Sets VK_USE_PLATFORM_*.
+ * - P_LOG_WARN_ENABLED  default 1. PWARN.
+ * - P_LOG_INFO_ENABLED  default 1. PINFO.
+ * - P_LOG_DEBUG_ENABLED default 0. PDEBUG.
+ * - P_LOG_TRACE_ENABLED default 0. PTRACE.
+ *
+ * DEFINED:
+ * - PEAK_WEB                wasm / emscripten
+ * - PEAK_WIN32              Windows
+ * - PEAK_APPLE              Darwin
+ * - PEAK_IOS                iPhone
+ * - PEAK_MACOS              macOS
+ * - PEAK_ANDROID            also PEAK_LINUX
+ * - PEAK_LINUX              Linux
+ * - PEAK_BSD                *BSD
+ * - PEAK_UNIX               Linux / BSD / Apple
+ * - PEAK_WINDOW_TRANSPARENT window_open: ARGB visual
+ * - PEAK_HANDLE             fd, or HANDLE on Win32
+ * - PEAK_HANDLE_INVALID     closed / failed
+ * - PEAK                    extern
+ *
  * =========================================================================== */
 
 #ifndef PEAK_H
@@ -17,8 +41,8 @@
 #endif
 
 #define PEAK_MAJOR "0"
-#define PEAK_MINOR "6"
-#define PEAK_PATCH "6"
+#define PEAK_MINOR "7"
+#define PEAK_PATCH "0"
 
 /* CHANGE LOG 
  * 0.0.0 - @vasco - prototyping
@@ -45,6 +69,7 @@
  * 0.6.4 - @vasco - win32 audio_stop before start
  * 0.6.5 - @vasco - ISO_Left_Tab; linux syscall prototype
  * 0.6.6 - @vasco - pending is this window only; WSI events no longer spin poll
+ * 0.7.0 - @vasco - clipboard; keymod flags; Insert; pointer.mod; PEAK_EVENT_CLIP
  */
 
 #define NANOS_PER_SEC 1000000000ull
@@ -168,24 +193,29 @@ static const char *p_prefix[P_COUNT_LOG_LEVEL] = {
 #endif
 
 typedef enum {
-    PEAK_KEYMOD_NONE = 0,
-    PEAK_KEYMOD_ALT,
-    PEAK_KEYMOD_SHIFT,
-    PEAK_KEYMOD_CTRL,
-    PEAK_KEYMOD_CAPS,
+    PEAK_KEYMOD_NONE  = 0,
+    PEAK_KEYMOD_SHIFT = 1 << 0,
+    PEAK_KEYMOD_CTRL  = 1 << 1,
+    PEAK_KEYMOD_ALT   = 1 << 2,
+    PEAK_KEYMOD_CAPS  = 1 << 3,
 } PeakKeyMod;
 
 typedef enum {
     PEAK_KEY_UNKNOWN = 0,
     PEAK_KEY_UP, PEAK_KEY_DOWN, PEAK_KEY_LEFT, PEAK_KEY_RIGHT,
     PEAK_KEY_SPACE, PEAK_KEY_ESCAPE, PEAK_KEY_ENTER,
-    PEAK_KEY_BACKSPACE, PEAK_KEY_TAB, PEAK_KEY_DELETE,
+    PEAK_KEY_BACKSPACE, PEAK_KEY_TAB, PEAK_KEY_DELETE, PEAK_KEY_INSERT,
     PEAK_KEY_0, PEAK_KEY_1, PEAK_KEY_2, PEAK_KEY_3, PEAK_KEY_4,
     PEAK_KEY_5, PEAK_KEY_6, PEAK_KEY_7, PEAK_KEY_8, PEAK_KEY_9,
     PEAK_KEY_A, PEAK_KEY_B, PEAK_KEY_C, PEAK_KEY_D, PEAK_KEY_E, PEAK_KEY_F, PEAK_KEY_G, PEAK_KEY_H, PEAK_KEY_I,
     PEAK_KEY_J, PEAK_KEY_K, PEAK_KEY_L, PEAK_KEY_M, PEAK_KEY_N, PEAK_KEY_O, PEAK_KEY_P, PEAK_KEY_Q, PEAK_KEY_R,
     PEAK_KEY_S, PEAK_KEY_T, PEAK_KEY_U, PEAK_KEY_V, PEAK_KEY_W, PEAK_KEY_X, PEAK_KEY_Y, PEAK_KEY_Z,
 } PeakKeyCode;
+
+typedef enum {
+    PEAK_CLIP_CLIPBOARD = 0, /* Ctrl-C/V, OSC 52 */
+    PEAK_CLIP_PRIMARY,       /* mouse select, middle paste */
+} PeakClip;
 
 typedef enum {
     PEAK_EVENT_NONE = 0,
@@ -196,6 +226,7 @@ typedef enum {
     PEAK_EVENT_POINTER,
     PEAK_EVENT_POINTER_CONNECTED,
     PEAK_EVENT_POINTER_DISCONNECTED,
+    PEAK_EVENT_CLIP,
     PEAK_EVENT_LAST
 } PeakEventType;
 
@@ -219,7 +250,8 @@ typedef struct {
     union {
         struct { PeakKeyCode key; PeakKeyMod mod; uint32_t code; } key;
         struct { uint32_t width, height; } resize;
-        struct { PeakPointerState state; PeakPointerType type; float x, y; } pointer;
+        struct { PeakPointerState state; PeakPointerType type; float x, y; PeakKeyMod mod; } pointer;
+        struct { PeakClip which; size_t n; } clip;
     };
 } PeakEvent;
 
@@ -307,6 +339,12 @@ PEAK void   peak_mirror_unmap(void *p, size_t size);
 /* Graphics API bull... */
 PEAK const char **peak_vulkan_get_extensions(uint32_t *count); // Get vulkan extensions.
 PEAK int peak_vulkan_create_surface(PeakWindow *win, void *instance, const void *allocator, void *out_surface); // Create a vulkan surface for a window. Needs PEAK_VULKAN.
+
+/* UTF-8 clipboard. Cap 1 MiB. win NULL: process-local slot. PRIMARY aliases
+ * CLIPBOARD on Win32/macOS/web. request completes as PEAK_EVENT_CLIP; take copies. */
+PEAK int peak_clip_set(PeakWindow *win, PeakClip which, const char *utf8, size_t n);
+PEAK int peak_clip_request(PeakWindow *win, PeakClip which);
+PEAK int peak_clip_take(PeakWindow *win, char *dst, size_t cap, size_t *n);
 
 /* Debug your amazing code. */
 PEAK void peak_log_printf(PeakLogLevel level, const char *src, ...); // Printf with log level.

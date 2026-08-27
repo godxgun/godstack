@@ -45,6 +45,7 @@ enum RendPipelineType {
     REND__PIPELINE_GRAPHICS,
     REND__PIPELINE_COMPUTE,
     REND__PIPELINE_MESH,
+    REND__PIPELINE_GRAPHICS_C,
 };
 
 typedef struct rend_pipeline_config_t {

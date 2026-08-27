@@ -46,7 +46,13 @@
 	X(XPending,            int, (Display *)) \
 	X(XLookupKeysym,       KeySym, (XKeyEvent *, int)) \
 	X(XLookupString,       int, (XKeyEvent *, char *, int, KeySym *, XComposeStatus *)) \
-	X(XPutImage,           int, (Display *, Drawable, GC, XImage *, int, int, int, int, unsigned int, unsigned int))
+	X(XPutImage,           int, (Display *, Drawable, GC, XImage *, int, int, int, int, unsigned int, unsigned int)) \
+	X(XSetSelectionOwner,  int, (Display *, Atom, Window, Time)) \
+	X(XConvertSelection,   int, (Display *, Atom, Atom, Atom, Window, Time)) \
+	X(XChangeProperty,     int, (Display *, Window, Atom, Atom, int, int, const unsigned char *, int)) \
+	X(XGetWindowProperty,  int, (Display *, Window, Atom, long, long, Bool, Atom, Atom *, int *, unsigned long *, unsigned long *, unsigned char **)) \
+	X(XDeleteProperty,     int, (Display *, Window, Atom)) \
+	X(XSendEvent,          Status, (Display *, Window, Bool, long, XEvent *))
 
 typedef struct {
 #define X(name, ret, args) ret (*name) args;
@@ -69,6 +75,12 @@ typedef struct {
 typedef struct {
 	Display *display;
 	Atom wm_delete_window;
+	Atom clip_clipboard;
+	Atom clip_utf8;
+	Atom clip_targets;
+	Atom clip_incr;
+	Atom clip_text;
+	Atom clip_prop;
 } PeakLinux;
 
 typedef struct {
@@ -98,6 +110,13 @@ struct peak_linux_win {
 static PeakLinux peak_linux;
 static PeakX11Api peak_x11;
 static PeakPulseApi peak_pulse;
+static char *peak_clip_incr;
+static size_t peak_clip_incr_n;
+static PeakClip peak_clip_incr_which;
+static int peak_clip_incr_on;
+static PeakClip peak_clip_req_which;
+static int peak_clip_req_on;
+static int peak_clip_req_xa;
 static PeakAudio peak_audio;
 
 static int
@@ -134,6 +153,8 @@ peak_internal_x11_key_map(KeySym sym)
 	case XK_Tab:
 	case XK_ISO_Left_Tab: return PEAK_KEY_TAB;
 	case XK_Delete: return PEAK_KEY_DELETE;
+	case XK_Insert:
+	case XK_KP_Insert: return PEAK_KEY_INSERT;
 	default: return PEAK_KEY_UNKNOWN;
 	}
 }
@@ -141,11 +162,18 @@ peak_internal_x11_key_map(KeySym sym)
 static PeakKeyMod
 peak_internal_x11_mod_map(unsigned int state)
 {
-	if (state & ControlMask) return PEAK_KEYMOD_CTRL;
-	if (state & Mod1Mask) return PEAK_KEYMOD_ALT;
-	if (state & ShiftMask) return PEAK_KEYMOD_SHIFT;
-	if (state & LockMask) return PEAK_KEYMOD_CAPS;
-	return (PeakKeyMod)0;
+	PeakKeyMod m;
+
+	m = 0;
+	if (state & ShiftMask)
+		m |= PEAK_KEYMOD_SHIFT;
+	if (state & ControlMask)
+		m |= PEAK_KEYMOD_CTRL;
+	if (state & Mod1Mask)
+		m |= PEAK_KEYMOD_ALT;
+	if (state & LockMask)
+		m |= PEAK_KEYMOD_CAPS;
+	return m;
 }
 
 static Bool
@@ -259,7 +287,7 @@ peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uin
 
 	screen = DefaultScreen(peak_linux.display);
 	evmask = KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask |
-		PointerMotionMask | StructureNotifyMask;
+		PointerMotionMask | StructureNotifyMask | PropertyChangeMask;
 	w->visual = DefaultVisual(peak_linux.display, screen);
 	w->depth = DefaultDepth(peak_linux.display, screen);
 	if ((flags & PEAK_WINDOW_TRANSPARENT) && peak_linux_visual32(screen, &vi)) {
@@ -355,6 +383,271 @@ peak_platform_window_present(PeakWindowInternal *intern)
 	peak_x11.XFlush(peak_linux.display);
 }
 
+static void
+peak_linux_clip_atoms(void)
+{
+	if (!peak_linux.display || peak_linux.clip_clipboard)
+		return;
+	peak_linux.clip_clipboard = peak_x11.XInternAtom(peak_linux.display, "CLIPBOARD", False);
+	peak_linux.clip_utf8 = peak_x11.XInternAtom(peak_linux.display, "UTF8_STRING", False);
+	peak_linux.clip_targets = peak_x11.XInternAtom(peak_linux.display, "TARGETS", False);
+	peak_linux.clip_incr = peak_x11.XInternAtom(peak_linux.display, "INCR", False);
+	peak_linux.clip_text = peak_x11.XInternAtom(peak_linux.display, "TEXT", False);
+	peak_linux.clip_prop = peak_x11.XInternAtom(peak_linux.display, "PEAK_CLIP", False);
+}
+
+static Atom
+peak_linux_clip_atom(PeakClip which)
+{
+	peak_linux_clip_atoms();
+	return which == PEAK_CLIP_PRIMARY ? XA_PRIMARY : peak_linux.clip_clipboard;
+}
+
+static PeakClip
+peak_linux_clip_which(Atom a)
+{
+	peak_linux_clip_atoms();
+	if (a == XA_PRIMARY)
+		return PEAK_CLIP_PRIMARY;
+	return PEAK_CLIP_CLIPBOARD;
+}
+
+static void
+peak_linux_clip_reply(XSelectionRequestEvent *req, Atom prop)
+{
+	XEvent ev;
+
+	memset(&ev, 0, sizeof ev);
+	ev.xselection.type = SelectionNotify;
+	ev.xselection.display = req->display;
+	ev.xselection.requestor = req->requestor;
+	ev.xselection.selection = req->selection;
+	ev.xselection.target = req->target;
+	ev.xselection.property = prop;
+	ev.xselection.time = req->time;
+	peak_x11.XSendEvent(peak_linux.display, req->requestor, False, NoEventMask, &ev);
+	peak_x11.XFlush(peak_linux.display);
+}
+
+static void
+peak_linux_clip_request_sel(XSelectionRequestEvent *req)
+{
+	const char *p;
+	size_t n;
+	PeakClip which;
+	Atom targets[5];
+
+	peak_linux_clip_atoms();
+	if (req->property == None) {
+		peak_linux_clip_reply(req, None);
+		return;
+	}
+	which = peak_linux_clip_which(req->selection);
+	if (!peak_clip_own_get(which, &p, &n))
+		n = 0;
+	if (req->target == peak_linux.clip_targets) {
+		targets[0] = peak_linux.clip_targets;
+		targets[1] = peak_linux.clip_utf8;
+		targets[2] = XA_STRING;
+		targets[3] = peak_linux.clip_text;
+		peak_x11.XChangeProperty(peak_linux.display, req->requestor, req->property,
+			XA_ATOM, 32, PropModeReplace, (const unsigned char *)targets, 4);
+		peak_linux_clip_reply(req, req->property);
+		return;
+	}
+	if (req->target == peak_linux.clip_utf8 || req->target == peak_linux.clip_text) {
+		peak_x11.XChangeProperty(peak_linux.display, req->requestor, req->property,
+			peak_linux.clip_utf8, 8, PropModeReplace, (const unsigned char *)p, (int)n);
+		peak_linux_clip_reply(req, req->property);
+		return;
+	}
+	if (req->target == XA_STRING) {
+		peak_x11.XChangeProperty(peak_linux.display, req->requestor, req->property,
+			XA_STRING, 8, PropModeReplace, (const unsigned char *)p, (int)n);
+		peak_linux_clip_reply(req, req->property);
+		return;
+	}
+	peak_linux_clip_reply(req, None);
+}
+
+static int
+peak_linux_clip_incr_add(const char *p, size_t n)
+{
+	char *q;
+
+	if (peak_clip_incr_n + n > PEAK_CLIP_MAX)
+		n = PEAK_CLIP_MAX - peak_clip_incr_n;
+	if (!n)
+		return 1;
+	q = realloc(peak_clip_incr, peak_clip_incr_n + n);
+	if (!q)
+		return 0;
+	memcpy(q + peak_clip_incr_n, p, n);
+	peak_clip_incr = q;
+	peak_clip_incr_n += n;
+	return 1;
+}
+
+static int
+peak_linux_latin1_utf8(const unsigned char *s, size_t n, char **out, size_t *out_n)
+{
+	char *d;
+	size_t i;
+	size_t o;
+
+	d = malloc(n * 2 + 1);
+	if (!d)
+		return 0;
+	o = 0;
+	for (i = 0; i < n && o + 2 < n * 2 + 1; i++) {
+		if (s[i] < 0x80)
+			d[o++] = (char)s[i];
+		else {
+			d[o++] = (char)(0xC0 | (s[i] >> 6));
+			d[o++] = (char)(0x80 | (s[i] & 0x3F));
+		}
+	}
+	*out = d;
+	*out_n = o;
+	return 1;
+}
+
+static int
+peak_linux_clip_take_prop(Window window, Atom prop, PeakClip which, PeakEvent *ev)
+{
+	Atom type;
+	int fmt;
+	unsigned long nitems;
+	unsigned long remain;
+	unsigned char *data;
+	char *utf8;
+	size_t un;
+
+	data = NULL;
+	if (peak_x11.XGetWindowProperty(peak_linux.display, window, prop, 0, (long)(PEAK_CLIP_MAX / 4),
+			False, AnyPropertyType, &type, &fmt, &nitems, &remain, &data) != Success) {
+		peak_clip_req_on = 0;
+		return 0;
+	}
+	if (type == None || !data) {
+		if (data)
+			peak_x11.XFree(data);
+		peak_x11.XDeleteProperty(peak_linux.display, window, prop);
+		if (!peak_clip_req_xa && peak_clip_req_on) {
+			peak_clip_req_xa = 1;
+			peak_x11.XConvertSelection(peak_linux.display, peak_linux_clip_atom(which),
+				XA_STRING, peak_linux.clip_prop, window, CurrentTime);
+			peak_x11.XFlush(peak_linux.display);
+		} else {
+			peak_clip_req_on = 0;
+		}
+		return 0;
+	}
+	if (type == peak_linux.clip_incr) {
+		free(peak_clip_incr);
+		peak_clip_incr = NULL;
+		peak_clip_incr_n = 0;
+		peak_clip_incr_on = 1;
+		peak_clip_incr_which = which;
+		peak_x11.XFree(data);
+		peak_x11.XDeleteProperty(peak_linux.display, window, prop);
+		return 0;
+	}
+	utf8 = NULL;
+	un = 0;
+	if (type == XA_STRING || fmt != 8) {
+		if (!peak_linux_latin1_utf8(data, (size_t)nitems, &utf8, &un)) {
+			peak_x11.XFree(data);
+			peak_x11.XDeleteProperty(peak_linux.display, window, prop);
+			peak_clip_req_on = 0;
+			return 0;
+		}
+		peak_clip_paste_store(which, utf8, un);
+		free(utf8);
+	} else {
+		peak_clip_paste_store(which, (const char *)data, (size_t)nitems);
+	}
+	peak_x11.XFree(data);
+	peak_x11.XDeleteProperty(peak_linux.display, window, prop);
+	peak_clip_req_on = 0;
+	ev->type = PEAK_EVENT_CLIP;
+	ev->clip.which = which;
+	ev->clip.n = peak_clip.paste_n;
+	return 1;
+}
+
+static int
+peak_linux_clip_property(struct peak_linux_win *w, XPropertyEvent *pe, PeakEvent *ev)
+{
+	Atom type;
+	int fmt;
+	unsigned long nitems;
+	unsigned long remain;
+	unsigned char *data;
+
+	if (!peak_clip_incr_on || pe->state != PropertyNewValue || pe->atom != peak_linux.clip_prop)
+		return 0;
+	data = NULL;
+	if (peak_x11.XGetWindowProperty(peak_linux.display, w->window, pe->atom, 0,
+			(long)(PEAK_CLIP_MAX / 4), False, AnyPropertyType, &type, &fmt, &nitems, &remain, &data) != Success)
+		return 0;
+	if (!nitems) {
+		if (data)
+			peak_x11.XFree(data);
+		peak_x11.XDeleteProperty(peak_linux.display, w->window, pe->atom);
+		peak_clip_paste_store(peak_clip_incr_which, peak_clip_incr ? peak_clip_incr : "", peak_clip_incr_n);
+		free(peak_clip_incr);
+		peak_clip_incr = NULL;
+		peak_clip_incr_n = 0;
+		peak_clip_incr_on = 0;
+		peak_clip_req_on = 0;
+		ev->type = PEAK_EVENT_CLIP;
+		ev->clip.which = peak_clip_incr_which;
+		ev->clip.n = peak_clip.paste_n;
+		return 1;
+	}
+	peak_linux_clip_incr_add((const char *)data, (size_t)nitems);
+	if (data)
+		peak_x11.XFree(data);
+	peak_x11.XDeleteProperty(peak_linux.display, w->window, pe->atom);
+	return 0;
+}
+
+static int
+peak_platform_clip_set(PeakWindowInternal *intern, PeakClip which, const char *utf8, size_t n)
+{
+	struct peak_linux_win *w;
+
+	(void)utf8;
+	(void)n;
+	w = intern ? intern->w : NULL;
+	if (!w || !w->window || !peak_linux.display)
+		return 0;
+	peak_linux_clip_atoms();
+	peak_x11.XSetSelectionOwner(peak_linux.display, peak_linux_clip_atom(which), w->window, CurrentTime);
+	peak_x11.XFlush(peak_linux.display);
+	return 1;
+}
+
+static int
+peak_platform_clip_request(PeakWindowInternal *intern, PeakClip which)
+{
+	struct peak_linux_win *w;
+
+	w = intern ? intern->w : NULL;
+	if (!w || !w->window || !peak_linux.display)
+		return 0;
+	peak_linux_clip_atoms();
+	peak_clip_req_on = 1;
+	peak_clip_req_which = which;
+	peak_clip_req_xa = 0;
+	peak_clip_incr_on = 0;
+	peak_x11.XConvertSelection(peak_linux.display, peak_linux_clip_atom(which),
+		peak_linux.clip_utf8, peak_linux.clip_prop, w->window, CurrentTime);
+	peak_x11.XFlush(peak_linux.display);
+	return 1;
+}
+
 static bool
 peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 {
@@ -393,6 +686,7 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 			ev->pointer.state = (xev.type == ButtonPress) ? PEAK_POINTER_PRESSED : PEAK_POINTER_RELEASED;
 			ev->pointer.x = (float)xev.xbutton.x;
 			ev->pointer.y = (float)xev.xbutton.y;
+			ev->pointer.mod = peak_internal_x11_mod_map(xev.xbutton.state);
 			if (xev.xbutton.button == Button4)
 				ev->pointer.type = PEAK_POINTER_WHEEL_UP;
 			else if (xev.xbutton.button == Button5)
@@ -409,6 +703,7 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 			ev->pointer.state = PEAK_POINTER_MOVED;
 			ev->pointer.x = (float)xev.xmotion.x;
 			ev->pointer.y = (float)xev.xmotion.y;
+			ev->pointer.mod = peak_internal_x11_mod_map(xev.xmotion.state);
 			ev->pointer.type = (xev.xmotion.state & Button3Mask) ? PEAK_POINTER_RIGHT :
 			                   (xev.xmotion.state & Button2Mask) ? PEAK_POINTER_MIDDLE : PEAK_POINTER_LEFT;
 			return 1;
@@ -424,6 +719,35 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 			ev->resize.height = w->height;
 			return 1;
 		}
+		case SelectionRequest:
+			peak_linux_clip_request_sel(&xev.xselectionrequest);
+			continue;
+		case SelectionClear:
+			continue;
+		case SelectionNotify:
+			if (!peak_clip_req_on)
+				continue;
+			if (xev.xselection.property == None) {
+				if (!peak_clip_req_xa) {
+					peak_linux_clip_atoms();
+					peak_clip_req_xa = 1;
+					peak_x11.XConvertSelection(peak_linux.display,
+						peak_linux_clip_atom(peak_clip_req_which), XA_STRING,
+						peak_linux.clip_prop, w->window, CurrentTime);
+					peak_x11.XFlush(peak_linux.display);
+				} else {
+					peak_clip_req_on = 0;
+				}
+				continue;
+			}
+			if (peak_linux_clip_take_prop(w->window, xev.xselection.property,
+					peak_clip_req_which, ev))
+				return 1;
+			continue;
+		case PropertyNotify:
+			if (peak_linux_clip_property(w, &xev.xproperty, ev))
+				return 1;
+			continue;
 		default:
 			continue;
 		}

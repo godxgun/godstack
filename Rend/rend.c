@@ -5,7 +5,10 @@
 
 #include "rend.h"
 #include "rend_internal.h"
+#ifdef PEAK_VULKAN
 #include "rend_vk14.c"
+#endif
+#include "rend_cpu.c"
 
 static void rend__pipeline_free_list(RendPipeline pipeline);
 static bool rend__renderer_init(RendRenderer renderer, RendBackendType backend);
@@ -24,6 +27,7 @@ static RendRenderer rend_renderers_head = NULL;
 bool rend_backend_vk_initialized = false;
 
 RendVTable rend_vtables[] = {
+#ifdef PEAK_VULKAN
     [REND_BACKEND_VULKAN_14] = {
             .renderer_create = rend_vk14_renderer_create,
             .renderer_create_offscreen = rend_vk14_renderer_create_offscreen,
@@ -62,6 +66,45 @@ RendVTable rend_vtables[] = {
             .descriptor_write_buffer = rend_vk14_descriptor_write_buffer,
             .descriptor_write_texture = rend_vk14_descriptor_write_texture,
     },
+#endif
+    [REND_BACKEND_CPU] = {
+            .renderer_create = rend_cpu_renderer_create,
+            .renderer_create_offscreen = rend_cpu_renderer_create_offscreen,
+            .renderer_destroy = rend_cpu_renderer_destroy,
+            .renderer_frame_begin = rend_cpu_renderer_frame_begin,
+            .renderer_frame_end = rend_cpu_renderer_frame_end,
+            .color_target = rend_cpu_color_target,
+
+            .buffer_create_lifetime = rend_cpu_buffer_create_lifetime,
+            .buffer_destroy = rend_cpu_buffer_destroy,
+            .buffer_copy = rend_cpu_buffer_copy,
+
+            .texture_create = rend_cpu_texture_create,
+            .texture_destroy = rend_cpu_texture_destroy,
+            .texture_copy_buffer = rend_cpu_texture_copy_buffer,
+            .texture_copy_to_buffer = rend_cpu_texture_copy_to_buffer,
+            .texture_blit = rend_cpu_texture_blit,
+
+            .pipeline_create = rend_cpu_pipeline_create,
+            .pipeline_bind = rend_cpu_pipeline_bind,
+            .pipeline_push_constants = rend_cpu_pipeline_push_constants,
+
+            .pipeline_bind_vertex_buffer = rend_cpu_pipeline_bind_vertex_buffer,
+            .pipeline_bind_index_buffer = rend_cpu_pipeline_bind_index_buffer,
+
+            .pipeline_dispatch = rend_cpu_pipeline_dispatch,
+            .pipeline_draw = rend_cpu_pipeline_draw,
+            .pipeline_draw_indexed = rend_cpu_pipeline_draw_indexed,
+            .pipeline_set_blend = rend_cpu_pipeline_set_blend,
+
+            .renderer_render_pass_begin = rend_cpu_renderer_render_pass_begin,
+            .renderer_render_pass_begin_texture = rend_cpu_renderer_render_pass_begin_texture,
+            .renderer_render_pass_end = rend_cpu_renderer_render_pass_end,
+            .renderer_render_pass_end_texture = rend_cpu_renderer_render_pass_end_texture,
+
+            .descriptor_write_buffer = rend_cpu_descriptor_write_buffer,
+            .descriptor_write_texture = rend_cpu_descriptor_write_texture,
+    },
 };
 
 extern void
@@ -70,10 +113,12 @@ rend_quit()
     while (rend_renderers_head)
         rend_renderer_destroy(rend_renderers_head);
 
+#ifdef PEAK_VULKAN
     if (rend_backend_vk_initialized) {
         rend_vk_quit();
         rend_backend_vk_initialized = false;
     }
+#endif
 }
 
 extern RendRenderer
@@ -89,7 +134,12 @@ rend_renderer_create(PeakWindow *target, RendBackendType backend, void *device, 
     if (bind_info)
         rend->bind_info = *bind_info;
     rend->window = target;
-    rend->context = rend_vtables[rend->backend].renderer_create(target, bind_info, vsync);
+    if (rend_vtables[rend->backend].renderer_create)
+        rend->context = rend_vtables[rend->backend].renderer_create(target, bind_info, vsync);
+    if (!rend->context && backend == REND_BACKEND_AUTO && rend->backend != REND_BACKEND_CPU) {
+        rend->backend = REND_BACKEND_CPU;
+        rend->context = rend_vtables[REND_BACKEND_CPU].renderer_create(target, bind_info, vsync);
+    }
     if (!rend->context) {
         rfree(rend);
         return NULL;
@@ -110,11 +160,12 @@ rend_renderer_create_offscreen(uint32_t width, uint32_t height, RendFormat forma
     if (bind_info)
         rend->bind_info = *bind_info;
     rend->window = NULL;
-    if (!rend_vtables[rend->backend].renderer_create_offscreen) {
-        rfree(rend);
-        return NULL;
+    if (rend_vtables[rend->backend].renderer_create_offscreen)
+        rend->context = rend_vtables[rend->backend].renderer_create_offscreen(width, height, format, bind_info);
+    if (!rend->context && backend == REND_BACKEND_AUTO && rend->backend != REND_BACKEND_CPU) {
+        rend->backend = REND_BACKEND_CPU;
+        rend->context = rend_vtables[REND_BACKEND_CPU].renderer_create_offscreen(width, height, format, bind_info);
     }
-    rend->context = rend_vtables[rend->backend].renderer_create_offscreen(width, height, format, bind_info);
     if (!rend->context) {
         rfree(rend);
         return NULL;
@@ -464,6 +515,27 @@ rend_pipeline_create_graphics_spirv(RendRenderer renderer, uint8_t *vertex_bytes
 }
 
 extern RendPipeline
+rend_pipeline_create_graphics_c(RendRenderer renderer, void *vertex, size_t vertex_size, void *frag, size_t frag_size, const RendVertexBinding *vertex_bindings, uint32_t vertex_binding_count, const RendVertexAttributes *vertex_attributes, uint32_t vertex_attribute_count, const RendPushConstantInfo *push_constants, uint32_t push_constant_count, RendPolygonMode polygon_mode, RendCullMode cull_mode, RendTopology topology, RendFormat color_format, bool depth_test_enable)
+{
+    Rend__PipelineConfig config;
+
+    config = (Rend__PipelineConfig) {
+        .vertex_bindings = vertex_bindings,
+        .vertex_binding_count = vertex_binding_count,
+        .vertex_attributes = vertex_attributes,
+        .vertex_attribute_count = vertex_attribute_count,
+        .push_constants = push_constants,
+        .push_constant_count = push_constant_count,
+        .polygon_mode = polygon_mode,
+        .cull_mode = cull_mode,
+        .topology = topology,
+        .depth_test_enable = depth_test_enable,
+        .color_format = color_format,
+    };
+    return rend__pipeline_create(renderer, config, REND__PIPELINE_GRAPHICS_C, vertex, vertex_size, frag, frag_size);
+}
+
+extern RendPipeline
 rend_pipeline_create_graphics_bindless_spirv(RendRenderer renderer, uint8_t *vertex_bytes, size_t vertex_size, uint8_t *frag_bytes, size_t frag_size, const RendPushConstantInfo *push_constants, uint32_t push_constant_count, RendPolygonMode polygon_mode, RendCullMode cull_mode, RendTopology topology, RendFormat color_format, bool depth_test_enable)
 {
     return rend_pipeline_create_graphics_spirv(renderer, vertex_bytes, vertex_size, frag_bytes, frag_size,
@@ -640,9 +712,15 @@ rend__renderer_init(RendRenderer renderer, RendBackendType backend)
     }
 
     for (i = first; i <= last; i++) {
+#ifdef PEAK_VULKAN
         if (i == REND_BACKEND_VULKAN_14 && rend_vk_init()) {
             rend_backend_vk_initialized = true;
             renderer->backend = REND_BACKEND_VULKAN_14;
+            return true;
+        }
+#endif
+        if (i == REND_BACKEND_CPU) {
+            renderer->backend = REND_BACKEND_CPU;
             return true;
         }
     }

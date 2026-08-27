@@ -174,6 +174,25 @@ build_rend_demos(void)
 }
 
 static bool
+build_rend_cpu_test(void)
+{
+    Poof_CC cc = {0};
+
+    poof_mkdir("tests");
+    poof_cc_init(&cc, POOF_CC_GCC | POOF_CC_CLANG, POOF_TARGET_HOST);
+    cc.debug_mode = true;
+    cc.optimization = POOF_O0;
+    cc.output = "tests/rend_cpu";
+    poof_cmd_append(&cc.inputs, "tests/rend_cpu.c");
+    poof_cmd_append(&cc.includes, ".", "Rend", "Peak");
+    poof_cmd_append(&cc.defines, "REND_DEBUG");
+    poof_cmd_append(&cc.libs, "m");
+    poof_cmd_append(&cc.extra_flags, "-std=c99", "-Wall", "-Werror");
+    poof_cc_append_linux(&cc, "-ldl");
+    return poof_cc_run(&cc);
+}
+
+static bool
 run_one(Poof_Cmd *cmd)
 {
     bool ok;
@@ -189,6 +208,10 @@ run_tests(void)
 
     cmd = (Poof_Cmd){0};
     poof_cmd_append(&cmd, "./Fuse/fuse_test");
+    if (!run_one(&cmd)) return false;
+
+    cmd = (Poof_Cmd){0};
+    poof_cmd_append(&cmd, "./tests/rend_cpu");
     if (!run_one(&cmd)) return false;
 
     cmd = (Poof_Cmd){0};
@@ -242,6 +265,7 @@ main(int argc, char **argv)
     if (!build_term_demo()) return 1;
     if (!build_cool_demo()) return 1;
     if (!build_rend_demos()) return 1;
+    if (!build_rend_cpu_test()) return 1;
     if (test && !run_tests()) return 1;
     return 0;
 }

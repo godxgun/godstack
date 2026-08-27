@@ -62,6 +62,7 @@ peak_web_key_map(const char *code)
 	if (!strcmp(code, "Backspace")) return PEAK_KEY_BACKSPACE;
 	if (!strcmp(code, "Tab")) return PEAK_KEY_TAB;
 	if (!strcmp(code, "Delete")) return PEAK_KEY_DELETE;
+	if (!strcmp(code, "Insert")) return PEAK_KEY_INSERT;
 	if (code[0] == 'D' && code[1] == 'i' && code[2] == 'g' && code[3] == 'i' && code[4] == 't' &&
 	    code[5] >= '0' && code[5] <= '9' && code[6] == 0)
 		return (PeakKeyCode)(PEAK_KEY_0 + (code[5] - '0'));
@@ -74,7 +75,7 @@ peak_web_key(int type, const EmscriptenKeyboardEvent *e, void *ud)
 	PeakEvent ev = {0};
 	ev.type = (type == EMSCRIPTEN_EVENT_KEYDOWN) ? PEAK_EVENT_KEY_DOWN : PEAK_EVENT_KEY_UP;
 	ev.key.key = peak_web_key_map(e->code);
-	ev.key.mod = e->ctrlKey ? PEAK_KEYMOD_CTRL : e->altKey ? PEAK_KEYMOD_ALT : e->shiftKey ? PEAK_KEYMOD_SHIFT : 0;
+	ev.key.mod = (e->shiftKey ? PEAK_KEYMOD_SHIFT : 0) | (e->ctrlKey ? PEAK_KEYMOD_CTRL : 0) | (e->altKey ? PEAK_KEYMOD_ALT : 0);
 	peak_q_push(&((struct peak_web_win *)ud)->q, ev);
 	return EM_TRUE;
 }
@@ -99,6 +100,7 @@ peak_web_mouse(int type, const EmscriptenMouseEvent *e, void *ud)
 		ev.pointer.type = (e->button == 1) ? PEAK_POINTER_MIDDLE :
 		                  (e->button == 2) ? PEAK_POINTER_RIGHT : PEAK_POINTER_LEFT;
 	}
+	ev.pointer.mod = (e->shiftKey ? PEAK_KEYMOD_SHIFT : 0) | (e->ctrlKey ? PEAK_KEYMOD_CTRL : 0) | (e->altKey ? PEAK_KEYMOD_ALT : 0);
 	peak_q_push(&((struct peak_web_win *)ud)->q, ev);
 	return EM_TRUE;
 }
@@ -181,6 +183,36 @@ peak_platform_window_present(PeakWindowInternal *intern)
 	if (!w)
 		return;
 	peak_web_dom_present(w->name, (int)w->width, (int)w->height, (uintptr_t)w->buffer);
+}
+
+static int
+peak_platform_clip_set(PeakWindowInternal *intern, PeakClip which, const char *utf8, size_t n)
+{
+	(void)intern;
+	(void)which;
+	(void)utf8;
+	(void)n;
+	return 1;
+}
+
+static int
+peak_platform_clip_request(PeakWindowInternal *intern, PeakClip which)
+{
+	struct peak_web_win *w;
+	const char *p;
+	size_t n;
+	PeakEvent ev;
+
+	w = intern ? intern->w : NULL;
+	if (!w || !peak_clip_own_get(which, &p, &n))
+		return 0;
+	peak_clip_paste_store(which, p, n);
+	memset(&ev, 0, sizeof ev);
+	ev.type = PEAK_EVENT_CLIP;
+	ev.clip.which = which;
+	ev.clip.n = n;
+	peak_q_push(&w->q, ev);
+	return 1;
 }
 
 static bool

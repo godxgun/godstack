@@ -484,13 +484,20 @@ term_codepoint_width(uint32_t c)
 {
     if (c == 0)
         return 0;
-    if (c < 0x20 || c == 0x7F)
+    if (c < 0x20 || c == 0x7F || (c >= 0x80 && c <= 0x9F))
         return -1;
     if ((c >= 0x0300 && c <= 0x036F) ||
         (c >= 0x1AB0 && c <= 0x1AFF) ||
         (c >= 0x1DC0 && c <= 0x1DFF) ||
+        (c >= 0x200B && c <= 0x200F) ||
+        (c >= 0x202A && c <= 0x202E) ||
+        (c >= 0x2060 && c <= 0x206F) ||
         (c >= 0x20D0 && c <= 0x20FF) ||
-        (c >= 0xFE20 && c <= 0xFE2F))
+        (c >= 0x3099 && c <= 0x309A) ||
+        (c >= 0xFE00 && c <= 0xFE0F) ||
+        (c >= 0xFE20 && c <= 0xFE2F) ||
+        c == 0xFEFF ||
+        (c >= 0xE0100 && c <= 0xE01EF))
         return 0;
     if ((c >= 0x1100 && c <= 0x115F) ||
         (c >= 0x2329 && c <= 0x232A) ||
@@ -1053,6 +1060,9 @@ term_clear_region(Term *t, uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1)
 static void
 term_handle_c0(Term *t, unsigned char code)
 {
+    if (code != TERM_ESC && code != TERM_BEL)
+        t->state &= ~(TERM_ESC_START | TERM_ESC_CSI | TERM_ESC_ALTCHARSET |
+            TERM_ESC_TEST | TERM_ESC_UTF8);
     switch (code) {
     case '\t': {
         TermScreen *s = term_live(t);
@@ -1582,11 +1592,13 @@ term_char_feed(Term *t, unsigned char ch)
     int control;
 
     if (t->state & TERM_ESC_STR) {
-        if (ch == TERM_BEL || ch == TERM_CAN || ch == TERM_SUB || ch == TERM_ESC || TERM_IS_C1(ch)) {
+        /* UTF-8 continuations live in 0x80-0x9F. 8-bit C1 ends OSC only in Latin-1. */
+        if (ch == TERM_BEL || ch == TERM_CAN || ch == TERM_SUB || ch == TERM_ESC ||
+            (!(t->mode & TERM_MODE_UTF8) && TERM_IS_C1(ch))) {
             t->state &= ~(TERM_ESC_START | TERM_ESC_STR);
             t->state |= TERM_ESC_STR_END;
             t->utf8_rem = 0;
-            if (TERM_IS_C1(ch))
+            if (!(t->mode & TERM_MODE_UTF8) && TERM_IS_C1(ch))
                 term_handle_c1(t, ch);
             else
                 term_handle_c0(t, ch);
@@ -1764,11 +1776,20 @@ term_feed_utf8(Term *t, const char *bytes, size_t len)
         st = term_utf8_consume(t, ch, &cp);
         if (st == 0)
             continue;
-        TASSERT(st == 1);
+        if (st == 2) {
+            t->last_ch = 0;
+            term_putc(t, TERM_UTF_INVALID);
+            i--;
+            continue;
+        }
         t->last_ch = cp;
         term_putc(t, cp);
     }
-    TASSERT(!t->utf8_rem);
+    if (t->utf8_rem) {
+        t->utf8_rem = 0;
+        t->last_ch = 0;
+        term_putc(t, TERM_UTF_INVALID);
+    }
 }
 
 void
@@ -1784,4 +1805,6 @@ term_feed_escape(Term *t, const char *bytes, size_t len)
     TASSERT((unsigned char)bytes[0] < 0x20 || (unsigned char)bytes[0] == 0x7F);
     for (i = 0; i < len; i++)
         term_char_feed(t, (unsigned char)bytes[i]);
+    t->state = 0;
+    t->utf8_rem = 0;
 }

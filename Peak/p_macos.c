@@ -165,15 +165,18 @@ peak_internal_macos_key_map(unsigned short kc)
 static PeakKeyMod
 peak_internal_macos_mod_map(NSEventModifierFlags flags)
 {
-	if (flags & (NSEventModifierFlagControl | NSEventModifierFlagCommand))
-		return PEAK_KEYMOD_CTRL;
-	if (flags & NSEventModifierFlagOption)
-		return PEAK_KEYMOD_ALT;
+	PeakKeyMod m;
+
+	m = 0;
 	if (flags & NSEventModifierFlagShift)
-		return PEAK_KEYMOD_SHIFT;
+		m |= PEAK_KEYMOD_SHIFT;
+	if (flags & (NSEventModifierFlagControl | NSEventModifierFlagCommand))
+		m |= PEAK_KEYMOD_CTRL;
+	if (flags & NSEventModifierFlagOption)
+		m |= PEAK_KEYMOD_ALT;
 	if (flags & NSEventModifierFlagCapsLock)
-		return PEAK_KEYMOD_CAPS;
-	return (PeakKeyMod)0;
+		m |= PEAK_KEYMOD_CAPS;
+	return m;
 }
 
 static void
@@ -201,6 +204,7 @@ peak_internal_macos_translate(struct peak_macos_win *w, NSEvent *ev)
 		out.pointer.type = ([ev deltaY] < 0) ? PEAK_POINTER_WHEEL_DOWN : PEAK_POINTER_WHEEL_UP;
 		out.pointer.x = (float)pt.x;
 		out.pointer.y = (float)((double)w->height - pt.y);
+		out.pointer.mod = peak_internal_macos_mod_map([ev modifierFlags]);
 		peak_q_push(&w->q, out);
 		break;
 	case NSEventTypeLeftMouseDown:
@@ -215,6 +219,7 @@ peak_internal_macos_translate(struct peak_macos_win *w, NSEvent *ev)
 		out.type = PEAK_EVENT_POINTER;
 		out.pointer.x = (float)pt.x;
 		out.pointer.y = (float)((double)w->height - pt.y);
+		out.pointer.mod = peak_internal_macos_mod_map([ev modifierFlags]);
 		if ([ev type] == NSEventTypeMouseMoved || [ev type] == NSEventTypeLeftMouseDragged
 		    || [ev type] == NSEventTypeRightMouseDragged) {
 			out.pointer.state = PEAK_POINTER_MOVED;
@@ -407,6 +412,60 @@ peak_platform_window_present(PeakWindowInternal *intern)
 		CGDataProviderRelease(prov);
 	if (cs)
 		CGColorSpaceRelease(cs);
+}
+
+static int
+peak_platform_clip_set(PeakWindowInternal *intern, PeakClip which, const char *utf8, size_t n)
+{
+	NSPasteboard *pb;
+	NSString *s;
+	char *z;
+
+	(void)intern;
+	(void)which;
+	z = malloc(n + 1);
+	if (!z)
+		return 0;
+	if (n)
+		memcpy(z, utf8, n);
+	z[n] = 0;
+	s = [[NSString alloc] initWithUTF8String:z];
+	free(z);
+	if (!s)
+		return 0;
+	pb = [NSPasteboard generalPasteboard];
+	[pb clearContents];
+	[pb setString:s forType:NSPasteboardTypeString];
+	[s release];
+	return 1;
+}
+
+static int
+peak_platform_clip_request(PeakWindowInternal *intern, PeakClip which)
+{
+	struct peak_macos_win *w;
+	NSPasteboard *pb;
+	NSString *s;
+	const char *utf8;
+	size_t n;
+	PeakEvent ev;
+
+	w = intern ? intern->w : NULL;
+	if (!w)
+		return 0;
+	pb = [NSPasteboard generalPasteboard];
+	s = [pb stringForType:NSPasteboardTypeString];
+	utf8 = s ? [s UTF8String] : "";
+	n = utf8 ? strlen(utf8) : 0;
+	if (n > PEAK_CLIP_MAX)
+		n = PEAK_CLIP_MAX;
+	peak_clip_paste_store(which, utf8, n);
+	memset(&ev, 0, sizeof ev);
+	ev.type = PEAK_EVENT_CLIP;
+	ev.clip.which = which;
+	ev.clip.n = n;
+	peak_q_push(&w->q, ev);
+	return 1;
 }
 
 static bool

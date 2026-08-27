@@ -48,7 +48,12 @@
         X(EndPaint,           BOOL,    WINAPI, (HWND, const PAINTSTRUCT *)) \
         X(AdjustWindowRectEx, BOOL,    WINAPI, (LPRECT, DWORD, BOOL, DWORD)) \
         X(LoadCursorA,        HCURSOR, WINAPI, (HINSTANCE, LPCSTR)) \
-        X(GetKeyState,        SHORT,   WINAPI, (int))
+        X(GetKeyState,        SHORT,   WINAPI, (int)) \
+        X(OpenClipboard,      BOOL,    WINAPI, (HWND)) \
+        X(CloseClipboard,     BOOL,    WINAPI, (void)) \
+        X(EmptyClipboard,     BOOL,    WINAPI, (void)) \
+        X(SetClipboardData,   HANDLE,  WINAPI, (UINT, HANDLE)) \
+        X(GetClipboardData,   HANDLE,  WINAPI, (UINT))
 
 #define PEAK_GDI32_API(X) \
         X(StretchDIBits, int, WINAPI, (HDC, int, int, int, int, int, int, int, int, const void *, const BITMAPINFO *, UINT, DWORD))
@@ -193,6 +198,8 @@ peak_internal_win32_key_map(WPARAM vk)
 		return PEAK_KEY_TAB;
 	case VK_DELETE:
 		return PEAK_KEY_DELETE;
+	case VK_INSERT:
+		return PEAK_KEY_INSERT;
 	default:
 		return PEAK_KEY_UNKNOWN;
 	}
@@ -201,15 +208,18 @@ peak_internal_win32_key_map(WPARAM vk)
 static PeakKeyMod
 peak_internal_win32_mod_map(void)
 {
-	if (peak_user32.GetKeyState(VK_CONTROL) & 0x8000)
-		return PEAK_KEYMOD_CTRL;
-	if (peak_user32.GetKeyState(VK_MENU) & 0x8000)
-		return PEAK_KEYMOD_ALT;
+	PeakKeyMod m;
+
+	m = 0;
 	if (peak_user32.GetKeyState(VK_SHIFT) & 0x8000)
-		return PEAK_KEYMOD_SHIFT;
+		m |= PEAK_KEYMOD_SHIFT;
+	if (peak_user32.GetKeyState(VK_CONTROL) & 0x8000)
+		m |= PEAK_KEYMOD_CTRL;
+	if (peak_user32.GetKeyState(VK_MENU) & 0x8000)
+		m |= PEAK_KEYMOD_ALT;
 	if (peak_user32.GetKeyState(VK_CAPITAL) & 1)
-		return PEAK_KEYMOD_CAPS;
-	return (PeakKeyMod)0;
+		m |= PEAK_KEYMOD_CAPS;
+	return m;
 }
 
 static int
@@ -300,6 +310,7 @@ peak_internal_win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 			ev.pointer.type = (msg == WM_RBUTTONUP) ? PEAK_POINTER_RIGHT :
 			                  (msg == WM_MBUTTONUP) ? PEAK_POINTER_MIDDLE : PEAK_POINTER_LEFT;
 		}
+		ev.pointer.mod = peak_internal_win32_mod_map();
 		peak_q_push(&w->q, ev);
 		return 0;
 	case WM_PAINT: {
@@ -476,6 +487,123 @@ peak_platform_window_present(PeakWindowInternal *intern)
 		0, 0, (int)w->width, (int)w->height,
 		0, 0, (int)w->width, (int)w->height,
 		w->buffer, &bmi, DIB_RGB_COLORS, SRCCOPY);
+}
+
+static int
+peak_platform_clip_set(PeakWindowInternal *intern, PeakClip which, const char *utf8, size_t n)
+{
+	struct peak_win32_win *w;
+	wchar_t *wide;
+	int wlen;
+	HGLOBAL mem;
+	wchar_t *lock;
+
+	(void)which;
+	w = intern ? intern->w : NULL;
+	if (!w || !w->hwnd || !peak_user32.OpenClipboard)
+		return 0;
+	wlen = MultiByteToWideChar(CP_UTF8, 0, utf8 ? utf8 : "", n ? (int)n : 0, NULL, 0);
+	if (wlen < 0)
+		return 0;
+	wide = malloc(((size_t)wlen + 1) * sizeof *wide);
+	if (!wide)
+		return 0;
+	MultiByteToWideChar(CP_UTF8, 0, utf8 ? utf8 : "", n ? (int)n : 0, wide, wlen);
+	wide[wlen] = 0;
+	if (!peak_user32.OpenClipboard(w->hwnd)) {
+		free(wide);
+		return 0;
+	}
+	peak_user32.EmptyClipboard();
+	mem = GlobalAlloc(GMEM_MOVEABLE, ((size_t)wlen + 1) * sizeof (wchar_t));
+	if (!mem) {
+		peak_user32.CloseClipboard();
+		free(wide);
+		return 0;
+	}
+	lock = GlobalLock(mem);
+	if (!lock) {
+		GlobalFree(mem);
+		peak_user32.CloseClipboard();
+		free(wide);
+		return 0;
+	}
+	memcpy(lock, wide, ((size_t)wlen + 1) * sizeof (wchar_t));
+	GlobalUnlock(mem);
+	free(wide);
+	if (!peak_user32.SetClipboardData(CF_UNICODETEXT, mem)) {
+		GlobalFree(mem);
+		peak_user32.CloseClipboard();
+		return 0;
+	}
+	peak_user32.CloseClipboard();
+	return 1;
+}
+
+static int
+peak_platform_clip_request(PeakWindowInternal *intern, PeakClip which)
+{
+	struct peak_win32_win *w;
+	HANDLE mem;
+	wchar_t *lock;
+	char *utf8;
+	int n;
+	PeakEvent ev;
+
+	w = intern ? intern->w : NULL;
+	if (!w || !w->hwnd || !peak_user32.OpenClipboard)
+		return 0;
+	if (!peak_user32.OpenClipboard(w->hwnd)) {
+		const char *p;
+		size_t pn;
+
+		if (!peak_clip_own_get(which, &p, &pn))
+			return 0;
+		peak_clip_paste_store(which, p, pn);
+		memset(&ev, 0, sizeof ev);
+		ev.type = PEAK_EVENT_CLIP;
+		ev.clip.which = which;
+		ev.clip.n = pn;
+		peak_q_push(&w->q, ev);
+		return 1;
+	}
+	mem = peak_user32.GetClipboardData(CF_UNICODETEXT);
+	if (!mem) {
+		peak_user32.CloseClipboard();
+		return 0;
+	}
+	lock = GlobalLock(mem);
+	if (!lock) {
+		peak_user32.CloseClipboard();
+		return 0;
+	}
+	n = WideCharToMultiByte(CP_UTF8, 0, lock, -1, NULL, 0, NULL, NULL);
+	if (n <= 0) {
+		GlobalUnlock(mem);
+		peak_user32.CloseClipboard();
+		return 0;
+	}
+	utf8 = malloc((size_t)n);
+	if (!utf8) {
+		GlobalUnlock(mem);
+		peak_user32.CloseClipboard();
+		return 0;
+	}
+	WideCharToMultiByte(CP_UTF8, 0, lock, -1, utf8, n, NULL, NULL);
+	GlobalUnlock(mem);
+	peak_user32.CloseClipboard();
+	if (n > 0 && utf8[n - 1] == 0)
+		n--;
+	if ((size_t)n > PEAK_CLIP_MAX)
+		n = (int)PEAK_CLIP_MAX;
+	peak_clip_paste_store(which, utf8, (size_t)n);
+	free(utf8);
+	memset(&ev, 0, sizeof ev);
+	ev.type = PEAK_EVENT_CLIP;
+	ev.clip.which = which;
+	ev.clip.n = peak_clip.paste_n;
+	peak_q_push(&w->q, ev);
+	return 1;
 }
 
 static bool

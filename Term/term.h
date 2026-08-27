@@ -25,7 +25,7 @@
 
 #define TERM_MAJOR 0
 #define TERM_MINOR 4
-#define TERM_PATCH 1
+#define TERM_PATCH 3
 
 /* CHANGE LOG
  * 0.1.0 - @vasco - extract from vt: feed, grid, live CSI
@@ -41,6 +41,8 @@
  *                  DECALN, RIS, ACS G0, resize_on adopt; TERM_MAX
  * 0.4.0 - @vasco - typed feed: printable / utf8 / escape / any
  * 0.4.1 - @vasco - printable is 0x20-0x7E; utf8 is high bytes; CR/LF is escape
+ * 0.4.2 - @vasco - unknown C0/UTF-8 leaves ground state; VS/ZW format width 0
+ * 0.4.3 - @vasco - UTF-8 OSC/DCS payload is not 8-bit C1
  */
 
 #include <assert.h>

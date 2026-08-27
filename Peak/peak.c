@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #if defined(PEAK_WIN32) || defined(PEAK_WEB) || defined(PEAK_MACOS)
 #define PEAK_Q 64
@@ -30,6 +31,68 @@ peak_q_pop(PeakQ *q, PeakEvent *ev)
     return 1;
 }
 #endif
+
+#define PEAK_CLIP_MAX (1024u * 1024u)
+
+static struct {
+    char *own[2];
+    size_t own_n[2];
+    char *paste;
+    size_t paste_n;
+    int paste_ready;
+    PeakClip paste_which;
+} peak_clip;
+
+static int
+peak_clip_own_store(PeakClip which, const char *utf8, size_t n)
+{
+    char *p;
+
+    if ((unsigned)which > 1)
+        return 0;
+    if (n && !utf8)
+        return 0;
+    p = realloc(peak_clip.own[which], n ? n : 1);
+    if (!p)
+        return 0;
+    if (n)
+        memcpy(p, utf8, n);
+    peak_clip.own[which] = p;
+    peak_clip.own_n[which] = n;
+    return 1;
+}
+
+static int
+peak_clip_own_get(PeakClip which, const char **p, size_t *n)
+{
+    if ((unsigned)which > 1 || !p || !n)
+        return 0;
+    *p = peak_clip.own[which] ? peak_clip.own[which] : "";
+    *n = peak_clip.own_n[which];
+    return 1;
+}
+
+static void
+peak_clip_paste_store(PeakClip which, const char *utf8, size_t n)
+{
+    char *p;
+
+    if (n > PEAK_CLIP_MAX)
+        n = PEAK_CLIP_MAX;
+    if (n && !utf8)
+        n = 0;
+    p = realloc(peak_clip.paste, n ? n : 1);
+    if (!p) {
+        peak_clip.paste_ready = 0;
+        return;
+    }
+    if (n)
+        memcpy(p, utf8, n);
+    peak_clip.paste = p;
+    peak_clip.paste_n = n;
+    peak_clip.paste_which = which;
+    peak_clip.paste_ready = 1;
+}
 
 #if defined(PEAK_WIN32)
 #include "p_win32.c"
@@ -253,4 +316,60 @@ peak_vulkan_create_surface(PeakWindow *win, void *instance, const void *allocato
 {
     if (!win || !instance || !out_surface) return 0;
     return peak_platform_vulkan_create_surface(&win->internal, instance, allocator, out_surface);
+}
+
+int
+peak_clip_set(PeakWindow *win, PeakClip which, const char *utf8, size_t n)
+{
+    if (which != PEAK_CLIP_CLIPBOARD && which != PEAK_CLIP_PRIMARY)
+        return 0;
+    if (n && !utf8)
+        return 0;
+    if (n > PEAK_CLIP_MAX)
+        n = PEAK_CLIP_MAX;
+    if (!peak_clip_own_store(which, utf8, n))
+        return 0;
+#if defined(PEAK_WIN32) || defined(PEAK_MACOS) || defined(PEAK_WEB)
+    if (!peak_clip_own_store(which == PEAK_CLIP_PRIMARY ? PEAK_CLIP_CLIPBOARD : PEAK_CLIP_PRIMARY, utf8, n))
+        return 0;
+#endif
+    if (!win)
+        return 1;
+    return peak_platform_clip_set(&win->internal, which, utf8, n);
+}
+
+int
+peak_clip_request(PeakWindow *win, PeakClip which)
+{
+    const char *p;
+    size_t n;
+
+    if (which != PEAK_CLIP_CLIPBOARD && which != PEAK_CLIP_PRIMARY)
+        return 0;
+    if (!win) {
+        if (!peak_clip_own_get(which, &p, &n))
+            return 0;
+        peak_clip_paste_store(which, p, n);
+        return 1;
+    }
+    return peak_platform_clip_request(&win->internal, which);
+}
+
+int
+peak_clip_take(PeakWindow *win, char *dst, size_t cap, size_t *n)
+{
+    size_t c;
+
+    (void)win;
+    if (!peak_clip.paste_ready)
+        return 0;
+    peak_clip.paste_ready = 0;
+    c = peak_clip.paste_n;
+    if (c > cap)
+        c = cap;
+    if (dst && c)
+        memcpy(dst, peak_clip.paste, c);
+    if (n)
+        *n = c;
+    return 1;
 }
