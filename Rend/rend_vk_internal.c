@@ -412,7 +412,10 @@ rend_vk_device_score_default(RendVkDevice *device, RendSpecs minimum_specs, cons
 				supports_present = VK_FALSE;
 				CHECK_VK_RESULT(vkGetPhysicalDeviceSurfaceSupportKHR(device->physical_device, i, device->surface, &supports_present));
 				if (supports_present) {
-					device->present_family_index = i;
+					if (device->present_family_index == UINT32_MAX)
+						device->present_family_index = i;
+					if (q_family[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+						device->present_family_index = i;
 				}
 			}
 		}

@@ -42,6 +42,7 @@
 	X(XFreeGC,             int, (Display *, GC)) \
 	X(XDestroyWindow,      int, (Display *, Window)) \
 	X(XCheckIfEvent,       Bool, (Display *, XEvent *, Bool (*)(Display *, XEvent *, XPointer), XPointer)) \
+	X(XPutBackEvent,       void, (Display *, XEvent *)) \
 	X(XPending,            int, (Display *)) \
 	X(XLookupKeysym,       KeySym, (XKeyEvent *, int)) \
 	X(XLookupString,       int, (XKeyEvent *, char *, int, KeySym *, XComposeStatus *)) \
@@ -442,10 +443,20 @@ peak_platform_fd(PeakWindowInternal *intern)
 static int
 peak_platform_pending(PeakWindowInternal *intern)
 {
-	(void)intern;
-	if (!peak_linux.display || !peak_x11.XPending)
+	struct peak_linux_win *w;
+	XEvent ev;
+
+	w = intern ? intern->w : NULL;
+	if (!w || !w->window || !peak_linux.display || !peak_x11.XPending)
 		return 0;
-	return peak_x11.XPending(peak_linux.display);
+	/* Display-wide XPending is true for Vulkan WSI / other windows too.
+	 * Timeout 0 on that spins the client after the first present. */
+	if (peak_x11.XPending(peak_linux.display) <= 0)
+		return 0;
+	if (!peak_x11.XCheckIfEvent(peak_linux.display, &ev, peak_internal_x11_window_match, (XPointer)&w->window))
+		return 0;
+	peak_x11.XPutBackEvent(peak_linux.display, &ev);
+	return 1;
 }
 
 static int

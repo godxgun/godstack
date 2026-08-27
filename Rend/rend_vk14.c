@@ -10,6 +10,7 @@
  * * 1.4.0 - @vasco - window pass uses color_target; drop renderer_read
  * * 1.5.0 - @vasco - in-frame copy_buffer; blit-only present barrier
  * * 1.5.1 - @vasco - no per-frame surface query; SUBOPTIMAL recreates once; host arena stays
+ * * 1.5.2 - @vasco - present on graphics family; extra swapchain image; OPAQUE composite first
  */
 
 #include <stdbool.h>
@@ -1995,10 +1996,11 @@ rend_vk14_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain, VkS
 	 * We also may want immediate mode if we want to disable VSYNC.
 	 */
 
-	/* vsync: MAILBOX else FIFO. no vsync: IMMEDIATE else MAILBOX else FIFO. */
+	/* vsync: MAILBOX else FIFO. no vsync: MAILBOX else IMMEDIATE else FIFO.
+	 * IMMEDIATE on X11 ARGB blocks in vkQueuePresentKHR; MAILBOX does not. */
 	VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
-	VkPresentModeKHR preferred = ctx->vsync ? VK_PRESENT_MODE_MAILBOX_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
-	VkPresentModeKHR second = ctx->vsync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_MAILBOX_KHR;
+	VkPresentModeKHR preferred = VK_PRESENT_MODE_MAILBOX_KHR;
+	VkPresentModeKHR second = ctx->vsync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
 	int have_pref = 0;
 	int have_second = 0;
 	const char *mode_name = "FIFO";
@@ -2021,7 +2023,9 @@ rend_vk14_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain, VkS
 		mode_name = "FIFO_RELAXED";
 	PINFO("Present mode %s", mode_name);
 
-	uint32_t img_count = surface_caps.minImageCount + 1;
+	uint32_t img_count = surface_caps.minImageCount + 2;
+	if (img_count < ctx->max_frames_in_flight + 1)
+		img_count = (uint32_t)ctx->max_frames_in_flight + 1;
 	if (surface_caps.maxImageCount > 0 && img_count > surface_caps.maxImageCount) {
 		img_count = surface_caps.maxImageCount;
 	}
@@ -2051,9 +2055,9 @@ rend_vk14_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain, VkS
 	swapchain_create_info.preTransform = surface_caps.currentTransform;
 	{
 		static const VkCompositeAlphaFlagBitsKHR alpha_pref[] = {
-			VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR,
-			VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR,
 			VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+			VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR,
+			VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR,
 			VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
 		};
 		uint32_t ai;
@@ -2065,6 +2069,10 @@ rend_vk14_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain, VkS
 				break;
 			}
 		}
+		PINFO("Composite alpha %s",
+			swapchain_create_info.compositeAlpha == VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR ? "OPAQUE" :
+			swapchain_create_info.compositeAlpha == VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR ? "PRE" :
+			swapchain_create_info.compositeAlpha == VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR ? "POST" : "INHERIT");
 	}
 	swapchain_create_info.presentMode = present_mode;
 	swapchain_create_info.clipped = VK_TRUE;

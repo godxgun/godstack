@@ -11,11 +11,11 @@ Collection of modular and minimal libraries used by our software.
 | Name   | Version | Description                                |
 | ------ | ------- | ------------------------------------------ |
 | Poof   | 0.1.4   | Build system.                              |
-| Peak   | 0.6.5   | Platform library that automatically links the correct system libraries. |
+| Peak   | 0.6.6   | Platform library that automatically links the correct system libraries. |
 | Grit   | 0.2.1   | Utilities: allocators, math, rng, software raster.  |
 | Fuse   | 0.8.0   | Immediate-mode UI command buffer.          |
 | Term   | 0.4.1   | Cell-grid terminal emulator.               |
-| Rend   | 1.5.1   | Modern graphics API layer.                 |
+| Rend   | 1.5.2   | Modern graphics API layer.                 |
 | Cool   | 0.0.3   | Render HTML by calling functions.          |
 
 ## Installing
