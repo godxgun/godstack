@@ -30,6 +30,11 @@ struct peak_macos_win {
 	uint32_t width;
 	uint32_t height;
 	int force_close;
+	int flags;
+	int cursor_on;
+	int relative;
+	int touch_n;
+	float last_x, last_y;
 	PeakQ q;
 };
 
@@ -44,6 +49,10 @@ typedef struct {
 } PeakAudio;
 
 @interface PeakMacDelegate : NSObject <NSWindowDelegate>
+@property(nonatomic, assign) struct peak_macos_win *w;
+@end
+
+@interface PeakMacView : NSView
 @property(nonatomic, assign) struct peak_macos_win *w;
 @end
 
@@ -68,6 +77,12 @@ static uint64_t peak_platform_get_time(void);
 static void peak_platform_sleep_ns(int64_t ns);
 static const char **peak_platform_vulkan_get_extensions(uint32_t *count);
 static int peak_platform_vulkan_create_surface(PeakWindowInternal *intern, void *instance, const void *allocator, void *out_surface);
+static void peak_platform_window_set_title(PeakWindowInternal *intern, const char *name);
+static void peak_platform_window_set_size(PeakWindowInternal *intern, uint32_t width, uint32_t height);
+static void peak_platform_window_fullscreen(PeakWindowInternal *intern, int on);
+static void peak_platform_window_cursor(PeakWindowInternal *intern, int on);
+static void peak_platform_window_pointer_relative(PeakWindowInternal *intern, int on);
+static float peak_platform_window_scale(PeakWindowInternal *intern);
 
 static NSApplication *peak_macos_app;
 static PeakAudio peak_audio;
@@ -88,6 +103,37 @@ static PeakAudio peak_audio;
 	ev.type = PEAK_EVENT_WINDOW_CLOSE;
 	peak_q_push(&w->q, ev);
 	return NO;
+}
+@end
+
+@implementation PeakMacView
+- (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender
+{
+	(void)sender;
+	return NSDragOperationCopy;
+}
+- (BOOL)performDragOperation:(id<NSDraggingInfo>)sender
+{
+	NSArray *files;
+	NSString *p;
+	const char *u;
+	PeakEvent ev;
+	size_t n;
+
+	files = [[sender draggingPasteboard] propertyListForType:NSFilenamesPboardType];
+	if (!files || ![files count] || !self.w)
+		return NO;
+	p = [files objectAtIndex:0];
+	u = [p UTF8String];
+	if (!u)
+		return NO;
+	n = strlen(u);
+	peak_drop_store(u, n);
+	memset(&ev, 0, sizeof ev);
+	ev.type = PEAK_EVENT_DROP;
+	ev.drop.n = n;
+	peak_q_push(&self.w->q, ev);
+	return YES;
 }
 @end
 
@@ -158,6 +204,23 @@ peak_internal_macos_key_map(unsigned short kc)
 	case 0x33: return PEAK_KEY_BACKSPACE;
 	case 0x30: return PEAK_KEY_TAB;
 	case 0x75: return PEAK_KEY_DELETE;
+	case 0x72: return PEAK_KEY_INSERT;
+	case 0x73: return PEAK_KEY_HOME;
+	case 0x77: return PEAK_KEY_END;
+	case 0x74: return PEAK_KEY_PAGEUP;
+	case 0x79: return PEAK_KEY_PAGEDOWN;
+	case 0x7A: return PEAK_KEY_F1;
+	case 0x78: return PEAK_KEY_F2;
+	case 0x63: return PEAK_KEY_F3;
+	case 0x76: return PEAK_KEY_F4;
+	case 0x60: return PEAK_KEY_F5;
+	case 0x61: return PEAK_KEY_F6;
+	case 0x62: return PEAK_KEY_F7;
+	case 0x64: return PEAK_KEY_F8;
+	case 0x65: return PEAK_KEY_F9;
+	case 0x6D: return PEAK_KEY_F10;
+	case 0x67: return PEAK_KEY_F11;
+	case 0x6F: return PEAK_KEY_F12;
 	default: return PEAK_KEY_UNKNOWN;
 	}
 }
@@ -170,8 +233,10 @@ peak_internal_macos_mod_map(NSEventModifierFlags flags)
 	m = 0;
 	if (flags & NSEventModifierFlagShift)
 		m |= PEAK_KEYMOD_SHIFT;
-	if (flags & (NSEventModifierFlagControl | NSEventModifierFlagCommand))
+	if (flags & NSEventModifierFlagControl)
 		m |= PEAK_KEYMOD_CTRL;
+	if (flags & NSEventModifierFlagCommand)
+		m |= PEAK_KEYMOD_SUPER;
 	if (flags & NSEventModifierFlagOption)
 		m |= PEAK_KEYMOD_ALT;
 	if (flags & NSEventModifierFlagCapsLock)
@@ -197,6 +262,17 @@ peak_internal_macos_translate(struct peak_macos_win *w, NSEvent *ev)
 		utf8 = [[ev characters] UTF8String];
 		out.key.code = (utf8 && utf8[0]) ? (uint32_t)(unsigned char)utf8[0] : 0;
 		peak_q_push(&w->q, out);
+		if ([ev type] == NSEventTypeKeyDown && utf8 && utf8[0] && (unsigned char)utf8[0] >= 32) {
+			PeakEvent tev;
+			size_t n;
+
+			n = strlen(utf8);
+			peak_text_store(utf8, n);
+			memset(&tev, 0, sizeof tev);
+			tev.type = PEAK_EVENT_TEXT;
+			tev.text.n = n;
+			peak_q_push(&w->q, tev);
+		}
 		break;
 	case NSEventTypeScrollWheel:
 		out.type = PEAK_EVENT_POINTER;
@@ -219,6 +295,13 @@ peak_internal_macos_translate(struct peak_macos_win *w, NSEvent *ev)
 		out.type = PEAK_EVENT_POINTER;
 		out.pointer.x = (float)pt.x;
 		out.pointer.y = (float)((double)w->height - pt.y);
+		if (w->relative && ([ev type] == NSEventTypeMouseMoved || [ev type] == NSEventTypeLeftMouseDragged
+		    || [ev type] == NSEventTypeRightMouseDragged)) {
+			out.pointer.x -= w->last_x;
+			out.pointer.y -= w->last_y;
+		}
+		w->last_x = (float)pt.x;
+		w->last_y = (float)((double)w->height - pt.y);
 		out.pointer.mod = peak_internal_macos_mod_map([ev modifierFlags]);
 		if ([ev type] == NSEventTypeMouseMoved || [ev type] == NSEventTypeLeftMouseDragged
 		    || [ev type] == NSEventTypeRightMouseDragged) {
@@ -310,7 +393,6 @@ peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uin
 	PeakMacDelegate *del;
 	NSRect rect;
 
-	(void)flags;
 	if (!peak_macos_app && !peak_platform_init())
 		return intern;
 	if (!(w = calloc(1, sizeof *w)))
@@ -333,10 +415,29 @@ peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uin
 		return intern;
 	}
 	[w->window setTitle:[NSString stringWithUTF8String:name]];
-	w->view = [w->window contentView];
+	w->flags = (int)flags;
+	w->cursor_on = 1;
+	if (flags & PEAK_WINDOW_TRANSPARENT) {
+		[w->window setOpaque:NO];
+		[w->window setBackgroundColor:[NSColor clearColor]];
+		[w->window setHasShadow:NO];
+	}
+	if (flags & PEAK_WINDOW_FULLSCREEN)
+		[w->window toggleFullScreen:nil];
+	[w->window registerForDraggedTypes:[NSArray arrayWithObject:NSFilenamesPboardType]];
+	{
+		PeakMacView *view;
+
+		view = [[PeakMacView alloc] initWithFrame:rect];
+		view.w = w;
+		[w->window setContentView:view];
+		w->view = view;
+	}
 	w->layer = [CAMetalLayer new];
 	[w->view setLayer:w->layer];
 	[w->view setWantsLayer:YES];
+	if (flags & PEAK_WINDOW_TRANSPARENT)
+		w->layer.opaque = NO;
 	w->layer.drawableSize = CGSizeMake((CGFloat)width, (CGFloat)height);
 	del = [PeakMacDelegate new];
 	del.w = w;
@@ -403,7 +504,8 @@ peak_platform_window_present(PeakWindowInternal *intern)
 	cs = CGColorSpaceCreateDeviceRGB();
 	prov = CGDataProviderCreateWithData(NULL, w->buffer, nbytes, NULL);
 	img = CGImageCreate((size_t)w->width, (size_t)w->height, 8, 32, (size_t)w->width * 4, cs,
-		kCGBitmapByteOrder32Little | kCGImageAlphaNoneSkipFirst,
+		kCGBitmapByteOrder32Little | ((w->flags & PEAK_WINDOW_TRANSPARENT)
+			? kCGImageAlphaPremultipliedFirst : kCGImageAlphaNoneSkipFirst),
 		prov, NULL, false, kCGRenderingIntentDefault);
 	w->layer.contents = (id)img;
 	if (img)
@@ -634,6 +736,89 @@ peak_platform_vulkan_create_surface(PeakWindowInternal *intern, void *instance, 
 	(void)out_surface;
 	return 0;
 #endif
+}
+
+static void
+peak_platform_window_set_title(PeakWindowInternal *intern, const char *name)
+{
+	struct peak_macos_win *w;
+
+	w = intern ? intern->w : NULL;
+	if (!w || !w->window || !name)
+		return;
+	[w->window setTitle:[NSString stringWithUTF8String:name]];
+}
+
+static void
+peak_platform_window_set_size(PeakWindowInternal *intern, uint32_t width, uint32_t height)
+{
+	struct peak_macos_win *w;
+	NSRect r;
+
+	w = intern ? intern->w : NULL;
+	if (!w || !w->window)
+		return;
+	r = [w->window frame];
+	r.size.width = (CGFloat)width;
+	r.size.height = (CGFloat)height;
+	[w->window setFrame:r display:YES];
+}
+
+static void
+peak_platform_window_fullscreen(PeakWindowInternal *intern, int on)
+{
+	struct peak_macos_win *w;
+	int isfs;
+
+	w = intern ? intern->w : NULL;
+	if (!w || !w->window)
+		return;
+	isfs = ([w->window styleMask] & NSWindowStyleMaskFullScreen) != 0;
+	if ((on && !isfs) || (!on && isfs))
+		[w->window toggleFullScreen:nil];
+}
+
+static void
+peak_platform_window_cursor(PeakWindowInternal *intern, int on)
+{
+	struct peak_macos_win *w;
+
+	w = intern ? intern->w : NULL;
+	if (!w)
+		return;
+	w->cursor_on = on;
+	if (on)
+		[NSCursor unhide];
+	else
+		[NSCursor hide];
+}
+
+static void
+peak_platform_window_pointer_relative(PeakWindowInternal *intern, int on)
+{
+	struct peak_macos_win *w;
+
+	w = intern ? intern->w : NULL;
+	if (!w)
+		return;
+	w->relative = on;
+	if (on)
+		CGAssociateMouseAndMouseCursorPosition(false);
+	else
+		CGAssociateMouseAndMouseCursorPosition(true);
+}
+
+static float
+peak_platform_window_scale(PeakWindowInternal *intern)
+{
+	struct peak_macos_win *w;
+	CGFloat s;
+
+	w = intern ? intern->w : NULL;
+	if (!w || !w->window)
+		return 1.f;
+	s = [w->window backingScaleFactor];
+	return s > 0 ? (float)s : 1.f;
 }
 
 #include "p_posix.c"

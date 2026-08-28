@@ -24,7 +24,7 @@
 #define TERM_H
 
 #define TERM_MAJOR 0
-#define TERM_MINOR 5
+#define TERM_MINOR 6
 #define TERM_PATCH 0
 
 /* CHANGE LOG
@@ -44,6 +44,7 @@
  * 0.4.2 - @vasco - unknown C0/UTF-8 leaves ground state; VS/ZW format width 0
  * 0.4.3 - @vasco - UTF-8 OSC/DCS payload is not 8-bit C1
  * 0.5.0 - @vasco - 8-byte TermCell; interned style id; drop is_dirty; DECSET 2004
+ * 0.6.0 - @vasco - term_cell_style; drop term_cell_fg / term_cell_bg
  */
 
 #include <assert.h>
@@ -200,12 +201,10 @@ typedef struct Term {
 } Term;
 
 int  term_init(Term *t, uint32_t cols, uint32_t rows, const TermColors *colors);
-int  term_init_on(Term *t, uint32_t cols, uint32_t rows, const TermColors *colors,
-    TermCell *screen, TermCell *alt, uint32_t cap);
+int  term_init_on(Term *t, uint32_t cols, uint32_t rows, const TermColors *colors, TermCell *screen, TermCell *alt, uint32_t cap);
 void term_destroy(Term *t);
 void term_resize(Term *t, uint32_t cols, uint32_t rows);
-void term_resize_on(Term *t, uint32_t cols, uint32_t rows,
-    TermCell *screen, TermCell *alt, uint32_t cap);
+void term_resize_on(Term *t, uint32_t cols, uint32_t rows, TermCell *screen, TermCell *alt, uint32_t cap);
 void term_feed(Term *t, const char *bytes, size_t len); /* any; vt avoids this */
 void term_feed_printable(Term *t, const char *bytes, size_t len); /* 0x20-0x7E */
 void term_feed_utf8(Term *t, const char *bytes, size_t len); /* complete UTF-8, high bytes */
@@ -213,16 +212,13 @@ void term_feed_escape(Term *t, const char *bytes, size_t len); /* C0 / ESC / CSI
 TermScreen *term_screen(Term *t);
 uint32_t term_hist_count(const Term *t);
 const TermCell *term_hist_line(const Term *t, uint32_t back);
-uint32_t term_cell_fg(const Term *t, const TermCell *c);
-uint32_t term_cell_bg(const Term *t, const TermCell *c);
+TermStyle term_cell_style(const Term *t, const TermCell *c);
 
 #endif /* TERM_H */
 
 /*
 ------------------------------------------------------------------------------
-This software is available under 2 licenses -- choose whichever you prefer.
-------------------------------------------------------------------------------
-ALTERNATIVE A - MIT License
+MIT License
 Copyright (c) 2026 Vasco Alves
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -239,11 +235,5 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-------------------------------------------------------------------------------
-ALTERNATIVE B - Public Domain (www.unlicense.org)
-This is free and unencumbered software released into the public domain.
-Anyone is free to copy, modify, publish, use, compile, sell, or distribute this
-software, either in source code form or as a compiled binary, for any purpose,
-commercial or non-commercial, and by any means.
 ------------------------------------------------------------------------------
 */

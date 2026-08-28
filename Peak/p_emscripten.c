@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 EM_JS(void, peak_web_dom_open, (const char *id, int w, int h), {
 	var name = UTF8ToString(id);
@@ -63,6 +66,15 @@ peak_web_key_map(const char *code)
 	if (!strcmp(code, "Tab")) return PEAK_KEY_TAB;
 	if (!strcmp(code, "Delete")) return PEAK_KEY_DELETE;
 	if (!strcmp(code, "Insert")) return PEAK_KEY_INSERT;
+	if (!strcmp(code, "Home")) return PEAK_KEY_HOME;
+	if (!strcmp(code, "End")) return PEAK_KEY_END;
+	if (!strcmp(code, "PageUp")) return PEAK_KEY_PAGEUP;
+	if (!strcmp(code, "PageDown")) return PEAK_KEY_PAGEDOWN;
+	if (code[0] == 'F' && code[1] >= '1' && code[1] <= '9' && code[2] == 0)
+		return (PeakKeyCode)(PEAK_KEY_F1 + (code[1] - '1'));
+	if (!strcmp(code, "F10")) return PEAK_KEY_F10;
+	if (!strcmp(code, "F11")) return PEAK_KEY_F11;
+	if (!strcmp(code, "F12")) return PEAK_KEY_F12;
 	if (code[0] == 'D' && code[1] == 'i' && code[2] == 'g' && code[3] == 'i' && code[4] == 't' &&
 	    code[5] >= '0' && code[5] <= '9' && code[6] == 0)
 		return (PeakKeyCode)(PEAK_KEY_0 + (code[5] - '0'));
@@ -75,8 +87,15 @@ peak_web_key(int type, const EmscriptenKeyboardEvent *e, void *ud)
 	PeakEvent ev = {0};
 	ev.type = (type == EMSCRIPTEN_EVENT_KEYDOWN) ? PEAK_EVENT_KEY_DOWN : PEAK_EVENT_KEY_UP;
 	ev.key.key = peak_web_key_map(e->code);
-	ev.key.mod = (e->shiftKey ? PEAK_KEYMOD_SHIFT : 0) | (e->ctrlKey ? PEAK_KEYMOD_CTRL : 0) | (e->altKey ? PEAK_KEYMOD_ALT : 0);
+	ev.key.mod = (e->shiftKey ? PEAK_KEYMOD_SHIFT : 0) | (e->ctrlKey ? PEAK_KEYMOD_CTRL : 0) | (e->altKey ? PEAK_KEYMOD_ALT : 0) | (e->metaKey ? PEAK_KEYMOD_SUPER : 0);
 	peak_q_push(&((struct peak_web_win *)ud)->q, ev);
+	if (type == EMSCRIPTEN_EVENT_KEYDOWN && e->key[0] && (unsigned char)e->key[0] >= 32 && e->key[1] == 0) {
+		PeakEvent tev = {0};
+		peak_text_store(e->key, 1);
+		tev.type = PEAK_EVENT_TEXT;
+		tev.text.n = 1;
+		peak_q_push(&((struct peak_web_win *)ud)->q, tev);
+	}
 	return EM_TRUE;
 }
 
@@ -232,8 +251,63 @@ peak_platform_fd(PeakWindowInternal *intern)
 static int
 peak_platform_pending(PeakWindowInternal *intern)
 {
+	struct peak_web_win *w = intern ? intern->w : NULL;
+	return w ? (int)w->q.n : 0;
+}
+
+static void
+peak_platform_window_set_title(PeakWindowInternal *intern, const char *name)
+{
 	(void)intern;
-	return 0;
+	if (name)
+		emscripten_set_window_title(name);
+}
+
+static void
+peak_platform_window_set_size(PeakWindowInternal *intern, uint32_t width, uint32_t height)
+{
+	struct peak_web_win *w = intern ? intern->w : NULL;
+	if (!w || !width || !height)
+		return;
+	w->width = width;
+	w->height = height;
+	peak_web_dom_open(w->name, (int)width, (int)height);
+}
+
+static void
+peak_platform_window_fullscreen(PeakWindowInternal *intern, int on)
+{
+	struct peak_web_win *w = intern ? intern->w : NULL;
+	char sel[66];
+	if (!w)
+		return;
+	peak_web_sel(w->name, sel, sizeof sel);
+	if (on)
+		emscripten_request_fullscreen(sel, EM_TRUE);
+	else
+		emscripten_exit_fullscreen();
+}
+
+static void
+peak_platform_window_cursor(PeakWindowInternal *intern, int on)
+{
+	(void)intern;
+	emscripten_hide_mouse();
+	(void)on;
+}
+
+static void
+peak_platform_window_pointer_relative(PeakWindowInternal *intern, int on)
+{
+	(void)intern;
+	(void)on;
+}
+
+static float
+peak_platform_window_scale(PeakWindowInternal *intern)
+{
+	(void)intern;
+	return 1.f;
 }
 
 #define PEAK_AUDIO_FRAMES 1024
@@ -412,6 +486,55 @@ peak_sock_listen(const char *path)
 {
 	(void)path;
 	return PEAK_HANDLE_INVALID;
+}
+
+PEAK_HANDLE
+peak_sock_connect(const char *path)
+{
+	(void)path;
+	return PEAK_HANDLE_INVALID;
+}
+
+int
+peak_filesystem_mkdir(const char *path)
+{
+	if (!path || !path[0])
+		return 0;
+	return mkdir(path, 0777) == 0;
+}
+
+int
+peak_filesystem_rm(const char *path)
+{
+	if (!path || !path[0])
+		return 0;
+	if (unlink(path) == 0)
+		return 1;
+	return rmdir(path) == 0;
+}
+
+int
+peak_filesystem_cwd(char *buf, size_t cap)
+{
+	if (!buf || cap < 2)
+		return 0;
+	return getcwd(buf, cap) != NULL;
+}
+
+int
+peak_filesystem_chdir(const char *path)
+{
+	if (!path || !path[0])
+		return 0;
+	return chdir(path) == 0;
+}
+
+int
+peak_filesystem_rename(const char *from, const char *to)
+{
+	if (!from || !from[0] || !to || !to[0])
+		return 0;
+	return rename(from, to) == 0;
 }
 
 PEAK_HANDLE

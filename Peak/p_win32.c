@@ -12,6 +12,7 @@
 
 /* windows.h must precede mmsystem.h */
 #include <windows.h>
+#include <shellapi.h>
 #include <mmsystem.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -53,10 +54,33 @@
         X(CloseClipboard,     BOOL,    WINAPI, (void)) \
         X(EmptyClipboard,     BOOL,    WINAPI, (void)) \
         X(SetClipboardData,   HANDLE,  WINAPI, (UINT, HANDLE)) \
-        X(GetClipboardData,   HANDLE,  WINAPI, (UINT))
+        X(GetClipboardData,   HANDLE,  WINAPI, (UINT)) \
+        X(SetWindowTextA,     BOOL,    WINAPI, (HWND, LPCSTR)) \
+        X(SetWindowPos,       BOOL,    WINAPI, (HWND, HWND, int, int, int, int, UINT)) \
+        X(ShowCursor,         int,     WINAPI, (BOOL)) \
+        X(SetCursor,          HCURSOR, WINAPI, (HCURSOR)) \
+        X(SetCursorPos,       BOOL,    WINAPI, (int, int)) \
+        X(GetCursorPos,       BOOL,    WINAPI, (LPPOINT)) \
+        X(ScreenToClient,     BOOL,    WINAPI, (HWND, LPPOINT)) \
+        X(ClientToScreen,     BOOL,    WINAPI, (HWND, LPPOINT)) \
+        X(GetClientRect,      BOOL,    WINAPI, (HWND, LPRECT)) \
+        X(GetWindowRect,      BOOL,    WINAPI, (HWND, LPRECT)) \
+        X(GetWindowLongPtrA,  LONG_PTR,WINAPI, (HWND, int)) \
+        X(SetWindowLongPtrA,  LONG_PTR,WINAPI, (HWND, int, LONG_PTR)) \
+        X(GetSystemMetrics,   int,     WINAPI, (int)) \
+        X(UpdateLayeredWindow,BOOL,    WINAPI, (HWND, HDC, POINT *, SIZE *, HDC, POINT *, COLORREF, BLENDFUNCTION *, DWORD)) \
+        X(SetCapture,         HWND,    WINAPI, (HWND)) \
+        X(ReleaseCapture,     BOOL,    WINAPI, (void)) \
+        X(GetWindowPlacement, BOOL,    WINAPI, (HWND, WINDOWPLACEMENT *)) \
+        X(SetWindowPlacement, BOOL,    WINAPI, (HWND, const WINDOWPLACEMENT *))
 
 #define PEAK_GDI32_API(X) \
-        X(StretchDIBits, int, WINAPI, (HDC, int, int, int, int, int, int, int, int, const void *, const BITMAPINFO *, UINT, DWORD))
+        X(StretchDIBits, int, WINAPI, (HDC, int, int, int, int, int, int, int, int, const void *, const BITMAPINFO *, UINT, DWORD)) \
+        X(CreateCompatibleDC, HDC, WINAPI, (HDC)) \
+        X(CreateDIBSection, HBITMAP, WINAPI, (HDC, const BITMAPINFO *, UINT, void **, HANDLE, DWORD)) \
+        X(SelectObject, HGDIOBJ, WINAPI, (HDC, HGDIOBJ)) \
+        X(DeleteDC, BOOL, WINAPI, (HDC)) \
+        X(DeleteObject, BOOL, WINAPI, (HGDIOBJ))
 
 #define PEAK_WINMM_API(X) \
         X(waveOutOpen,            MMRESULT, WINAPI, (LPHWAVEOUT, UINT, LPCWAVEFORMATEX, DWORD_PTR, DWORD_PTR, DWORD)) \
@@ -109,6 +133,14 @@ struct peak_win32_win {
 	uint32_t *buffer;
 	uint32_t width;
 	uint32_t height;
+	int flags;
+	int cursor_on;
+	int relative;
+	int layered;
+	int touch_n;
+	float last_x, last_y;
+	WINDOWPLACEMENT place;
+	DWORD style, ex;
 	PeakQ q;
 };
 
@@ -137,12 +169,21 @@ static uint64_t peak_platform_get_time(void);
 static void peak_platform_sleep_ns(int64_t ns);
 static const char **peak_platform_vulkan_get_extensions(uint32_t *count);
 static int peak_platform_vulkan_create_surface(PeakWindowInternal *intern, void *instance, const void *allocator, void *out_surface);
+static void peak_platform_window_set_title(PeakWindowInternal *intern, const char *name);
+static void peak_platform_window_set_size(PeakWindowInternal *intern, uint32_t width, uint32_t height);
+static void peak_platform_window_fullscreen(PeakWindowInternal *intern, int on);
+static void peak_platform_window_cursor(PeakWindowInternal *intern, int on);
+static void peak_platform_window_pointer_relative(PeakWindowInternal *intern, int on);
+static float peak_platform_window_scale(PeakWindowInternal *intern);
 
 static PeakWin32 peak_win32;
 static PeakUser32Api peak_user32;
 static PeakGdi32Api peak_gdi32;
 static PeakWinmmApi peak_winmm;
 static PeakAudio peak_audio;
+static void (WINAPI *peak_DragAcceptFiles)(HWND, BOOL);
+static UINT (WINAPI *peak_DragQueryFileA)(HDROP, UINT, LPSTR, UINT);
+static void (WINAPI *peak_DragFinish)(HDROP);
 
 static int
 peak_internal_user32_load(HMODULE handle)
@@ -200,6 +241,26 @@ peak_internal_win32_key_map(WPARAM vk)
 		return PEAK_KEY_DELETE;
 	case VK_INSERT:
 		return PEAK_KEY_INSERT;
+	case VK_HOME:
+		return PEAK_KEY_HOME;
+	case VK_END:
+		return PEAK_KEY_END;
+	case VK_PRIOR:
+		return PEAK_KEY_PAGEUP;
+	case VK_NEXT:
+		return PEAK_KEY_PAGEDOWN;
+	case VK_F1: return PEAK_KEY_F1;
+	case VK_F2: return PEAK_KEY_F2;
+	case VK_F3: return PEAK_KEY_F3;
+	case VK_F4: return PEAK_KEY_F4;
+	case VK_F5: return PEAK_KEY_F5;
+	case VK_F6: return PEAK_KEY_F6;
+	case VK_F7: return PEAK_KEY_F7;
+	case VK_F8: return PEAK_KEY_F8;
+	case VK_F9: return PEAK_KEY_F9;
+	case VK_F10: return PEAK_KEY_F10;
+	case VK_F11: return PEAK_KEY_F11;
+	case VK_F12: return PEAK_KEY_F12;
 	default:
 		return PEAK_KEY_UNKNOWN;
 	}
@@ -219,6 +280,8 @@ peak_internal_win32_mod_map(void)
 		m |= PEAK_KEYMOD_ALT;
 	if (peak_user32.GetKeyState(VK_CAPITAL) & 1)
 		m |= PEAK_KEYMOD_CAPS;
+	if (peak_user32.GetKeyState(VK_LWIN) & 0x8000 || peak_user32.GetKeyState(VK_RWIN) & 0x8000)
+		m |= PEAK_KEYMOD_SUPER;
 	return m;
 }
 
@@ -286,6 +349,47 @@ peak_internal_win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 		ev.key.mod = peak_internal_win32_mod_map();
 		peak_q_push(&w->q, ev);
 		return 0;
+	case WM_CHAR: {
+		char utf8[8];
+		int n;
+
+		n = WideCharToMultiByte(CP_UTF8, 0, (wchar_t *)&wparam, 1, utf8, (int)sizeof utf8, NULL, NULL);
+		if (n > 0 && wparam >= 32) {
+			peak_text_store(utf8, (size_t)n);
+			memset(&ev, 0, sizeof ev);
+			ev.type = PEAK_EVENT_TEXT;
+			ev.text.n = (size_t)n;
+			peak_q_push(&w->q, ev);
+		}
+		return 0;
+	}
+	case WM_MOUSEWHEEL:
+		memset(&ev, 0, sizeof ev);
+		ev.type = PEAK_EVENT_POINTER;
+		ev.pointer.state = PEAK_POINTER_PRESSED;
+		ev.pointer.type = ((short)HIWORD(wparam) > 0) ? PEAK_POINTER_WHEEL_UP : PEAK_POINTER_WHEEL_DOWN;
+		ev.pointer.x = (float)(short)LOWORD(lparam);
+		ev.pointer.y = (float)(short)HIWORD(lparam);
+		ev.pointer.mod = peak_internal_win32_mod_map();
+		peak_q_push(&w->q, ev);
+		return 0;
+	case WM_DROPFILES:
+		if (peak_DragQueryFileA) {
+			char path[MAX_PATH];
+			UINT n;
+
+			n = peak_DragQueryFileA((HDROP)wparam, 0, path, MAX_PATH);
+			if (n) {
+				peak_drop_store(path, n);
+				memset(&ev, 0, sizeof ev);
+				ev.type = PEAK_EVENT_DROP;
+				ev.drop.n = n;
+				peak_q_push(&w->q, ev);
+			}
+			if (peak_DragFinish)
+				peak_DragFinish((HDROP)wparam);
+		}
+		return 0;
 	case WM_MOUSEMOVE: /* FALLTHROUGH */
 	case WM_LBUTTONDOWN: /* FALLTHROUGH */
 	case WM_LBUTTONUP: /* FALLTHROUGH */
@@ -297,6 +401,12 @@ peak_internal_win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 		ev.type = PEAK_EVENT_POINTER;
 		ev.pointer.x = (float)(short)LOWORD(lparam);
 		ev.pointer.y = (float)(short)HIWORD(lparam);
+		if (w->relative && msg == WM_MOUSEMOVE) {
+			ev.pointer.x -= w->last_x;
+			ev.pointer.y -= w->last_y;
+		}
+		w->last_x = (float)(short)LOWORD(lparam);
+		w->last_y = (float)(short)HIWORD(lparam);
 		if (msg == WM_MOUSEMOVE) {
 			ev.pointer.state = PEAK_POINTER_MOVED;
 			ev.pointer.type = (wparam & MK_RBUTTON) ? PEAK_POINTER_RIGHT :
@@ -312,6 +422,18 @@ peak_internal_win32_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 		}
 		ev.pointer.mod = peak_internal_win32_mod_map();
 		peak_q_push(&w->q, ev);
+		if (w->relative && msg == WM_MOUSEMOVE && peak_user32.SetCursorPos) {
+			POINT pt;
+			RECT rc;
+
+			peak_user32.GetClientRect(w->hwnd, &rc);
+			pt.x = (rc.right - rc.left) / 2;
+			pt.y = (rc.bottom - rc.top) / 2;
+			peak_user32.ClientToScreen(w->hwnd, &pt);
+			peak_user32.SetCursorPos(pt.x, pt.y);
+			w->last_x = (float)((rc.right - rc.left) / 2);
+			w->last_y = (float)((rc.bottom - rc.top) / 2);
+		}
 		return 0;
 	case WM_PAINT: {
 		PAINTSTRUCT ps;
@@ -355,6 +477,16 @@ peak_platform_init(void)
 			return 0;
 		}
 	}
+	if (!peak_DragAcceptFiles) {
+		HMODULE sh;
+
+		sh = LoadLibraryA("shell32.dll");
+		if (sh) {
+			peak_DragAcceptFiles = (void (WINAPI *)(HWND, BOOL))(void *)GetProcAddress(sh, "DragAcceptFiles");
+			peak_DragQueryFileA = (UINT (WINAPI *)(HDROP, UINT, LPSTR, UINT))(void *)GetProcAddress(sh, "DragQueryFileA");
+			peak_DragFinish = (void (WINAPI *)(HDROP))(void *)GetProcAddress(sh, "DragFinish");
+		}
+	}
 	if (!peak_win32.class_reg) {
 		memset(&wc, 0, sizeof wc);
 		wc.cbSize = sizeof wc;
@@ -390,7 +522,6 @@ peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uin
 	RECT r;
 	HINSTANCE inst;
 
-	(void)flags;
 	if (!peak_user32.CreateWindowExA && !peak_platform_init())
 		return intern;
 
@@ -401,8 +532,8 @@ peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uin
 		return intern;
 	}
 
-	ex = 0;
-	style = WS_OVERLAPPEDWINDOW;
+	ex = (flags & PEAK_WINDOW_TRANSPARENT) ? WS_EX_LAYERED : 0;
+	style = (flags & PEAK_WINDOW_FULLSCREEN) ? (WS_POPUP | WS_VISIBLE) : WS_OVERLAPPEDWINDOW;
 	r.left = 0;
 	r.top = 0;
 	r.right = (LONG)width;
@@ -426,7 +557,19 @@ peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uin
 		return intern;
 	}
 
+	w->flags = (int)flags;
+	w->cursor_on = 1;
+	w->layered = !!(flags & PEAK_WINDOW_TRANSPARENT);
+	w->style = style;
+	w->ex = ex;
+	if (peak_DragAcceptFiles)
+		peak_DragAcceptFiles(w->hwnd, TRUE);
 	peak_user32.ShowWindow(w->hwnd, SW_SHOWNORMAL);
+	if (flags & PEAK_WINDOW_FULLSCREEN) {
+		intern.w = w;
+		peak_platform_window_fullscreen(&intern, 1);
+		return intern;
+	}
 	intern.w = w;
 	return intern;
 }
@@ -483,6 +626,46 @@ peak_platform_window_present(PeakWindowInternal *intern)
 	bmi.bmiHeader.biPlanes = 1;
 	bmi.bmiHeader.biBitCount = 32;
 	bmi.bmiHeader.biCompression = BI_RGB;
+	if (w->layered && peak_user32.UpdateLayeredWindow && peak_gdi32.CreateCompatibleDC) {
+		HDC mem;
+		HBITMAP dib, old;
+		void *bits;
+		SIZE size;
+		POINT dst, src;
+		BLENDFUNCTION blend;
+
+		mem = peak_gdi32.CreateCompatibleDC(w->hdc);
+		if (!mem)
+			return;
+		dib = peak_gdi32.CreateDIBSection(mem, &bmi, DIB_RGB_COLORS, &bits, NULL, 0);
+		if (!dib) {
+			peak_gdi32.DeleteDC(mem);
+			return;
+		}
+		old = peak_gdi32.SelectObject(mem, dib);
+		if (bits)
+			memcpy(bits, w->buffer, (size_t)w->width * w->height * 4);
+		dst.x = dst.y = 0;
+		src.x = src.y = 0;
+		size.cx = (LONG)w->width;
+		size.cy = (LONG)w->height;
+		blend.BlendOp = AC_SRC_OVER;
+		blend.BlendFlags = 0;
+		blend.SourceConstantAlpha = 255;
+		blend.AlphaFormat = AC_SRC_ALPHA;
+		{
+			RECT wr;
+
+			peak_user32.GetWindowRect(w->hwnd, &wr);
+			dst.x = wr.left;
+			dst.y = wr.top;
+		}
+		peak_user32.UpdateLayeredWindow(w->hwnd, w->hdc, &dst, &size, mem, &src, 0, &blend, ULW_ALPHA);
+		peak_gdi32.SelectObject(mem, old);
+		peak_gdi32.DeleteObject(dib);
+		peak_gdi32.DeleteDC(mem);
+		return;
+	}
 	peak_gdi32.StretchDIBits(w->hdc,
 		0, 0, (int)w->width, (int)w->height,
 		0, 0, (int)w->width, (int)w->height,
@@ -635,7 +818,16 @@ peak_platform_fd(PeakWindowInternal *intern)
 static int
 peak_platform_pending(PeakWindowInternal *intern)
 {
-	(void)intern;
+	struct peak_win32_win *w;
+	MSG msg;
+
+	w = intern ? intern->w : NULL;
+	if (!w)
+		return 0;
+	if (w->q.n)
+		return (int)w->q.n;
+	if (peak_user32.PeekMessageA && peak_user32.PeekMessageA(&msg, w->hwnd, 0, 0, PM_NOREMOVE))
+		return 1;
 	return 0;
 }
 
@@ -839,6 +1031,95 @@ peak_platform_vulkan_create_surface(PeakWindowInternal *intern, void *instance, 
 	(void)out_surface;
 	return 0;
 #endif
+}
+
+static void
+peak_platform_window_set_title(PeakWindowInternal *intern, const char *name)
+{
+	struct peak_win32_win *w;
+
+	w = intern ? intern->w : NULL;
+	if (!w || !w->hwnd || !name || !peak_user32.SetWindowTextA)
+		return;
+	peak_user32.SetWindowTextA(w->hwnd, name);
+}
+
+static void
+peak_platform_window_set_size(PeakWindowInternal *intern, uint32_t width, uint32_t height)
+{
+	struct peak_win32_win *w;
+	RECT r;
+
+	w = intern ? intern->w : NULL;
+	if (!w || !w->hwnd || !peak_user32.SetWindowPos)
+		return;
+	r.left = 0;
+	r.top = 0;
+	r.right = (LONG)width;
+	r.bottom = (LONG)height;
+	peak_user32.AdjustWindowRectEx(&r, w->style ? w->style : WS_OVERLAPPEDWINDOW, FALSE, w->ex);
+	peak_user32.SetWindowPos(w->hwnd, NULL, 0, 0, r.right - r.left, r.bottom - r.top, SWP_NOMOVE | SWP_NOZORDER);
+}
+
+static void
+peak_platform_window_fullscreen(PeakWindowInternal *intern, int on)
+{
+	struct peak_win32_win *w;
+	int sw, sh;
+
+	w = intern ? intern->w : NULL;
+	if (!w || !w->hwnd || !peak_user32.SetWindowLongPtrA)
+		return;
+	if (on) {
+		w->place.length = sizeof w->place;
+		peak_user32.GetWindowPlacement(w->hwnd, &w->place);
+		w->style = (DWORD)peak_user32.GetWindowLongPtrA(w->hwnd, GWL_STYLE);
+		peak_user32.SetWindowLongPtrA(w->hwnd, GWL_STYLE, (LONG_PTR)((w->style & ~WS_OVERLAPPEDWINDOW) | WS_POPUP));
+		sw = peak_user32.GetSystemMetrics(SM_CXSCREEN);
+		sh = peak_user32.GetSystemMetrics(SM_CYSCREEN);
+		peak_user32.SetWindowPos(w->hwnd, HWND_TOP, 0, 0, sw, sh, SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+	} else {
+		peak_user32.SetWindowLongPtrA(w->hwnd, GWL_STYLE, (LONG_PTR)(w->style | WS_OVERLAPPEDWINDOW));
+		peak_user32.SetWindowPlacement(w->hwnd, &w->place);
+		peak_user32.SetWindowPos(w->hwnd, NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+	}
+}
+
+static void
+peak_platform_window_cursor(PeakWindowInternal *intern, int on)
+{
+	struct peak_win32_win *w;
+
+	w = intern ? intern->w : NULL;
+	if (!w)
+		return;
+	if (on == w->cursor_on)
+		return;
+	w->cursor_on = on;
+	if (peak_user32.ShowCursor)
+		peak_user32.ShowCursor(on ? TRUE : FALSE);
+}
+
+static void
+peak_platform_window_pointer_relative(PeakWindowInternal *intern, int on)
+{
+	struct peak_win32_win *w;
+
+	w = intern ? intern->w : NULL;
+	if (!w || !w->hwnd)
+		return;
+	w->relative = on;
+	if (on && peak_user32.SetCapture)
+		peak_user32.SetCapture(w->hwnd);
+	else if (!on && peak_user32.ReleaseCapture)
+		peak_user32.ReleaseCapture();
+}
+
+static float
+peak_platform_window_scale(PeakWindowInternal *intern)
+{
+	(void)intern;
+	return 1.f;
 }
 
 #include "p_win32_proc.c"

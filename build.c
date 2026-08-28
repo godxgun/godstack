@@ -51,6 +51,14 @@ add_rend_demo(Poof_Batch *batch, const char *src, const char *out, uint32_t opt,
     poof_batch_append_cc(batch, &cc);
 }
 
+static void
+add_peak_link(Poof_CC *cc)
+{
+    poof_cc_append_linux(cc, "-ldl", "-lpthread", "-lutil");
+    poof_cc_append_macos(cc, "-framework", "AppKit", "-framework", "AudioToolbox",
+        "-framework", "QuartzCore", "-framework", "CoreGraphics", "-framework", "GameController");
+}
+
 static bool
 build_peak_native(const char *src, const char *out)
 {
@@ -62,21 +70,46 @@ build_peak_native(const char *src, const char *out)
     poof_cmd_append(&cc.inputs, src);
     poof_cmd_append(&cc.includes, "Peak");
     poof_cmd_append(&cc.extra_flags, "-std=c99", "-Wall", "-Wno-deprecated-declarations");
+    add_peak_link(&cc);
     return poof_cc_run(&cc);
 }
 
 static bool
-build_peak_demos(void)
+build_peak_test(void)
 {
+    Poof_CC cc = {0};
+
+    poof_mkdir("tests");
+    poof_cc_init(&cc, POOF_CC_GCC | POOF_CC_CLANG, POOF_TARGET_HOST);
+    cc.debug_mode = true;
+    cc.optimization = POOF_O0;
+    cc.output = "tests/peak";
+    poof_cmd_append(&cc.inputs, "tests/peak.c");
+    poof_cmd_append(&cc.includes, ".", "Peak");
+    poof_cmd_append(&cc.extra_flags, "-std=c99", "-Wall", "-Werror", "-Wno-deprecated-declarations");
+    add_peak_link(&cc);
+    return poof_cc_run(&cc);
+}
+
+static bool
+build_peak_demos(int need_web)
+{
+    Poof_Cmd cmd = {0};
+
     poof_mkdir("demos/multiplatform");
     if (!build_peak_native("demos/multiplatform/demo.c", "demos/multiplatform/demo")) return false;
     if (!build_peak_native("demos/multiplatform/demo_run.c", "demos/multiplatform/demo_run")) return false;
 
-    Poof_Cmd cmd = {0};
     poof_cmd_append(&cmd, "emcc", "demos/multiplatform/demo_run.c", "-o", "demos/multiplatform/demo.js",
         "-IPeak", "-std=c99", "-Wall", "-Wno-deprecated-declarations",
         "-sALLOW_MEMORY_GROWTH=1", "-sENVIRONMENT=web");
-    return poof_cmd_run(&cmd);
+    if (poof_cmd_run(&cmd))
+        return true;
+    if (!need_web) {
+        fprintf(stderr, "skip emcc\n");
+        return true;
+    }
+    return false;
 }
 
 static bool
@@ -237,6 +270,10 @@ run_tests(void)
     Poof_Cmd cmd;
 
     cmd = (Poof_Cmd){0};
+    poof_cmd_append(&cmd, "./tests/peak");
+    if (!run_one(&cmd)) return false;
+
+    cmd = (Poof_Cmd){0};
     poof_cmd_append(&cmd, "./Fuse/fuse_test");
     if (!run_one(&cmd)) return false;
 
@@ -288,17 +325,33 @@ int
 main(int argc, char **argv)
 {
     int test;
+    int peak_only;
     int i;
 
     POOF_GO_REBUILD_URSELF(argc, argv);
 
     test = 0;
+    peak_only = 0;
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "test") == 0)
             test = 1;
+        if (strcmp(argv[i], "peak") == 0)
+            peak_only = 1;
     }
 
-    if (!build_peak_demos()) return 1;
+    if (peak_only) {
+        if (!build_peak_demos(0)) return 1;
+        if (!build_peak_test()) return 1;
+        if (test) {
+            Poof_Cmd cmd = {0};
+            poof_cmd_append(&cmd, "./tests/peak");
+            if (!run_one(&cmd)) return 1;
+        }
+        return 0;
+    }
+
+    if (!build_peak_demos(1)) return 1;
+    if (!build_peak_test()) return 1;
     if (!build_fuse_test()) return 1;
     if (!build_grit_demo()) return 1;
     if (!build_term_demo()) return 1;

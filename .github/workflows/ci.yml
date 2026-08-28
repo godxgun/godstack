@@ -1,0 +1,71 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-x11:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc libx11-dev libwayland-dev libpulse-dev xvfb
+      - name: build
+        run: gcc -o build build.c && ./build peak
+      - name: test
+        run: xvfb-run -a ./tests/peak
+
+  linux-wayland:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc libx11-dev libwayland-dev libpulse-dev weston
+      - name: build
+        run: gcc -o build build.c && ./build peak
+      - name: test
+        run: |
+          export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/xdg-runtime}"
+          mkdir -p "$XDG_RUNTIME_DIR"
+          weston --backend=headless --socket=peak --idle-time=0 >/tmp/weston.log 2>&1 &
+          for i in $(seq 1 50); do
+            [ -S "$XDG_RUNTIME_DIR/peak" ] && break
+            sleep 0.1
+          done
+          export WAYLAND_DISPLAY=peak
+          unset DISPLAY
+          ./tests/peak
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: build
+        run: cc -o build build.c && ./build peak
+      - name: test
+        run: ./tests/peak
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: mingw-w64-x86_64-gcc
+      - name: build
+        run: gcc -o build build.c && ./build peak
+      - name: test
+        run: ./tests/peak

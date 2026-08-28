@@ -427,6 +427,71 @@ peak_sock_accept(PEAK_HANDLE listen_fd)
 	return PEAK_HANDLE_INVALID;
 }
 
+PEAK_HANDLE
+peak_sock_connect(const char *path)
+{
+	char name[MAX_PATH];
+	HANDLE h;
+	DWORD mode;
+
+	peak_internal_pipe_name(path, name, sizeof name);
+	if (!name[0])
+		return PEAK_HANDLE_INVALID;
+	h = CreateFileA(name, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+	if (h == INVALID_HANDLE_VALUE)
+		return PEAK_HANDLE_INVALID;
+	mode = PIPE_READMODE_BYTE | PIPE_NOWAIT;
+	SetNamedPipeHandleState(h, &mode, NULL, NULL);
+	return h;
+}
+
+int
+peak_filesystem_mkdir(const char *path)
+{
+	if (!path || !path[0])
+		return 0;
+	return CreateDirectoryA(path, NULL) != 0;
+}
+
+int
+peak_filesystem_rm(const char *path)
+{
+	DWORD attr;
+
+	if (!path || !path[0])
+		return 0;
+	attr = GetFileAttributesA(path);
+	if (attr == INVALID_FILE_ATTRIBUTES)
+		return 0;
+	if (attr & FILE_ATTRIBUTE_DIRECTORY)
+		return RemoveDirectoryA(path) != 0;
+	return DeleteFileA(path) != 0;
+}
+
+int
+peak_filesystem_cwd(char *buf, size_t cap)
+{
+	if (!buf || cap < 2)
+		return 0;
+	return GetCurrentDirectoryA((DWORD)cap, buf) != 0;
+}
+
+int
+peak_filesystem_chdir(const char *path)
+{
+	if (!path || !path[0])
+		return 0;
+	return SetCurrentDirectoryA(path) != 0;
+}
+
+int
+peak_filesystem_rename(const char *from, const char *to)
+{
+	if (!from || !from[0] || !to || !to[0])
+		return 0;
+	return MoveFileExA(from, to, MOVEFILE_REPLACE_EXISTING) != 0;
+}
+
 int
 peak_fd_read(PEAK_HANDLE fd, void *buf, size_t n)
 {

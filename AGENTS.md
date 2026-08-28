@@ -11,4 +11,6 @@
 ## Build
 - `./build` in this directory (includes `Poof/poof.c`).
 - `./build test` builds then runs.
+- `./build peak` builds Peak demos + `tests/peak`.
 - `tests/rend_cpu` is offscreen Rend CPU raster (no window, no Vulkan).
+- `tests/peak` is Peak window tests (needs a display).

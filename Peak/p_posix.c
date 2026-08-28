@@ -267,6 +267,75 @@ peak_sock_accept(PEAK_HANDLE listen_fd)
 	}
 }
 
+PEAK_HANDLE
+peak_sock_connect(const char *path)
+{
+	struct sockaddr_un addr;
+	int fd;
+	size_t n;
+
+	if (!path || !path[0])
+		return PEAK_HANDLE_INVALID;
+	n = strlen(path);
+	if (n >= sizeof addr.sun_path)
+		return PEAK_HANDLE_INVALID;
+	fd = socket(AF_UNIX, SOCK_STREAM, 0);
+	if (fd < 0)
+		return PEAK_HANDLE_INVALID;
+	memset(&addr, 0, sizeof addr);
+	addr.sun_family = AF_UNIX;
+	memcpy(addr.sun_path, path, n + 1);
+	if (connect(fd, (struct sockaddr *)&addr, sizeof addr) < 0) {
+		close(fd);
+		return PEAK_HANDLE_INVALID;
+	}
+	return peak_internal_nb(fd);
+}
+
+int
+peak_filesystem_mkdir(const char *path)
+{
+	if (!path || !path[0])
+		return 0;
+	return mkdir(path, 0777) == 0;
+}
+
+int
+peak_filesystem_rm(const char *path)
+{
+	if (!path || !path[0])
+		return 0;
+	if (unlink(path) == 0)
+		return 1;
+	if (errno == EISDIR || errno == EPERM)
+		return rmdir(path) == 0;
+	return 0;
+}
+
+int
+peak_filesystem_cwd(char *buf, size_t cap)
+{
+	if (!buf || cap < 2)
+		return 0;
+	return getcwd(buf, cap) != NULL;
+}
+
+int
+peak_filesystem_chdir(const char *path)
+{
+	if (!path || !path[0])
+		return 0;
+	return chdir(path) == 0;
+}
+
+int
+peak_filesystem_rename(const char *from, const char *to)
+{
+	if (!from || !from[0] || !to || !to[0])
+		return 0;
+	return rename(from, to) == 0;
+}
+
 int
 peak_fd_read(PEAK_HANDLE fd, void *buf, size_t n)
 {

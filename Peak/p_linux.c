@@ -3,12 +3,17 @@
 #include <X11/Xutil.h>
 #include <X11/keysym.h>
 #include <dlfcn.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <linux/joystick.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 #ifdef PEAK_VULKAN
+#define VK_USE_PLATFORM_WAYLAND_KHR
 #define VK_USE_PLATFORM_XLIB_KHR
 #include <vulkan/vulkan.h>
 #endif
@@ -52,7 +57,19 @@
 	X(XChangeProperty,     int, (Display *, Window, Atom, Atom, int, int, const unsigned char *, int)) \
 	X(XGetWindowProperty,  int, (Display *, Window, Atom, long, long, Bool, Atom, Atom *, int *, unsigned long *, unsigned long *, unsigned char **)) \
 	X(XDeleteProperty,     int, (Display *, Window, Atom)) \
-	X(XSendEvent,          Status, (Display *, Window, Bool, long, XEvent *))
+	X(XSendEvent,          Status, (Display *, Window, Bool, long, XEvent *)) \
+	X(XResizeWindow,       int, (Display *, Window, unsigned int, unsigned int)) \
+	X(XDefineCursor,       int, (Display *, Window, Cursor)) \
+	X(XUndefineCursor,     int, (Display *, Window)) \
+	X(XCreatePixmap,       Pixmap, (Display *, Drawable, unsigned int, unsigned int, unsigned int)) \
+	X(XFreePixmap,         int, (Display *, Pixmap)) \
+	X(XCreatePixmapCursor, Cursor, (Display *, Pixmap, Pixmap, XColor *, XColor *, unsigned int, unsigned int)) \
+	X(XFreeCursor,         int, (Display *, Cursor)) \
+	X(XWarpPointer,        int, (Display *, Window, Window, int, int, unsigned int, unsigned int, int, int)) \
+	X(XGrabPointer,        int, (Display *, Window, Bool, unsigned int, int, int, Window, Cursor, Time)) \
+	X(XUngrabPointer,      int, (Display *, Time)) \
+	X(XGetWindowAttributes, Status, (Display *, Window, XWindowAttributes *)) \
+	X(XQueryPointer,       Bool, (Display *, Window, Window *, Window *, int *, int *, int *, int *, unsigned int *))
 
 typedef struct {
 #define X(name, ret, args) ret (*name) args;
@@ -81,6 +98,18 @@ typedef struct {
 	Atom clip_incr;
 	Atom clip_text;
 	Atom clip_prop;
+	Atom net_wm_state;
+	Atom net_wm_state_fullscreen;
+	Atom xdnd_aware;
+	Atom xdnd_enter;
+	Atom xdnd_position;
+	Atom xdnd_drop;
+	Atom xdnd_status;
+	Atom xdnd_finished;
+	Atom xdnd_selection;
+	Atom xdnd_type_list;
+	Atom xdnd_action_copy;
+	Atom uri_list;
 } PeakLinux;
 
 typedef struct {
@@ -105,6 +134,14 @@ struct peak_linux_win {
 	uint32_t height;
 	int depth;
 	int colormap_owned;
+	int flags;
+	int cursor_on;
+	int relative;
+	int extra_on;
+	int touch_n;
+	float last_x, last_y;
+	Cursor blank;
+	PeakEvent extra;
 };
 
 static PeakLinux peak_linux;
@@ -118,6 +155,19 @@ static PeakClip peak_clip_req_which;
 static int peak_clip_req_on;
 static int peak_clip_req_xa;
 static PeakAudio peak_audio;
+static int peak_linux_kind;
+#define PEAK_LINUX_NONE    0
+#define PEAK_LINUX_WAYLAND 1
+#define PEAK_LINUX_X11     2
+
+#include "p_wayland.c"
+
+static void peak_platform_window_set_title(PeakWindowInternal *intern, const char *name);
+static void peak_platform_window_set_size(PeakWindowInternal *intern, uint32_t width, uint32_t height);
+static void peak_platform_window_fullscreen(PeakWindowInternal *intern, int on);
+static void peak_platform_window_cursor(PeakWindowInternal *intern, int on);
+static void peak_platform_window_pointer_relative(PeakWindowInternal *intern, int on);
+static float peak_platform_window_scale(PeakWindowInternal *intern);
 
 static int
 peak_internal_x11_load(void *handle)
@@ -155,6 +205,26 @@ peak_internal_x11_key_map(KeySym sym)
 	case XK_Delete: return PEAK_KEY_DELETE;
 	case XK_Insert:
 	case XK_KP_Insert: return PEAK_KEY_INSERT;
+	case XK_Home:
+	case XK_KP_Home: return PEAK_KEY_HOME;
+	case XK_End:
+	case XK_KP_End: return PEAK_KEY_END;
+	case XK_Page_Up:
+	case XK_KP_Page_Up: return PEAK_KEY_PAGEUP;
+	case XK_Page_Down:
+	case XK_KP_Page_Down: return PEAK_KEY_PAGEDOWN;
+	case XK_F1: return PEAK_KEY_F1;
+	case XK_F2: return PEAK_KEY_F2;
+	case XK_F3: return PEAK_KEY_F3;
+	case XK_F4: return PEAK_KEY_F4;
+	case XK_F5: return PEAK_KEY_F5;
+	case XK_F6: return PEAK_KEY_F6;
+	case XK_F7: return PEAK_KEY_F7;
+	case XK_F8: return PEAK_KEY_F8;
+	case XK_F9: return PEAK_KEY_F9;
+	case XK_F10: return PEAK_KEY_F10;
+	case XK_F11: return PEAK_KEY_F11;
+	case XK_F12: return PEAK_KEY_F12;
 	default: return PEAK_KEY_UNKNOWN;
 	}
 }
@@ -173,6 +243,8 @@ peak_internal_x11_mod_map(unsigned int state)
 		m |= PEAK_KEYMOD_ALT;
 	if (state & LockMask)
 		m |= PEAK_KEYMOD_CAPS;
+	if (state & Mod4Mask)
+		m |= PEAK_KEYMOD_SUPER;
 	return m;
 }
 
@@ -213,10 +285,92 @@ peak_linux_buffer(struct peak_linux_win *w, uint32_t width, uint32_t height)
 	return 1;
 }
 
+static int peak_linux_gp_fd[4];
+static int peak_linux_gp_on[4];
+
+static void
+peak_linux_gamepad_scan(void)
+{
+	char path[32];
+	int i, fd;
+
+	for (i = 0; i < 4; i++) {
+		if (peak_linux_gp_fd[i] >= 0)
+			continue;
+		snprintf(path, sizeof path, "/dev/input/js%d", i);
+		fd = open(path, O_RDONLY | O_NONBLOCK);
+		if (fd >= 0)
+			peak_linux_gp_fd[i] = fd;
+	}
+}
+
+static int
+peak_linux_gamepad_poll(PeakEvent *ev)
+{
+	struct js_event js;
+	int i, n;
+
+	peak_linux_gamepad_scan();
+	for (i = 0; i < 4; i++) {
+		if (peak_linux_gp_fd[i] < 0)
+			continue;
+		n = (int)read(peak_linux_gp_fd[i], &js, sizeof js);
+		if (n < 0) {
+			if (errno == EAGAIN || errno == EWOULDBLOCK)
+				continue;
+			close(peak_linux_gp_fd[i]);
+			peak_linux_gp_fd[i] = -1;
+			if (peak_linux_gp_on[i]) {
+				peak_linux_gp_on[i] = 0;
+				memset(ev, 0, sizeof *ev);
+				ev->type = PEAK_EVENT_POINTER_DISCONNECTED;
+				return 1;
+			}
+			continue;
+		}
+		if (n != (int)sizeof js)
+			continue;
+		if (js.type & JS_EVENT_INIT)
+			continue;
+		if (!peak_linux_gp_on[i]) {
+			peak_linux_gp_on[i] = 1;
+			memset(ev, 0, sizeof *ev);
+			ev->type = PEAK_EVENT_POINTER_CONNECTED;
+			return 1;
+		}
+		memset(ev, 0, sizeof *ev);
+		ev->type = PEAK_EVENT_POINTER;
+		if (js.type & JS_EVENT_BUTTON) {
+			ev->pointer.state = js.value ? PEAK_POINTER_PRESSED : PEAK_POINTER_RELEASED;
+			ev->pointer.type = (js.number == 1) ? PEAK_POINTER_RIGHT :
+			                   (js.number == 2) ? PEAK_POINTER_MIDDLE : PEAK_POINTER_LEFT;
+		} else {
+			ev->pointer.state = PEAK_POINTER_MOVED;
+			ev->pointer.type = PEAK_POINTER_LEFT;
+			if (js.number == 0)
+				ev->pointer.x = (float)js.value / 32767.f;
+			else
+				ev->pointer.y = (float)js.value / 32767.f;
+		}
+		return 1;
+	}
+	return 0;
+}
+
 static int
 peak_platform_init(void)
 {
 	void *handle;
+	int i;
+
+	if (peak_linux_kind == PEAK_LINUX_WAYLAND || peak_linux_kind == PEAK_LINUX_X11)
+		return 1;
+	for (i = 0; i < 4; i++)
+		peak_linux_gp_fd[i] = -1;
+	if (peak_wayland_init()) {
+		peak_linux_kind = PEAK_LINUX_WAYLAND;
+		return 1;
+	}
 
 	if (!peak_x11.XOpenDisplay) {
 		if (!(handle = dlopen(PEAK_X11_LINUX, RTLD_LOCAL | RTLD_NOW))) {
@@ -234,19 +388,47 @@ peak_platform_init(void)
 			return 0;
 		}
 		peak_linux.wm_delete_window = peak_x11.XInternAtom(peak_linux.display, "WM_DELETE_WINDOW", False);
+		peak_linux.net_wm_state = peak_x11.XInternAtom(peak_linux.display, "_NET_WM_STATE", False);
+		peak_linux.net_wm_state_fullscreen = peak_x11.XInternAtom(peak_linux.display, "_NET_WM_STATE_FULLSCREEN", False);
+		peak_linux.xdnd_aware = peak_x11.XInternAtom(peak_linux.display, "XdndAware", False);
+		peak_linux.xdnd_enter = peak_x11.XInternAtom(peak_linux.display, "XdndEnter", False);
+		peak_linux.xdnd_position = peak_x11.XInternAtom(peak_linux.display, "XdndPosition", False);
+		peak_linux.xdnd_drop = peak_x11.XInternAtom(peak_linux.display, "XdndDrop", False);
+		peak_linux.xdnd_status = peak_x11.XInternAtom(peak_linux.display, "XdndStatus", False);
+		peak_linux.xdnd_finished = peak_x11.XInternAtom(peak_linux.display, "XdndFinished", False);
+		peak_linux.xdnd_selection = peak_x11.XInternAtom(peak_linux.display, "XdndSelection", False);
+		peak_linux.xdnd_type_list = peak_x11.XInternAtom(peak_linux.display, "XdndTypeList", False);
+		peak_linux.xdnd_action_copy = peak_x11.XInternAtom(peak_linux.display, "XdndActionCopy", False);
+		peak_linux.uri_list = peak_x11.XInternAtom(peak_linux.display, "text/uri-list", False);
 	}
+	peak_linux_kind = PEAK_LINUX_X11;
 	return 1;
 }
 
 static void
 peak_platform_quit(void)
 {
+	int i;
+
+	if (peak_linux_kind == PEAK_LINUX_WAYLAND) {
+		peak_wayland_quit();
+		peak_linux_kind = PEAK_LINUX_NONE;
+		return;
+	}
+	for (i = 0; i < 4; i++) {
+		if (peak_linux_gp_fd[i] >= 0) {
+			close(peak_linux_gp_fd[i]);
+			peak_linux_gp_fd[i] = -1;
+		}
+		peak_linux_gp_on[i] = 0;
+	}
 	/* NOTE: NVIDIA's Vulkan ICD registers an XCloseDisplay hook, then
 	 * vkDestroyInstance unloads the ICD. Closing afterwards is a SIGSEGV
 	 * into unmapped memory. The connection is dropped on process exit. */
 	if (!peak_linux.display)
 		return;
 	peak_linux.display = 0;
+	peak_linux_kind = PEAK_LINUX_NONE;
 }
 
 static int
@@ -277,7 +459,10 @@ peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uin
 	XVisualInfo vi;
 	int screen;
 	long evmask;
+	uint32_t xdnd_ver = 5;
 
+	if (peak_linux_kind != PEAK_LINUX_X11 && peak_platform_init() && peak_linux_kind == PEAK_LINUX_WAYLAND)
+		return peak_wayland_window_open(name, width, height, flags);
 	if (!peak_linux.display && !peak_platform_init())
 		return intern;
 
@@ -326,9 +511,16 @@ peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uin
 		return intern;
 	}
 
+	w->flags = (int)flags;
+	w->cursor_on = 1;
+	intern.w = w;
+	if (peak_linux.xdnd_aware)
+		peak_x11.XChangeProperty(peak_linux.display, w->window, peak_linux.xdnd_aware, XA_ATOM, 32,
+			PropModeReplace, (unsigned char *)&xdnd_ver, 1);
+	if (flags & PEAK_WINDOW_FULLSCREEN)
+		peak_platform_window_fullscreen(&intern, 1);
 	peak_x11.XMapRaised(peak_linux.display, w->window);
 	peak_x11.XFlush(peak_linux.display);
-	intern.w = w;
 	return intern;
 }
 
@@ -337,9 +529,15 @@ peak_platform_window_close(PeakWindowInternal *intern)
 {
 	struct peak_linux_win *w;
 
+	if (peak_linux_kind == PEAK_LINUX_WAYLAND) {
+		peak_wayland_window_close(intern);
+		return;
+	}
 	w = intern ? intern->w : NULL;
 	if (!w || !w->window || !peak_linux.display)
 		return;
+	if (w->blank && peak_x11.XFreeCursor)
+		peak_x11.XFreeCursor(peak_linux.display, w->blank);
 	if (w->ximage) {
 		w->ximage->data = NULL;
 		XDestroyImage(w->ximage);
@@ -357,6 +555,8 @@ peak_platform_window_close(PeakWindowInternal *intern)
 static uint32_t *
 peak_platform_window_buffer(PeakWindowInternal *intern, size_t *width, size_t *height)
 {
+	if (peak_linux_kind == PEAK_LINUX_WAYLAND)
+		return peak_wayland_window_buffer(intern, width, height);
 	struct peak_linux_win *w;
 
 	w = intern ? intern->w : NULL;
@@ -375,6 +575,10 @@ peak_platform_window_present(PeakWindowInternal *intern)
 {
 	struct peak_linux_win *w;
 
+	if (peak_linux_kind == PEAK_LINUX_WAYLAND) {
+		peak_wayland_window_present(intern);
+		return;
+	}
 	w = intern ? intern->w : NULL;
 	if (!w || !w->ximage || !peak_linux.display)
 		return;
@@ -613,9 +817,130 @@ peak_linux_clip_property(struct peak_linux_win *w, XPropertyEvent *pe, PeakEvent
 	return 0;
 }
 
+static void
+peak_platform_window_set_title(PeakWindowInternal *intern, const char *name)
+{
+	struct peak_linux_win *w;
+
+	if (peak_linux_kind == PEAK_LINUX_WAYLAND) {
+		peak_wayland_window_set_title(intern, name);
+		return;
+	}
+	w = intern ? intern->w : NULL;
+	if (!w || !w->window || !peak_linux.display || !name)
+		return;
+	peak_x11.XStoreName(peak_linux.display, w->window, name);
+	peak_x11.XFlush(peak_linux.display);
+}
+
+static void
+peak_platform_window_set_size(PeakWindowInternal *intern, uint32_t width, uint32_t height)
+{
+	struct peak_linux_win *w;
+
+	if (peak_linux_kind == PEAK_LINUX_WAYLAND) {
+		peak_wayland_window_set_size(intern, width, height);
+		return;
+	}
+	w = intern ? intern->w : NULL;
+	if (!w || !w->window || !peak_linux.display || !peak_x11.XResizeWindow)
+		return;
+	peak_x11.XResizeWindow(peak_linux.display, w->window, width, height);
+	peak_x11.XFlush(peak_linux.display);
+}
+
+static void
+peak_platform_window_fullscreen(PeakWindowInternal *intern, int on)
+{
+	struct peak_linux_win *w;
+	XEvent e;
+
+	if (peak_linux_kind == PEAK_LINUX_WAYLAND) {
+		peak_wayland_window_fullscreen(intern, on);
+		return;
+	}
+	w = intern ? intern->w : NULL;
+	if (!w || !w->window || !peak_linux.display || !peak_linux.net_wm_state)
+		return;
+	memset(&e, 0, sizeof e);
+	e.xclient.type = ClientMessage;
+	e.xclient.window = w->window;
+	e.xclient.message_type = peak_linux.net_wm_state;
+	e.xclient.format = 32;
+	e.xclient.data.l[0] = on ? 1 : 0;
+	e.xclient.data.l[1] = (long)peak_linux.net_wm_state_fullscreen;
+	e.xclient.data.l[2] = 0;
+	e.xclient.data.l[3] = 1;
+	peak_x11.XSendEvent(peak_linux.display, DefaultRootWindow(peak_linux.display), False,
+		SubstructureNotifyMask | SubstructureRedirectMask, &e);
+	peak_x11.XFlush(peak_linux.display);
+}
+
+static void
+peak_platform_window_cursor(PeakWindowInternal *intern, int on)
+{
+	struct peak_linux_win *w;
+	Pixmap bm;
+	XColor black;
+
+	if (peak_linux_kind == PEAK_LINUX_WAYLAND) {
+		peak_wayland_window_cursor(intern, on);
+		return;
+	}
+	w = intern ? intern->w : NULL;
+	if (!w || !w->window || !peak_linux.display)
+		return;
+	w->cursor_on = on;
+	if (on) {
+		if (peak_x11.XUndefineCursor)
+			peak_x11.XUndefineCursor(peak_linux.display, w->window);
+		return;
+	}
+	if (!w->blank && peak_x11.XCreatePixmap && peak_x11.XCreatePixmapCursor) {
+		memset(&black, 0, sizeof black);
+		bm = peak_x11.XCreatePixmap(peak_linux.display, w->window, 1, 1, 1);
+		w->blank = peak_x11.XCreatePixmapCursor(peak_linux.display, bm, bm, &black, &black, 0, 0);
+		peak_x11.XFreePixmap(peak_linux.display, bm);
+	}
+	if (w->blank)
+		peak_x11.XDefineCursor(peak_linux.display, w->window, w->blank);
+}
+
+static void
+peak_platform_window_pointer_relative(PeakWindowInternal *intern, int on)
+{
+	struct peak_linux_win *w;
+
+	if (peak_linux_kind == PEAK_LINUX_WAYLAND) {
+		peak_wayland_window_pointer_relative(intern, on);
+		return;
+	}
+	w = intern ? intern->w : NULL;
+	if (!w || !w->window || !peak_linux.display)
+		return;
+	w->relative = on;
+	if (on && peak_x11.XGrabPointer)
+		peak_x11.XGrabPointer(peak_linux.display, w->window, True,
+			PointerMotionMask | ButtonPressMask | ButtonReleaseMask,
+			GrabModeAsync, GrabModeAsync, w->window, None, CurrentTime);
+	else if (!on && peak_x11.XUngrabPointer)
+		peak_x11.XUngrabPointer(peak_linux.display, CurrentTime);
+}
+
+static float
+peak_platform_window_scale(PeakWindowInternal *intern)
+{
+	if (peak_linux_kind == PEAK_LINUX_WAYLAND)
+		return peak_wayland_window_scale(intern);
+	(void)intern;
+	return 1.f;
+}
+
 static int
 peak_platform_clip_set(PeakWindowInternal *intern, PeakClip which, const char *utf8, size_t n)
 {
+	if (peak_linux_kind == PEAK_LINUX_WAYLAND)
+		return peak_wayland_clip_set(intern, which, utf8, n);
 	struct peak_linux_win *w;
 
 	(void)utf8;
@@ -634,6 +959,8 @@ peak_platform_clip_request(PeakWindowInternal *intern, PeakClip which)
 {
 	struct peak_linux_win *w;
 
+	if (peak_linux_kind == PEAK_LINUX_WAYLAND)
+		return peak_wayland_clip_request(intern, which);
 	w = intern ? intern->w : NULL;
 	if (!w || !w->window || !peak_linux.display)
 		return 0;
@@ -654,9 +981,21 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 	struct peak_linux_win *w;
 	XEvent xev;
 
+	if (peak_linux_kind == PEAK_LINUX_WAYLAND) {
+		if (peak_wayland_epoll(intern, ev))
+			return 1;
+		return peak_linux_gamepad_poll(ev);
+	}
 	w = intern ? intern->w : NULL;
 	if (!w || !w->window || !peak_linux.display)
 		return 0;
+	if (w->extra_on) {
+		*ev = w->extra;
+		w->extra_on = 0;
+		return 1;
+	}
+	if (peak_linux_gamepad_poll(ev))
+		return 1;
 
 	while (peak_x11.XCheckIfEvent(peak_linux.display, &xev, peak_internal_x11_window_match, (XPointer)&w->window)) {
 		switch (xev.type) {
@@ -664,6 +1003,28 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 			if ((Atom)xev.xclient.data.l[0] == peak_linux.wm_delete_window) {
 				ev->type = PEAK_EVENT_WINDOW_CLOSE;
 				return 1;
+			}
+			if (xev.xclient.message_type == peak_linux.xdnd_enter)
+				continue;
+			if (xev.xclient.message_type == peak_linux.xdnd_position) {
+				XEvent r;
+
+				memset(&r, 0, sizeof r);
+				r.xclient.type = ClientMessage;
+				r.xclient.display = peak_linux.display;
+				r.xclient.window = (Window)xev.xclient.data.l[0];
+				r.xclient.message_type = peak_linux.xdnd_status;
+				r.xclient.format = 32;
+				r.xclient.data.l[0] = (long)w->window;
+				r.xclient.data.l[1] = 1;
+				r.xclient.data.l[4] = (long)peak_linux.xdnd_action_copy;
+				peak_x11.XSendEvent(peak_linux.display, r.xclient.window, False, 0, &r);
+				continue;
+			}
+			if (xev.xclient.message_type == peak_linux.xdnd_drop) {
+				peak_x11.XConvertSelection(peak_linux.display, peak_linux.xdnd_selection,
+					peak_linux.uri_list, peak_linux.clip_prop, w->window, CurrentTime);
+				continue;
 			}
 			continue;
 		case KeyPress:
@@ -678,6 +1039,13 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 			ev->key.key = peak_internal_x11_key_map(ks ? ks : peak_x11.XLookupKeysym(&xev.xkey, 0));
 			ev->key.mod = peak_internal_x11_mod_map(xev.xkey.state);
 			ev->key.code = (n > 0) ? (uint32_t)(unsigned char)buf[0] : 0;
+			if (xev.type == KeyPress && n > 0 && (unsigned char)buf[0] >= 32) {
+				peak_text_store(buf, (size_t)n);
+				w->extra_on = 1;
+				memset(&w->extra, 0, sizeof w->extra);
+				w->extra.type = PEAK_EVENT_TEXT;
+				w->extra.text.n = (size_t)n;
+			}
 			return 1;
 		}
 		case ButtonPress:
@@ -701,11 +1069,21 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 		case MotionNotify:
 			ev->type = PEAK_EVENT_POINTER;
 			ev->pointer.state = PEAK_POINTER_MOVED;
-			ev->pointer.x = (float)xev.xmotion.x;
-			ev->pointer.y = (float)xev.xmotion.y;
 			ev->pointer.mod = peak_internal_x11_mod_map(xev.xmotion.state);
 			ev->pointer.type = (xev.xmotion.state & Button3Mask) ? PEAK_POINTER_RIGHT :
 			                   (xev.xmotion.state & Button2Mask) ? PEAK_POINTER_MIDDLE : PEAK_POINTER_LEFT;
+			if (w->relative) {
+				ev->pointer.x = (float)xev.xmotion.x - w->last_x;
+				ev->pointer.y = (float)xev.xmotion.y - w->last_y;
+			} else {
+				ev->pointer.x = (float)xev.xmotion.x;
+				ev->pointer.y = (float)xev.xmotion.y;
+			}
+			w->last_x = (float)xev.xmotion.x;
+			w->last_y = (float)xev.xmotion.y;
+			if (w->relative && peak_x11.XWarpPointer)
+				peak_x11.XWarpPointer(peak_linux.display, None, w->window, 0, 0, 0, 0,
+					(int)w->width / 2, (int)w->height / 2);
 			return 1;
 		case ConfigureNotify: {
 			uint32_t width = (uint32_t)xev.xconfigure.width;
@@ -725,6 +1103,32 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 		case SelectionClear:
 			continue;
 		case SelectionNotify:
+			if (xev.xselection.selection == peak_linux.xdnd_selection && xev.xselection.property != None) {
+				Atom type = 0;
+				int fmt = 0;
+				unsigned long nitems = 0, after = 0;
+				unsigned char *data = NULL;
+				const char *p, *nl;
+
+				if (peak_x11.XGetWindowProperty(peak_linux.display, w->window, xev.xselection.property,
+						0, 0x10000, True, AnyPropertyType, &type, &fmt, &nitems, &after, &data) == Success && data) {
+					p = (const char *)data;
+					if (!strncmp(p, "file://", 7))
+						p += 7;
+					nl = strchr(p, '\n');
+					nitems = nl ? (unsigned long)(nl - p) : nitems;
+					while (nitems && (p[nitems - 1] == '\r' || p[nitems - 1] == '\n'))
+						nitems--;
+					peak_drop_store(p, (size_t)nitems);
+					ev->type = PEAK_EVENT_DROP;
+					ev->drop.n = (size_t)nitems;
+					peak_x11.XFree(data);
+					return 1;
+				}
+				if (data)
+					peak_x11.XFree(data);
+				continue;
+			}
 			if (!peak_clip_req_on)
 				continue;
 			if (xev.xselection.property == None) {
@@ -758,6 +1162,8 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 static int
 peak_platform_fd(PeakWindowInternal *intern)
 {
+	if (peak_linux_kind == PEAK_LINUX_WAYLAND)
+		return peak_wayland_fd(intern);
 	(void)intern;
 	if (!peak_linux.display)
 		return -1;
@@ -770,6 +1176,8 @@ peak_platform_pending(PeakWindowInternal *intern)
 	struct peak_linux_win *w;
 	XEvent ev;
 
+	if (peak_linux_kind == PEAK_LINUX_WAYLAND)
+		return peak_wayland_pending(intern);
 	w = intern ? intern->w : NULL;
 	if (!w || !w->window || !peak_linux.display || !peak_x11.XPending)
 		return 0;
@@ -890,6 +1298,8 @@ peak_platform_vulkan_get_extensions(uint32_t *count)
 		"VK_KHR_surface",
 		"VK_KHR_xlib_surface",
 	};
+	if (peak_linux_kind == PEAK_LINUX_WAYLAND)
+		return peak_wayland_vulkan_get_extensions(count);
 	if (count) *count = 2;
 	return exts;
 }
@@ -897,6 +1307,8 @@ peak_platform_vulkan_get_extensions(uint32_t *count)
 static int
 peak_platform_vulkan_create_surface(PeakWindowInternal *intern, void *instance, const void *allocator, void *out_surface)
 {
+	if (peak_linux_kind == PEAK_LINUX_WAYLAND)
+		return peak_wayland_vulkan_create_surface(intern, instance, allocator, out_surface);
 #ifdef PEAK_VULKAN
 	struct peak_linux_win *w;
 	VkXlibSurfaceCreateInfoKHR ci;

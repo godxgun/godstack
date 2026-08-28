@@ -12,7 +12,7 @@ Collection of modular and minimal libraries used by our software.
 | Name   | Version | Description                                |
 | ------ | ------- | ------------------------------------------ |
 | Poof   | 0.1.4   | Build system.                              |
-| Peak   | 0.7.0   | Platform library that automatically links the correct system libraries. |
+| Peak   | 0.8.0   | Platform library that automatically links the correct system libraries. |
 | Fuse   | 0.8.0   | Immediate-mode UI command buffer.          |
 | Rend   | 1.6.4   | Modern graphics API layer.                 |
 
@@ -21,7 +21,7 @@ Collection of modular and minimal libraries used by our software.
 | ------ | ------- | ------------------------------------------ |
 | Grit   | 0.2.1   | Allocators, math, rng, software raster.    |
 | Cast   | 0.0.0   | C parser.                                  |
-| Term   | 0.5.0   | Cell-grid terminal emulator as seen in [VT](https://github.com/valvesxyz/vt) |
+| Term   | 0.6.0   | Cell-grid terminal emulator as seen in [VT](https://github.com/valvesxyz/vt) |
 
 ## Web Related
 | Name   | Version | Description                                |
@@ -39,11 +39,13 @@ Collection of modular and minimal libraries used by our software.
 ## Build
 
 ```
-./build        # demos + fuse_test + tests/rend_cpu
-./build test   # that, then run them headlessly
+./build             # demos + tests
+./build test        # that, then run them headlessly
+./build peak        # Peak demos + tests/peak
+./build peak test   # that, then run tests/peak
 ```
 
-Rend demos take `--headless` (`--frames N`, `--ppm path`). Peak window demos need a display.
+Rend demos take `--headless` (`--frames N`, `--ppm path`). Peak window tests need a display (Xvfb on Linux CI).
 
 ## Maturity & Versioning
 

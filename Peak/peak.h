@@ -1,8 +1,14 @@
 /* ===========================================================================
  * PEAK - Copyright @ Vasco Alves - See LICENSE at the end of file.
  *
+ * figlet font: maxiwi
+ *
  * Platform layer.
  * It just works, don't think about it too much.
+ *
+ * SUPPORTED PLATFORMS:
+ * - Desktop: Win32, MacOS and Linux (Wayland & X11).
+ * - Web via emscripten.
  *
  * PREFIX: PEAK (macros)  Peak (types)  peak_ (functions)
  *
@@ -24,9 +30,13 @@
  * - PEAK_BSD                *BSD
  * - PEAK_UNIX               Linux / BSD / Apple
  * - PEAK_WINDOW_TRANSPARENT window_open: ARGB visual
+ * - PEAK_WINDOW_FULLSCREEN  window_open: start fullscreen
  * - PEAK_HANDLE             fd, or HANDLE on Win32
  * - PEAK_HANDLE_INVALID     closed / failed
  * - PEAK                    extern
+ *
+ * The platform detection macros may be useful in your project,
+ * feel free to use them. Detecting a platform does not mean it's supported.
  *
  * =========================================================================== */
 
@@ -41,10 +51,10 @@
 #endif
 
 #define PEAK_MAJOR "0"
-#define PEAK_MINOR "7"
+#define PEAK_MINOR "8"
 #define PEAK_PATCH "0"
 
-/* CHANGE LOG 
+/* CHANGE LOG
  * 0.0.0 - @vasco - prototyping
  * 0.1.0 - @vasco - linux x11 that automagically loads X11 DLL
  * 0.1.1 - @vasco - fixed event handling on linux
@@ -70,9 +80,8 @@
  * 0.6.5 - @vasco - ISO_Left_Tab; linux syscall prototype
  * 0.6.6 - @vasco - pending is this window only; WSI events no longer spin poll
  * 0.7.0 - @vasco - clipboard; keymod flags; Insert; pointer.mod; PEAK_EVENT_CLIP
+ * 0.8.0 - @vasco - keys F1-12 Home End Page Super; title size fullscreen cursor relative scale; text/drop; filesystem; sock_connect; wayland then x11; pointer connect
  */
-
-#define NANOS_PER_SEC 1000000000ull
 
 #include <assert.h>
 #include <stdint.h>
@@ -85,10 +94,13 @@
 #error "Peak requires C99."
 #endif
 
-/*
- * Detecting a platform does not mean it's supported.
- * Feel free to use these macros if you need them.
- */
+//   █
+//   █      █           █
+// ███ ███ ███ ███ ███ ███
+// █ █ ███  █  ███ █    █
+// █ █ █    █  █   █    █
+// ███ ███  ██ ███ ███  ██
+
 #if defined(__wasm__) || defined(__wasm32__) || defined(__wasm64__) || defined(__EMSCRIPTEN__)
     #define PEAK_WEB
 #elif defined(_WIN32) || defined(_WIN64) || defined(__WIN32__) || defined(__TOS_WIN__)
@@ -111,15 +123,20 @@
     #define PEAK_LINUX
 #elif defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__bsdi__) || defined(__DragonFly__)
     #define PEAK_BSD
-#endif 
+#endif
 
 #if defined(PEAK_LINUX) || defined(PEAK_BSD) || defined(PEAK_APPLE)
     #define PEAK_UNIX
 #endif
 
 #ifdef PEAK_VULKAN
-#if defined(PEAK_LINUX) && !defined(VK_USE_PLATFORM_XLIB_KHR)
+#if defined(PEAK_LINUX)
+#ifndef VK_USE_PLATFORM_WAYLAND_KHR
+#define VK_USE_PLATFORM_WAYLAND_KHR
+#endif
+#ifndef VK_USE_PLATFORM_XLIB_KHR
 #define VK_USE_PLATFORM_XLIB_KHR
+#endif
 #elif defined(PEAK_WIN32) && !defined(VK_USE_PLATFORM_WIN32_KHR)
 #define VK_USE_PLATFORM_WIN32_KHR
 #elif defined(PEAK_MACOS) && !defined(VK_USE_PLATFORM_METAL_EXT)
@@ -133,8 +150,276 @@ typedef void *PEAK_HANDLE;
 typedef int PEAK_HANDLE;
 #endif
 #define PEAK_HANDLE_INVALID ((PEAK_HANDLE)(intptr_t)-1)
-
 #define PEAK extern
+
+// █     █
+//          █
+// █ ███ █ ███
+// █ █ █ █  █
+// █ █ █ █  █
+// █ █ █ █  ██
+
+PEAK int  peak_init(void);
+PEAK void peak_quit(void);
+
+//                  █
+// ███ █ █ ███ ███ ███
+// ███ █ █ ███ █ █  █
+// █   █ █ █   █ █  █
+// ███  █  ███ █ █  ██
+
+typedef enum {
+    PEAK_KEYMOD_NONE  = 0,
+    PEAK_KEYMOD_SHIFT = 1 << 0,
+    PEAK_KEYMOD_CTRL  = 1 << 1,
+    PEAK_KEYMOD_ALT   = 1 << 2,
+    PEAK_KEYMOD_CAPS  = 1 << 3,
+    PEAK_KEYMOD_SUPER = 1 << 4,
+} PeakKeyMod;
+
+typedef enum {
+    PEAK_KEY_UNKNOWN = 0,
+    PEAK_KEY_UP, PEAK_KEY_DOWN, PEAK_KEY_LEFT, PEAK_KEY_RIGHT,
+    PEAK_KEY_SPACE, PEAK_KEY_ESCAPE, PEAK_KEY_ENTER,
+    PEAK_KEY_BACKSPACE, PEAK_KEY_TAB, PEAK_KEY_DELETE, PEAK_KEY_INSERT,
+    PEAK_KEY_HOME, PEAK_KEY_END, PEAK_KEY_PAGEUP, PEAK_KEY_PAGEDOWN,
+    PEAK_KEY_F1, PEAK_KEY_F2, PEAK_KEY_F3, PEAK_KEY_F4, PEAK_KEY_F5, PEAK_KEY_F6,
+    PEAK_KEY_F7, PEAK_KEY_F8, PEAK_KEY_F9, PEAK_KEY_F10, PEAK_KEY_F11, PEAK_KEY_F12,
+    PEAK_KEY_0, PEAK_KEY_1, PEAK_KEY_2, PEAK_KEY_3, PEAK_KEY_4,
+    PEAK_KEY_5, PEAK_KEY_6, PEAK_KEY_7, PEAK_KEY_8, PEAK_KEY_9,
+    PEAK_KEY_A, PEAK_KEY_B, PEAK_KEY_C, PEAK_KEY_D, PEAK_KEY_E, PEAK_KEY_F, PEAK_KEY_G, PEAK_KEY_H, PEAK_KEY_I,
+    PEAK_KEY_J, PEAK_KEY_K, PEAK_KEY_L, PEAK_KEY_M, PEAK_KEY_N, PEAK_KEY_O, PEAK_KEY_P, PEAK_KEY_Q, PEAK_KEY_R,
+    PEAK_KEY_S, PEAK_KEY_T, PEAK_KEY_U, PEAK_KEY_V, PEAK_KEY_W, PEAK_KEY_X, PEAK_KEY_Y, PEAK_KEY_Z,
+} PeakKeyCode;
+
+typedef enum {
+    PEAK_CLIP_CLIPBOARD = 0, /* Ctrl-C/V, OSC 52 */
+    PEAK_CLIP_PRIMARY,       /* mouse select, middle paste */
+} PeakClip;
+
+typedef enum {
+    PEAK_EVENT_NONE = 0,
+    PEAK_EVENT_KEY_DOWN,
+    PEAK_EVENT_KEY_UP,
+    PEAK_EVENT_WINDOW_CLOSE,
+    PEAK_EVENT_WINDOW_RESIZE,
+    PEAK_EVENT_POINTER,
+    PEAK_EVENT_POINTER_CONNECTED,
+    PEAK_EVENT_POINTER_DISCONNECTED,
+    PEAK_EVENT_CLIP,
+    PEAK_EVENT_TEXT,
+    PEAK_EVENT_DROP,
+    PEAK_EVENT_LAST
+} PeakEventType;
+
+typedef enum {
+    PEAK_POINTER_MOVED = 0,
+    PEAK_POINTER_PRESSED,
+    PEAK_POINTER_RELEASED
+} PeakPointerState;
+
+typedef enum {
+    PEAK_POINTER_LEFT = 0,
+    PEAK_POINTER_RIGHT,
+    PEAK_POINTER_MIDDLE,
+    PEAK_POINTER_TOUCH,
+    PEAK_POINTER_WHEEL_UP,
+    PEAK_POINTER_WHEEL_DOWN,
+} PeakPointerType;
+
+typedef struct {
+    PeakEventType type;
+    union {
+        struct { PeakKeyCode key; PeakKeyMod mod; uint32_t code; } key;
+        struct { uint32_t width, height; } resize;
+        struct { PeakPointerState state; PeakPointerType type; float x, y; PeakKeyMod mod; } pointer;
+        struct { PeakClip which; size_t n; } clip;
+        struct { size_t n; } text;
+        struct { size_t n; } drop;
+    };
+} PeakEvent;
+
+//       █       █
+//               █
+// █ █ █ █ ███ ███ ███ █ █ █
+// █ █ █ █ █ █ █ █ █ █ █ █ █
+// █ █ █ █ █ █ █ █ █ █ █ █ █
+//  █ █  █ █ █ ███ ███  █ █
+
+enum PeakWindowFlags {
+    PEAK_WINDOW_TRANSPARENT = 1 << 0,
+    PEAK_WINDOW_FULLSCREEN  = 1 << 1
+};
+
+typedef struct peak_window_internal_t {
+    void *w;
+} PeakWindowInternal;
+
+typedef struct PeakWindow {
+    PeakWindowInternal internal;
+    int (*tick)(struct PeakWindow *win, void *userdata);
+    void *userdata;
+    uint32_t *buffer;
+    uint32_t width;
+    uint32_t height;
+    uint32_t bufsize;
+    uint16_t *audio;
+    int running;
+} PeakWindow;
+
+PEAK PeakWindow peak_window_open(const char *name, uint32_t width, uint32_t height, uint32_t flags);
+PEAK void       peak_window_close(PeakWindow *window);
+PEAK void       peak_window_run(PeakWindow *win, int (*peak_tick)(PeakWindow *win, void *userdata), void *userdata); /* hijack main loop (web) */
+PEAK int        peak_window_epoll(PeakWindow *win, PeakEvent *ev);
+PEAK int        peak_window_fd(PeakWindow *win); /* display connection fd, or -1 */
+PEAK int        peak_window_pending(PeakWindow *win); /* queued window events; 0 if none */
+PEAK uint32_t  *peak_window_backbuffer(PeakWindow *win, size_t *width, size_t *height);
+PEAK void       peak_window_clear(PeakWindow *win, float r, float g, float b, float a);
+PEAK void       peak_window_present(PeakWindow *win);
+PEAK void       peak_window_set_title(PeakWindow *win, const char *name);
+PEAK void       peak_window_set_size(PeakWindow *win, uint32_t width, uint32_t height);
+PEAK void       peak_window_fullscreen(PeakWindow *win, int on);
+PEAK void       peak_window_cursor(PeakWindow *win, int on); /* 1 show, 0 hide */
+PEAK void       peak_window_pointer_relative(PeakWindow *win, int on); /* 1 deltas, 0 absolute */
+PEAK float      peak_window_scale(PeakWindow *win); /* framebuffer / window; 1.0 if unknown */
+
+//           █ █
+//           █
+// ███ █ █ ███ █ ███
+//   █ █ █ █ █ █ █ █
+// ███ █ █ █ █ █ █ █
+// ███ ███ ███ █ ███
+
+PEAK int  peak_audio_start(uint32_t channels, uint32_t rate, void (*fill)(int16_t *out, size_t frames, void *userdata), void *userdata); /* device pulls interleaved s16le */
+PEAK void peak_audio_stop(void);
+
+//     █
+//  █
+// ███ █ █████ ███
+//  █  █ █ █ █ ███
+//  █  █ █ █ █ █
+//  ██ █ █ █ █ ███
+
+#define NANOS_PER_SEC 1000000000ull
+
+PEAK uint64_t peak_get_time(void); /* nanoseconds */
+PEAK void     peak_sleep_ns(int64_t ns);
+
+//  ██ █ █
+//  █    █
+// ███ █ █  ███
+//  █  █ █  ███
+//  █  █ █  █
+//  █  █ ██ ███
+
+PEAK int   peak_file_exists(const char *path);
+PEAK void *peak_file_alloc(const char *path, unsigned long *buf_size);
+PEAK int   peak_file_write(const char *path, const void *buf, size_t n); /* create/overwrite */
+
+PEAK int peak_filesystem_mkdir(const char *path); /* one level */
+PEAK int peak_filesystem_rm(const char *path); /* unlink, or rmdir if empty */
+PEAK int peak_filesystem_cwd(char *buf, size_t cap);
+PEAK int peak_filesystem_chdir(const char *path);
+PEAK int peak_filesystem_rename(const char *from, const char *to);
+
+// ███ ███ ███ ███
+// █ █ █   █ █ █
+// █ █ █   █ █ █
+// ███ █   ███ ███
+// █
+// █
+
+typedef struct PeakProc {
+    PEAK_HANDLE fd; /* PEAK_HANDLE_INVALID if closed / failed */
+    int pid;        /* 0 if none */
+} PeakProc;
+
+/* Child + PTY. File descriptor is nonblocking. Fails as PEAK_HANDLE_INVALID. */
+PEAK PeakProc peak_pty_spawn(const char *file, const char **argv, uint32_t cols, uint32_t rows, uint32_t xpixel, uint32_t ypixel);
+PEAK void     peak_pty_resize(PeakProc *pty, uint32_t cols, uint32_t rows, uint32_t xpixel, uint32_t ypixel);
+PEAK int      peak_pty_reap(PeakProc *pty); /* 1 if dead */
+PEAK void     peak_pty_close(PeakProc *pty);
+
+/* Off-grid shell. */
+PEAK PeakProc peak_job_run(const char *cmd, const char *cwd);
+PEAK int      peak_job_reap(PeakProc *job, int *code); /* 1 if exited */
+PEAK void     peak_job_kill(PeakProc *job);
+PEAK int      peak_pid_cwd(int pid, char *buf, size_t cap);
+
+// █
+//
+// █ ███
+// █ █ █
+// █ █ █
+// █ ███
+
+/* Sleep until window (nullable) or any fd is ready. timeout_ms: -1 block, 0 poll. 1 if ready. */
+PEAK int peak_wait(PeakWindow *win, const PEAK_HANDLE *fds, uint32_t n, int timeout_ms);
+
+/* Local stream (unix socket / named pipe). listen/accept fds are nonblocking. */
+PEAK int         peak_runtime_dir(char *buf, size_t cap, const char *app);
+PEAK PEAK_HANDLE peak_sock_listen(const char *path);
+PEAK PEAK_HANDLE peak_sock_accept(PEAK_HANDLE listen_fd);
+PEAK PEAK_HANDLE peak_sock_connect(const char *path);
+
+/* Byte IO on Peak fds (pty, sock, job). -1 would-block, 0 EOF, >0 count. */
+PEAK int  peak_fd_read(PEAK_HANDLE fd, void *buf, size_t n);
+PEAK int  peak_fd_write(PEAK_HANDLE fd, const void *buf, size_t n);
+PEAK void peak_fd_close(PEAK_HANDLE fd);
+
+//     █
+//
+// ███ █ ███ ███
+// █   █ █ █ █ █
+// █   █ █ █ █ █
+// █   █ █ █ ███
+//             █
+//           ███
+
+/* Page-mirrored ring: size must be page-aligned. pointer valid for size*2. */
+PEAK size_t peak_page_size(void);
+PEAK void  *peak_mirror_map(size_t size);
+PEAK void   peak_mirror_unmap(void *p, size_t size);
+
+//      ██
+//      █
+// ███ ███ █ █
+// █ █  █   █
+// █ █  █   █
+// ███  █  █ █
+//   █
+// ███
+
+PEAK const char **peak_vulkan_get_extensions(uint32_t *count);
+PEAK int          peak_vulkan_create_surface(PeakWindow *win, void *instance, const void *allocator, void *out_surface); /* needs PEAK_VULKAN */
+
+//     █  █
+//     █
+// ███ █  █ ███
+// █   █  █ █ █
+// █   █  █ █ █
+// ███ ██ █ ███
+//          █
+//          █
+
+/* UTF-8 clipboard. Cap 1 MiB. win NULL: process-local slot. PRIMARY aliases
+ * CLIPBOARD on Win32/macOS/web. request completes as PEAK_EVENT_CLIP; take copies. */
+PEAK int peak_clip_set(PeakWindow *win, PeakClip which, const char *utf8, size_t n);
+PEAK int peak_clip_request(PeakWindow *win, PeakClip which);
+PEAK int peak_clip_take(PeakWindow *win, char *dst, size_t cap, size_t *n);
+
+/* UTF-8 text / drop path. Cap 1 MiB. Completes as PEAK_EVENT_TEXT / DROP; take copies. */
+PEAK int peak_text_take(PeakWindow *win, char *dst, size_t cap, size_t *n);
+PEAK int peak_drop_take(PeakWindow *win, char *dst, size_t cap, size_t *n);
+
+//   █     █
+//   █     █
+// ███ ███ ███ █ █ ███
+// █ █ ███ █ █ █ █ █ █
+// █ █ █   █ █ █ █ █ █
+// ███ ███ ███ ███ ███
+//                   █
+//                 ███
 
 typedef enum PeakLogLevel {
     P_LOG_LEVEL_FATAL = 0,
@@ -192,175 +477,18 @@ static const char *p_prefix[P_COUNT_LOG_LEVEL] = {
 #define PTRACE(message, ...)
 #endif
 
-typedef enum {
-    PEAK_KEYMOD_NONE  = 0,
-    PEAK_KEYMOD_SHIFT = 1 << 0,
-    PEAK_KEYMOD_CTRL  = 1 << 1,
-    PEAK_KEYMOD_ALT   = 1 << 2,
-    PEAK_KEYMOD_CAPS  = 1 << 3,
-} PeakKeyMod;
+PEAK void  peak_log_printf(PeakLogLevel level, const char *src, ...);
+PEAK void *peak_debug_malloc_impl(size_t size, const char *file, int line, const char *func);
+PEAK void  peak_debug_free_impl(void *ptr, const char *file, int line, const char *func);
+PEAK void *peak_debug_realloc_impl(void *ptr, size_t size, const char *file, int line, const char *func);
+PEAK void  peak_debug_memory_report(void);
 
-typedef enum {
-    PEAK_KEY_UNKNOWN = 0,
-    PEAK_KEY_UP, PEAK_KEY_DOWN, PEAK_KEY_LEFT, PEAK_KEY_RIGHT,
-    PEAK_KEY_SPACE, PEAK_KEY_ESCAPE, PEAK_KEY_ENTER,
-    PEAK_KEY_BACKSPACE, PEAK_KEY_TAB, PEAK_KEY_DELETE, PEAK_KEY_INSERT,
-    PEAK_KEY_0, PEAK_KEY_1, PEAK_KEY_2, PEAK_KEY_3, PEAK_KEY_4,
-    PEAK_KEY_5, PEAK_KEY_6, PEAK_KEY_7, PEAK_KEY_8, PEAK_KEY_9,
-    PEAK_KEY_A, PEAK_KEY_B, PEAK_KEY_C, PEAK_KEY_D, PEAK_KEY_E, PEAK_KEY_F, PEAK_KEY_G, PEAK_KEY_H, PEAK_KEY_I,
-    PEAK_KEY_J, PEAK_KEY_K, PEAK_KEY_L, PEAK_KEY_M, PEAK_KEY_N, PEAK_KEY_O, PEAK_KEY_P, PEAK_KEY_Q, PEAK_KEY_R,
-    PEAK_KEY_S, PEAK_KEY_T, PEAK_KEY_U, PEAK_KEY_V, PEAK_KEY_W, PEAK_KEY_X, PEAK_KEY_Y, PEAK_KEY_Z,
-} PeakKeyCode;
-
-typedef enum {
-    PEAK_CLIP_CLIPBOARD = 0, /* Ctrl-C/V, OSC 52 */
-    PEAK_CLIP_PRIMARY,       /* mouse select, middle paste */
-} PeakClip;
-
-typedef enum {
-    PEAK_EVENT_NONE = 0,
-    PEAK_EVENT_KEY_DOWN,
-    PEAK_EVENT_KEY_UP,
-    PEAK_EVENT_WINDOW_CLOSE,
-    PEAK_EVENT_WINDOW_RESIZE,
-    PEAK_EVENT_POINTER,
-    PEAK_EVENT_POINTER_CONNECTED,
-    PEAK_EVENT_POINTER_DISCONNECTED,
-    PEAK_EVENT_CLIP,
-    PEAK_EVENT_LAST
-} PeakEventType;
-
-typedef enum {
-    PEAK_POINTER_MOVED = 0,
-    PEAK_POINTER_PRESSED,
-    PEAK_POINTER_RELEASED
-} PeakPointerState;
-
-typedef enum {
-    PEAK_POINTER_LEFT = 0,
-    PEAK_POINTER_RIGHT,
-    PEAK_POINTER_MIDDLE,
-    PEAK_POINTER_TOUCH,
-    PEAK_POINTER_WHEEL_UP,
-    PEAK_POINTER_WHEEL_DOWN,
-} PeakPointerType;
-
-typedef struct {
-    PeakEventType type;
-    union {
-        struct { PeakKeyCode key; PeakKeyMod mod; uint32_t code; } key;
-        struct { uint32_t width, height; } resize;
-        struct { PeakPointerState state; PeakPointerType type; float x, y; PeakKeyMod mod; } pointer;
-        struct { PeakClip which; size_t n; } clip;
-    };
-} PeakEvent;
-
-/* Platform handle. Opaque pointer; PeakWindow is complete in this header. */
-typedef struct peak_window_internal_t {
-    void *w;
-} PeakWindowInternal;
-
-typedef struct PeakWindow {
-    PeakWindowInternal internal;
-    int (*tick)(struct PeakWindow *win, void *userdata);
-    void *userdata;
-    uint32_t *buffer;
-    uint32_t width;
-    uint32_t height;
-    uint32_t bufsize;
-    uint16_t *audio; /* LRLRLR */
-    int running;
-} PeakWindow;
-
-typedef struct PeakProc {
-    PEAK_HANDLE fd; /* PEAK_HANDLE_INVALID if closed / failed */
-    int pid;        /* 0 if none */
-} PeakProc;
-
-/* Initialize the platform. */
-PEAK int  peak_init(void); // Initialize platform context and load necessary DLLs.
-PEAK void peak_quit(void); // Close platform context.
-
-#define PEAK_WINDOW_TRANSPARENT (1u << 0) /* 32-bit ARGB visual when the platform has one */
-
-/* Do sexy stuff with the windows. */
-PEAK PeakWindow peak_window_open(const char *name, uint32_t width, uint32_t height, uint32_t flags); // Open a window.
-PEAK void       peak_window_close(PeakWindow *window); // Close a window.
-PEAK void       peak_window_run(PeakWindow *win, int (*peak_tick)(PeakWindow *win, void *userdata), void *userdata); // Hijacking the main loop makes life easier on platforms like web
-PEAK int        peak_window_epoll(PeakWindow *win, PeakEvent *ev); // Poll a window for events.
-PEAK int        peak_window_fd(PeakWindow *win); // Display connection fd, or -1.
-PEAK int        peak_window_pending(PeakWindow *win); // Queued window events (XPending). 0 if none.
-PEAK uint32_t*  peak_window_backbuffer(PeakWindow *win, size_t *width, size_t *height); // Get the windows backbuffer.
-PEAK void       peak_window_clear(PeakWindow *win, float r, float g, float b, float a); // Clear window to color.
-PEAK void       peak_window_present(PeakWindow *win); // Present window backbuffer.
-
-/* Play some tunes. */
-PEAK int peak_audio_start(uint32_t channels, uint32_t rate, void (*fill)(int16_t *out, size_t frames, void *userdata), void *userdata); // Device pulls interleaved s16le
-PEAK void peak_audio_stop(void); // Stop audio.
-                        
-/* Time */
-PEAK uint64_t peak_get_time(void); // Get time in nanoseconds.
-PEAK void peak_sleep_ns(int64_t ns); // Sleep for nanoseconds!!!
-
-/* File */
-PEAK int peak_file_exists(const char *path); // Does this file exist?
-PEAK void *peak_file_alloc(const char *path, unsigned long *buf_size); // Allocate an entire file.
-
-/* Child + PTY. fd is nonblocking. fail: PEAK_HANDLE_INVALID. */
-PEAK PeakProc peak_pty_spawn(const char *file, const char **argv, uint32_t cols, uint32_t rows, uint32_t xpixel, uint32_t ypixel);
-PEAK void     peak_pty_resize(PeakProc *pty, uint32_t cols, uint32_t rows, uint32_t xpixel, uint32_t ypixel);
-PEAK int      peak_pty_reap(PeakProc *pty); /* 1 if dead */
-PEAK void     peak_pty_close(PeakProc *pty);
-
-/* Sleep until window (nullable) or any fd is ready. timeout_ms: -1 block, 0 poll. 1 if ready. */
-PEAK int peak_wait(PeakWindow *win, const PEAK_HANDLE *fds, uint32_t n, int timeout_ms);
-
-/* Local stream (unix socket / named pipe). listen/accept fds are nonblocking. */
-PEAK int         peak_runtime_dir(char *buf, size_t cap, const char *app);
-PEAK PEAK_HANDLE peak_sock_listen(const char *path);
-PEAK PEAK_HANDLE peak_sock_accept(PEAK_HANDLE listen_fd);
-
-/* Byte IO on Peak fds (pty, sock, job). -1 would-block, 0 EOF, >0 count. */
-PEAK int  peak_fd_read(PEAK_HANDLE fd, void *buf, size_t n);
-PEAK int  peak_fd_write(PEAK_HANDLE fd, const void *buf, size_t n);
-PEAK void peak_fd_close(PEAK_HANDLE fd);
-
-/* Off-grid shell -c. stdout+stderr on fd. cwd NULL keeps current. */
-PEAK PeakProc peak_job_run(const char *cmd, const char *cwd);
-PEAK int      peak_job_reap(PeakProc *job, int *code); /* 1 if exited */
-PEAK void     peak_job_kill(PeakProc *job);
-PEAK int      peak_pid_cwd(int pid, char *buf, size_t cap);
-
-/* Page-mirrored ring: size must be page-aligned. pointer valid for size*2. */
-PEAK size_t peak_page_size(void);
-PEAK void  *peak_mirror_map(size_t size);
-PEAK void   peak_mirror_unmap(void *p, size_t size);
-
-/* Graphics API bull... */
-PEAK const char **peak_vulkan_get_extensions(uint32_t *count); // Get vulkan extensions.
-PEAK int peak_vulkan_create_surface(PeakWindow *win, void *instance, const void *allocator, void *out_surface); // Create a vulkan surface for a window. Needs PEAK_VULKAN.
-
-/* UTF-8 clipboard. Cap 1 MiB. win NULL: process-local slot. PRIMARY aliases
- * CLIPBOARD on Win32/macOS/web. request completes as PEAK_EVENT_CLIP; take copies. */
-PEAK int peak_clip_set(PeakWindow *win, PeakClip which, const char *utf8, size_t n);
-PEAK int peak_clip_request(PeakWindow *win, PeakClip which);
-PEAK int peak_clip_take(PeakWindow *win, char *dst, size_t cap, size_t *n);
-
-/* Debug your amazing code. */
-PEAK void peak_log_printf(PeakLogLevel level, const char *src, ...); // Printf with log level.
-PEAK void *peak_debug_malloc_impl(size_t size, const char *file, int line, const char *func); // Malloc for debuggin.
-PEAK void peak_debug_free_impl(void *ptr, const char *file, int line, const char *func); // Free for debugging.
-PEAK void *peak_debug_realloc_impl(void *ptr, size_t size, const char *file, int line, const char *func); // Realloc for debugging.
-PEAK void peak_debug_memory_report(void); // Report memory.
-
-#endif // PEAK_H
+#endif /* PEAK_H */
 
 
 /*
 ------------------------------------------------------------------------------
-This software is available under 2 licenses -- choose whichever you prefer.
-------------------------------------------------------------------------------
-ALTERNATIVE A - MIT License
+MIT License
 Copyright (c) 2026 Vasco Alves
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -377,23 +505,5 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-------------------------------------------------------------------------------
-ALTERNATIVE B - Public Domain (www.unlicense.org)
-This is free and unencumbered software released into the public domain.
-Anyone is free to copy, modify, publish, use, compile, sell, or distribute this
-software, either in source code form or as a compiled binary, for any purpose,
-commercial or non-commercial, and by any means.
-In jurisdictions that recognize copyright laws, the author or authors of this
-software dedicate any and all copyright interest in the software to the public
-domain. We make this dedication for the benefit of the public at large and to
-the detriment of our heirs and successors. We intend this dedication to be an
-overt act of relinquishment in perpetuity of all present and future rights to
-this software under copyright law.
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
-ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 */

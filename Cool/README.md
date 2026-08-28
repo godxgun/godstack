@@ -3,6 +3,8 @@
 Build server-side components with C! Use the single-header library as a standalone HTML formatter
 or use the transpiler to convert `.cool` files into `.c` files that you can include directly!
 
+**NOTE:** Run `./build` in the monorepo project root to compile the transpiler to `bin/`
+
 ## Example
 
 Write something like so:

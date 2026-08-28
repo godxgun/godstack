@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#if defined(PEAK_WIN32) || defined(PEAK_WEB) || defined(PEAK_MACOS)
+#if defined(PEAK_WIN32) || defined(PEAK_WEB) || defined(PEAK_MACOS) || defined(PEAK_LINUX)
 #define PEAK_Q 64
 
 typedef struct {
@@ -42,6 +42,15 @@ static struct {
     int paste_ready;
     PeakClip paste_which;
 } peak_clip;
+
+static struct {
+    char *text;
+    size_t text_n;
+    int text_ready;
+    char *drop;
+    size_t drop_n;
+    int drop_ready;
+} peak_xfer;
 
 static int
 peak_clip_own_store(PeakClip which, const char *utf8, size_t n)
@@ -92,6 +101,48 @@ peak_clip_paste_store(PeakClip which, const char *utf8, size_t n)
     peak_clip.paste_n = n;
     peak_clip.paste_which = which;
     peak_clip.paste_ready = 1;
+}
+
+static void
+peak_text_store(const char *utf8, size_t n)
+{
+    char *p;
+
+    if (n > PEAK_CLIP_MAX)
+        n = PEAK_CLIP_MAX;
+    if (n && !utf8)
+        n = 0;
+    p = realloc(peak_xfer.text, n ? n : 1);
+    if (!p) {
+        peak_xfer.text_ready = 0;
+        return;
+    }
+    if (n)
+        memcpy(p, utf8, n);
+    peak_xfer.text = p;
+    peak_xfer.text_n = n;
+    peak_xfer.text_ready = 1;
+}
+
+static void
+peak_drop_store(const char *utf8, size_t n)
+{
+    char *p;
+
+    if (n > PEAK_CLIP_MAX)
+        n = PEAK_CLIP_MAX;
+    if (n && !utf8)
+        n = 0;
+    p = realloc(peak_xfer.drop, n ? n : 1);
+    if (!p) {
+        peak_xfer.drop_ready = 0;
+        return;
+    }
+    if (n)
+        memcpy(p, utf8, n);
+    peak_xfer.drop = p;
+    peak_xfer.drop_n = n;
+    peak_xfer.drop_ready = 1;
 }
 
 #if defined(PEAK_WIN32)
@@ -214,6 +265,55 @@ peak_window_present(PeakWindow *win)
     if (win) peak_platform_window_present(&win->internal);
 }
 
+void
+peak_window_set_title(PeakWindow *win, const char *name)
+{
+    if (!win || !name)
+        return;
+    peak_platform_window_set_title(&win->internal, name);
+}
+
+void
+peak_window_set_size(PeakWindow *win, uint32_t width, uint32_t height)
+{
+    if (!win || !width || !height)
+        return;
+    peak_platform_window_set_size(&win->internal, width, height);
+    peak_window_sync(win, NULL, NULL);
+}
+
+void
+peak_window_fullscreen(PeakWindow *win, int on)
+{
+    if (!win)
+        return;
+    peak_platform_window_fullscreen(&win->internal, on);
+}
+
+void
+peak_window_cursor(PeakWindow *win, int on)
+{
+    if (!win)
+        return;
+    peak_platform_window_cursor(&win->internal, on);
+}
+
+void
+peak_window_pointer_relative(PeakWindow *win, int on)
+{
+    if (!win)
+        return;
+    peak_platform_window_pointer_relative(&win->internal, on);
+}
+
+float
+peak_window_scale(PeakWindow *win)
+{
+    if (!win)
+        return 1.f;
+    return peak_platform_window_scale(&win->internal);
+}
+
 #ifdef PEAK_WEB
 #include <emscripten.h>
 static void
@@ -305,6 +405,24 @@ peak_file_alloc(const char *path, unsigned long *buf_size)
     return p;
 }
 
+int
+peak_file_write(const char *path, const void *buf, size_t n)
+{
+    FILE *f;
+
+    if (!path || (n && !buf))
+        return 0;
+    f = fopen(path, "wb");
+    if (!f)
+        return 0;
+    if (n && fwrite(buf, 1, n, f) != n) {
+        fclose(f);
+        return 0;
+    }
+    fclose(f);
+    return 1;
+}
+
 const char **
 peak_vulkan_get_extensions(uint32_t *count)
 {
@@ -369,6 +487,44 @@ peak_clip_take(PeakWindow *win, char *dst, size_t cap, size_t *n)
         c = cap;
     if (dst && c)
         memcpy(dst, peak_clip.paste, c);
+    if (n)
+        *n = c;
+    return 1;
+}
+
+int
+peak_text_take(PeakWindow *win, char *dst, size_t cap, size_t *n)
+{
+    size_t c;
+
+    (void)win;
+    if (!peak_xfer.text_ready)
+        return 0;
+    peak_xfer.text_ready = 0;
+    c = peak_xfer.text_n;
+    if (c > cap)
+        c = cap;
+    if (dst && c)
+        memcpy(dst, peak_xfer.text, c);
+    if (n)
+        *n = c;
+    return 1;
+}
+
+int
+peak_drop_take(PeakWindow *win, char *dst, size_t cap, size_t *n)
+{
+    size_t c;
+
+    (void)win;
+    if (!peak_xfer.drop_ready)
+        return 0;
+    peak_xfer.drop_ready = 0;
+    c = peak_xfer.drop_n;
+    if (c > cap)
+        c = cap;
+    if (dst && c)
+        memcpy(dst, peak_xfer.drop, c);
     if (n)
         *n = c;
     return 1;

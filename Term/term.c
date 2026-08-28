@@ -391,20 +391,16 @@ term_hist_line(const Term *t, uint32_t back)
     return t->hist + (size_t)i * t->hist_cols;
 }
 
-uint32_t
-term_cell_fg(const Term *t, const TermCell *c)
+TermStyle
+term_cell_style(const Term *t, const TermCell *c)
 {
-    if (!t || !c || !t->styles || (uint32_t)c->style >= t->style_n)
-        return 0;
-    return t->styles[c->style].fg;
-}
+    TermStyle z;
 
-uint32_t
-term_cell_bg(const Term *t, const TermCell *c)
-{
+    z.fg = 0;
+    z.bg = 0;
     if (!t || !c || !t->styles || (uint32_t)c->style >= t->style_n)
-        return 0;
-    return t->styles[c->style].bg;
+        return z;
+    return t->styles[c->style];
 }
 
 int
