@@ -2023,7 +2023,7 @@ rend_vk14_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain, VkS
 		mode_name = "FIFO_RELAXED";
 	PINFO("Present mode %s", mode_name);
 
-	uint32_t img_count = surface_caps.minImageCount + 2;
+	uint32_t img_count = surface_caps.minImageCount + (uint32_t)REND_VK_SWAPCHAIN_EXTRA;
 	if (img_count < ctx->max_frames_in_flight + 1)
 		img_count = (uint32_t)ctx->max_frames_in_flight + 1;
 	if (surface_caps.maxImageCount > 0 && img_count > surface_caps.maxImageCount) {
@@ -2055,10 +2055,17 @@ rend_vk14_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain, VkS
 	swapchain_create_info.preTransform = surface_caps.currentTransform;
 	{
 		static const VkCompositeAlphaFlagBitsKHR alpha_pref[] = {
+#ifdef REND_VK_COMPOSITE_PREFER_ALPHA
+			VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR,
+			VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR,
+			VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
+			VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+#else
 			VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
 			VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR,
 			VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR,
 			VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
+#endif
 		};
 		uint32_t ai;
 

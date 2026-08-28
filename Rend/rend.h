@@ -13,9 +13,13 @@
  * - CPU Software Raster
  *
  * MACRO FLAGS:
- * - PEAK_VULKAN       Vulkan 1.4. peak.h sets WSI. Not auto-defined. Omit for CPU-only.
- * - REND_DEBUG        Asserts and Peak debug log.
- * - REND_DEBUG_MEMORY Debug malloc (internal).
+ * - PEAK_VULKAN              Vulkan 1.4. peak.h sets WSI. Not auto-defined. Omit for CPU-only.
+ * - REND_DEBUG               Asserts and Peak debug log.
+ * - REND_DEBUG_MEMORY        Debug malloc (internal).
+ * - REND_VK_ARENA_GROW       Device-memory page grow (default 2). 1 = fit the alloc.
+ * - REND_VK_ARENA_MIN        Device-memory page floor in bytes. 0 / unset = granularity*10.
+ * - REND_VK_SWAPCHAIN_EXTRA  Images above minImageCount (default 2).
+ * - REND_VK_COMPOSITE_PREFER_ALPHA  Prefer PRE/INHERIT over OPAQUE (transparent windows).
  *
  * USAGE:
  *     #include "peak.h"
@@ -53,7 +57,14 @@
 
 #define REND_MAJOR 1  // breaking API changes
 #define REND_MINOR 6  // non-breaking features
-#define REND_PATCH 2  // non-breaking patches and bug fixes
+#define REND_PATCH 4  // non-breaking patches and bug fixes
+
+#ifndef REND_VK_ARENA_GROW
+#define REND_VK_ARENA_GROW 2
+#endif
+#ifndef REND_VK_SWAPCHAIN_EXTRA
+#define REND_VK_SWAPCHAIN_EXTRA 2
+#endif
 
 /* Do not auto-define PEAK_VULKAN: a CPU-only compile must not pull WSI. */
 #if defined(REND_DEBUG) && !defined(P_LOG_DEBUG_ENABLED)
@@ -382,6 +393,8 @@ enum RendBufferType_t {
  * 1.6.0 - @vasco - REND_BACKEND_CPU; AUTO falls back; create_graphics_c; PEAK_VULKAN not auto-defined
  * 1.6.1 - @vasco - CPU raster: axis-aligned quads, incremental edges, word clear
  * 1.6.2 - @vasco - CPU raster: runtime SSE/SSE2/AVX
+ * 1.6.3 - @vasco - REND_VK_ARENA_GROW / MIN / SWAPCHAIN_EXTRA
+ * 1.6.4 - @vasco - REND_VK_COMPOSITE_PREFER_ALPHA
  */
 
 /*

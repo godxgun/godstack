@@ -14,14 +14,14 @@ Collection of modular and minimal libraries used by our software.
 | Poof   | 0.1.4   | Build system.                              |
 | Peak   | 0.7.0   | Platform library that automatically links the correct system libraries. |
 | Fuse   | 0.8.0   | Immediate-mode UI command buffer.          |
-| Rend   | 1.6.2   | Modern graphics API layer.                 |
+| Rend   | 1.6.4   | Modern graphics API layer.                 |
 
 ## Utilities
 | Name   | Version | Description                                |
 | ------ | ------- | ------------------------------------------ |
 | Grit   | 0.2.1   | Allocators, math, rng, software raster.    |
 | Cast   | 0.0.0   | C parser.                                  |
-| Term   | 0.4.3   | Cell-grid terminal emulator as seen in [VT](https://github.com/vascoalvesxyz/vt) |
+| Term   | 0.5.0   | Cell-grid terminal emulator as seen in [VT](https://github.com/valvesxyz/vt) |
 
 ## Web Related
 | Name   | Version | Description                                |

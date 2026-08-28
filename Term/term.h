@@ -24,8 +24,8 @@
 #define TERM_H
 
 #define TERM_MAJOR 0
-#define TERM_MINOR 4
-#define TERM_PATCH 3
+#define TERM_MINOR 5
+#define TERM_PATCH 0
 
 /* CHANGE LOG
  * 0.1.0 - @vasco - extract from vt: feed, grid, live CSI
@@ -43,6 +43,7 @@
  * 0.4.1 - @vasco - printable is 0x20-0x7E; utf8 is high bytes; CR/LF is escape
  * 0.4.2 - @vasco - unknown C0/UTF-8 leaves ground state; VS/ZW format width 0
  * 0.4.3 - @vasco - UTF-8 OSC/DCS payload is not 8-bit C1
+ * 0.5.0 - @vasco - 8-byte TermCell; interned style id; drop is_dirty; DECSET 2004
  */
 
 #include <assert.h>
@@ -87,6 +88,7 @@
 #define TERM_MODE_MOUSEMOT  (1u << 9)
 #define TERM_MODE_MOUSEMANY (1u << 10)
 #define TERM_MODE_MOUSESGR  (1u << 11)
+#define TERM_MODE_BRKTPASTE (1u << 12)
 #define TERM_MODE_MOUSE     (TERM_MODE_MOUSEBTN | TERM_MODE_MOUSEMOT | TERM_MODE_MOUSEMANY)
 #define TERM_WRAPNEXT       1u
 
@@ -111,6 +113,7 @@
 #define TERM_ESC_ARG_SIZ 16
 #define TERM_CSI_BUF_SIZ 256
 #define TERM_HIST_MAX    1024
+#define TERM_CELL_CODE   0u
 
 typedef struct TermColors {
     uint32_t fg[16];
@@ -128,11 +131,15 @@ typedef struct TermCursor {
     uint8_t state;
 } TermCursor;
 
-typedef struct TermCell {
+typedef struct TermStyle {
     uint32_t fg;
     uint32_t bg;
+} TermStyle;
+
+typedef struct TermCell {
     uint32_t codepoint;
-    bool is_dirty;
+    uint16_t style;
+    uint16_t tag;
 } TermCell;
 
 typedef struct TermScreen {
@@ -180,6 +187,11 @@ typedef struct Term {
     uint32_t hist_n;
     uint32_t hist_i;
     uint32_t hist_cols;
+    TermStyle *styles;
+    uint16_t *style_hash;
+    uint32_t style_n;
+    uint32_t style_cap;
+    uint32_t style_hash_n;
     int cells_owned;
     uint8_t cs_g0;
     uint8_t cs_g1;
@@ -201,6 +213,8 @@ void term_feed_escape(Term *t, const char *bytes, size_t len); /* C0 / ESC / CSI
 TermScreen *term_screen(Term *t);
 uint32_t term_hist_count(const Term *t);
 const TermCell *term_hist_line(const Term *t, uint32_t back);
+uint32_t term_cell_fg(const Term *t, const TermCell *c);
+uint32_t term_cell_bg(const Term *t, const TermCell *c);
 
 #endif /* TERM_H */
 

@@ -46,8 +46,6 @@ static void term_set_mode(Term *t, int set);
 static void term_reply_str(Term *t, const char *s);
 static uint32_t term_color_256(Term *t, int n);
 static void term_clear_region(Term *t, uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1);
-static void term_dirty_rect(TermScreen *s, uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1);
-static void term_dirty_all(TermScreen *s);
 static int  term_init_common(Term *t, uint32_t cols, uint32_t rows, const TermColors *colors);
 static void term_hist_resize(Term *t, uint32_t cols);
 static void term_screen_adopt(TermScreen *s, TermCell *cells, uint32_t cols, uint32_t rows, uint32_t cap);
@@ -55,6 +53,11 @@ static void term_screen_copy_on(TermScreen *s, TermCell *dst, uint32_t cols, uin
 static void term_move_to(Term *t, uint32_t x, uint32_t y);
 static void term_move_abs(Term *t, uint32_t x, uint32_t y);
 static void term_colors_default(TermColors *c);
+static uint32_t term_style_mix(uint32_t fg, uint32_t bg);
+static int  term_style_rehash(Term *t, uint32_t hash_n);
+static int  term_style_init(Term *t);
+static uint16_t term_style_intern(Term *t, uint32_t fg, uint32_t bg);
+static void term_cell_put(Term *t, TermCell *c, uint32_t cp, uint32_t fg, uint32_t bg);
 
 static const TermColors term_colors_stock = {
     .fg = {
@@ -75,6 +78,121 @@ static void
 term_colors_default(TermColors *c)
 {
     *c = term_colors_stock;
+}
+
+static uint32_t
+term_style_mix(uint32_t fg, uint32_t bg)
+{
+    return fg * 2654435761u ^ (bg + (bg << 11) + (fg >> 3));
+}
+
+static int
+term_style_rehash(Term *t, uint32_t hash_n)
+{
+    uint16_t *hash;
+    uint32_t i;
+    uint32_t mask;
+
+    hash = malloc((size_t)hash_n * sizeof *hash);
+    if (!hash)
+        return 0;
+    memset(hash, 0xff, (size_t)hash_n * sizeof *hash);
+    mask = hash_n - 1;
+    for (i = 0; i < t->style_n; i++) {
+        uint32_t h;
+
+        h = term_style_mix(t->styles[i].fg, t->styles[i].bg) & mask;
+        while (hash[h] != 0xffffu)
+            h = (h + 1) & mask;
+        hash[h] = (uint16_t)i;
+    }
+    free(t->style_hash);
+    t->style_hash = hash;
+    t->style_hash_n = hash_n;
+    return 1;
+}
+
+static int
+term_style_init(Term *t)
+{
+    t->style_cap = 64;
+    t->styles = calloc(t->style_cap, sizeof *t->styles);
+    if (!t->styles) {
+        t->style_cap = 0;
+        return 0;
+    }
+    t->style_n = 1;
+    if (!term_style_rehash(t, 128)) {
+        free(t->styles);
+        t->styles = NULL;
+        t->style_cap = 0;
+        t->style_n = 0;
+        return 0;
+    }
+    return 1;
+}
+
+static uint16_t
+term_style_intern(Term *t, uint32_t fg, uint32_t bg)
+{
+    uint32_t h;
+    uint32_t mask;
+    uint16_t id;
+
+    if (!t || !t->styles || !t->style_hash || !t->style_hash_n)
+        return 0;
+    if (fg == 0 && bg == 0)
+        return 0;
+    mask = t->style_hash_n - 1;
+    h = term_style_mix(fg, bg) & mask;
+    for (;;) {
+        id = t->style_hash[h];
+        if (id == 0xffffu)
+            break;
+        if (t->styles[id].fg == fg && t->styles[id].bg == bg)
+            return id;
+        h = (h + 1) & mask;
+    }
+    if (t->style_n >= 65535u)
+        return 0;
+    if (t->style_n >= t->style_cap) {
+        uint32_t cap;
+        TermStyle *next;
+
+        cap = t->style_cap * 2;
+        if (cap > 65536u)
+            cap = 65536u;
+        if (cap <= t->style_cap)
+            return 0;
+        next = realloc(t->styles, (size_t)cap * sizeof *next);
+        if (!next)
+            return 0;
+        memset(next + t->style_cap, 0, (size_t)(cap - t->style_cap) * sizeof *next);
+        t->styles = next;
+        t->style_cap = cap;
+    }
+    if (t->style_n * 4u >= t->style_hash_n * 3u) {
+        if (!term_style_rehash(t, t->style_hash_n * 2u))
+            return 0;
+        mask = t->style_hash_n - 1;
+        h = term_style_mix(fg, bg) & mask;
+        while (t->style_hash[h] != 0xffffu)
+            h = (h + 1) & mask;
+    }
+    id = (uint16_t)t->style_n;
+    t->styles[id].fg = fg;
+    t->styles[id].bg = bg;
+    t->style_hash[h] = id;
+    t->style_n++;
+    return id;
+}
+
+static void
+term_cell_put(Term *t, TermCell *c, uint32_t cp, uint32_t fg, uint32_t bg)
+{
+    c->codepoint = cp;
+    c->style = term_style_intern(t, fg, bg);
+    c->tag = TERM_CELL_CODE;
 }
 
 static void
@@ -127,7 +245,6 @@ term_screen_grow(TermScreen *s, uint32_t cols, uint32_t rows)
     s->cols = cols;
     s->rows = rows;
     s->capacity = (uint32_t)need;
-    term_dirty_all(s);
     return 1;
 }
 
@@ -155,7 +272,6 @@ term_screen_copy_on(TermScreen *s, TermCell *dst, uint32_t cols, uint32_t rows, 
     if (dst == src) {
         if (s->cols == cols && s->rows == rows) {
             s->capacity = cap;
-            term_dirty_all(s);
             return;
         }
         tmp = NULL;
@@ -173,7 +289,6 @@ term_screen_copy_on(TermScreen *s, TermCell *dst, uint32_t cols, uint32_t rows, 
             free(tmp);
         }
         term_screen_adopt(s, dst, cols, rows, cap);
-        term_dirty_all(s);
         return;
     }
     memset(dst, 0, (size_t)cap * sizeof *dst);
@@ -184,7 +299,6 @@ term_screen_copy_on(TermScreen *s, TermCell *dst, uint32_t cols, uint32_t rows, 
                 (size_t)copy_cols * sizeof *dst);
     }
     term_screen_adopt(s, dst, cols, rows, cap);
-    term_dirty_all(s);
 }
 
 static int
@@ -207,6 +321,7 @@ term_init_common(Term *t, uint32_t cols, uint32_t rows, const TermColors *colors
     t->hist = calloc((size_t)TERM_HIST_MAX * cols, sizeof *t->hist);
     if (!t->hist)
         t->hist_cap = 0;
+    term_style_init(t);
     return 1;
 }
 
@@ -276,6 +391,22 @@ term_hist_line(const Term *t, uint32_t back)
     return t->hist + (size_t)i * t->hist_cols;
 }
 
+uint32_t
+term_cell_fg(const Term *t, const TermCell *c)
+{
+    if (!t || !c || !t->styles || (uint32_t)c->style >= t->style_n)
+        return 0;
+    return t->styles[c->style].fg;
+}
+
+uint32_t
+term_cell_bg(const Term *t, const TermCell *c)
+{
+    if (!t || !c || !t->styles || (uint32_t)c->style >= t->style_n)
+        return 0;
+    return t->styles[c->style].bg;
+}
+
 int
 term_init(Term *t, uint32_t cols, uint32_t rows, const TermColors *colors)
 {
@@ -322,6 +453,8 @@ term_destroy(Term *t)
         memset(&t->alt, 0, sizeof t->alt);
     }
     free(t->hist);
+    free(t->styles);
+    free(t->style_hash);
     memset(t, 0, sizeof *t);
 }
 
@@ -611,20 +744,13 @@ term_putc(Term *t, uint32_t c)
 
     fg = (t->cursor.fg << 8) | t->cursor.attr;
     bg = t->cursor.bg << 8;
-    s->cell_buffer[idx].codepoint = c;
-    s->cell_buffer[idx].fg = fg;
-    s->cell_buffer[idx].bg = bg;
-    s->cell_buffer[idx].is_dirty = true;
+    term_cell_put(t, &s->cell_buffer[idx], c, fg, bg);
     term_cursor_forward(t);
 
     if (width == 2 && t->cursor.x != 0) {
         idx = t->cursor.x + t->cursor.y * s->cols;
-        if (idx < s->capacity) {
-            s->cell_buffer[idx].codepoint = 0;
-            s->cell_buffer[idx].fg = fg;
-            s->cell_buffer[idx].bg = bg;
-            s->cell_buffer[idx].is_dirty = true;
-        }
+        if (idx < s->capacity)
+            term_cell_put(t, &s->cell_buffer[idx], 0, fg, bg);
         term_cursor_forward(t);
     }
 }
@@ -665,7 +791,6 @@ term_insert_blank(Term *t, uint32_t n)
             s->cell_buffer + t->cursor.y * s->cols + x,
             rest * sizeof *s->cell_buffer);
     term_clear_region(t, x, t->cursor.y, x + n - 1, t->cursor.y);
-    term_dirty_rect(s, x, t->cursor.y, s->cols - 1, t->cursor.y);
 }
 
 static void
@@ -687,7 +812,6 @@ term_delete_chars(Term *t, uint32_t n)
             s->cell_buffer + t->cursor.y * s->cols + x + n,
             rest * sizeof *s->cell_buffer);
     term_clear_region(t, s->cols - n, t->cursor.y, s->cols - 1, t->cursor.y);
-    term_dirty_rect(s, x, t->cursor.y, s->cols - 1, t->cursor.y);
 }
 
 static void
@@ -756,7 +880,6 @@ term_scroll(Term *t, uint32_t y0, uint32_t y1, int n)
                 (rows - (uint32_t)n) * cols * sizeof *s->cell_buffer);
         term_clear_region(t, 0, y0, cols - 1, y0 + (uint32_t)n - 1);
     }
-    term_dirty_rect(s, 0, y0, cols - 1, y1);
 }
 
 static void
@@ -776,17 +899,18 @@ term_clear_screen(Term *t, TermScreen *s)
     uint32_t n;
     uint32_t fg;
     uint32_t bg;
+    uint16_t sid;
 
     if (!s || !s->cell_buffer || !s->cols || !s->rows)
         return;
     fg = (t->cursor.fg << 8) | t->cursor.attr;
     bg = t->cursor.bg << 8;
+    sid = term_style_intern(t, fg, bg);
     n = s->cols * s->rows;
     for (i = 0; i < n; i++) {
         s->cell_buffer[i].codepoint = 0;
-        s->cell_buffer[i].fg = fg;
-        s->cell_buffer[i].bg = bg;
-        s->cell_buffer[i].is_dirty = true;
+        s->cell_buffer[i].style = sid;
+        s->cell_buffer[i].tag = TERM_CELL_CODE;
     }
 }
 
@@ -809,12 +933,8 @@ term_decaln(Term *t)
     fg = (t->cursor.fg << 8) | t->cursor.attr;
     bg = t->cursor.bg << 8;
     n = s->cols * s->rows;
-    for (i = 0; i < n; i++) {
-        s->cell_buffer[i].codepoint = 'E';
-        s->cell_buffer[i].fg = fg;
-        s->cell_buffer[i].bg = bg;
-        s->cell_buffer[i].is_dirty = true;
-    }
+    for (i = 0; i < n; i++)
+        term_cell_put(t, &s->cell_buffer[i], 'E', fg, bg);
 }
 
 static void
@@ -871,7 +991,6 @@ term_alt(Term *t, int on, int save_cur)
             t->cursor = t->saved;
             term_move_to(t, t->cursor.x, t->cursor.y);
         }
-        term_dirty_all(term_live(t));
     }
 }
 
@@ -977,6 +1096,12 @@ term_set_mode(Term *t, int set)
                 else
                     t->mode &= ~TERM_MODE_MOUSESGR;
                 break;
+            case 2004:
+                if (set)
+                    t->mode |= TERM_MODE_BRKTPASTE;
+                else
+                    t->mode &= ~TERM_MODE_BRKTPASTE;
+                break;
             default:
                 break;
             }
@@ -997,44 +1122,14 @@ term_set_mode(Term *t, int set)
 }
 
 static void
-term_dirty_rect(TermScreen *s, uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1)
-{
-    uint32_t x;
-    uint32_t y;
-
-    if (!s || !s->cell_buffer || !s->cols || !s->rows)
-        return;
-    if (x0 > x1) { uint32_t tmp = x0; x0 = x1; x1 = tmp; }
-    if (y0 > y1) { uint32_t tmp = y0; y0 = y1; y1 = tmp; }
-    if (x0 >= s->cols || y0 >= s->rows)
-        return;
-    x1 = TERM_MIN(x1, s->cols - 1);
-    y1 = TERM_MIN(y1, s->rows - 1);
-    for (y = y0; y <= y1; y++) {
-        for (x = x0; x <= x1; x++)
-            s->cell_buffer[y * s->cols + x].is_dirty = true;
-    }
-}
-
-static void
-term_dirty_all(TermScreen *s)
-{
-    uint32_t i;
-    uint32_t n;
-
-    if (!s || !s->cell_buffer)
-        return;
-    n = s->cols * s->rows;
-    for (i = 0; i < n; i++)
-        s->cell_buffer[i].is_dirty = true;
-}
-
-static void
 term_clear_region(Term *t, uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1)
 {
     TermScreen *s;
     uint32_t y;
     uint32_t x;
+    uint32_t fg;
+    uint32_t bg;
+    uint16_t sid;
 
     s = term_live(t);
     if (s->cols == 0 || s->rows == 0)
@@ -1046,13 +1141,15 @@ term_clear_region(Term *t, uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1)
     x1 = TERM_MIN(x1, s->cols - 1);
     y1 = TERM_MIN(y1, s->rows - 1);
 
+    fg = (t->cursor.fg << 8) | t->cursor.attr;
+    bg = t->cursor.bg << 8;
+    sid = term_style_intern(t, fg, bg);
     for (y = y0; y <= y1; y++) {
         for (x = x0; x <= x1; x++) {
             TermCell *c = &s->cell_buffer[y * s->cols + x];
             c->codepoint = 0;
-            c->fg = (t->cursor.fg << 8) | t->cursor.attr;
-            c->bg = t->cursor.bg << 8;
-            c->is_dirty = true;
+            c->style = sid;
+            c->tag = TERM_CELL_CODE;
         }
     }
 }

@@ -203,8 +203,6 @@ static const VkShaderStageFlagBits vk_pipeline_stages[][3] = {
 	[REND__PIPELINE_MESH]     = { VK_SHADER_STAGE_MESH_BIT_EXT, VK_SHADER_STAGE_FRAGMENT_BIT },
 };
 
-/* --- host allocator (linear arena) --- */
-
 static bool
 rend_vk_is_power_of_two(uintptr_t x)
 {
@@ -773,7 +771,12 @@ rend_vk_arena_create(VkDevice logical_device, VkPhysicalDevice physical_device, 
 	}
 
 	arena.gpu_alignment = alignment;
+#ifdef REND_VK_ARENA_MIN
+	arena.block_min_size = (VkDeviceSize)REND_VK_ARENA_MIN
+		? (VkDeviceSize)REND_VK_ARENA_MIN : arena.gpu_alignment * 10;
+#else
 	arena.block_min_size = arena.gpu_alignment * 10;
+#endif
 
 	return arena;
 }
@@ -792,7 +795,9 @@ rend_vk_arena_add_page(RendVkArenaAllocator *arena, VkDeviceSize size, uint32_t 
 	uint32_t new_capacity;
 	void *new_darr;
 
-	new_arena_size = fit_to_alloc ? size : (size * 2);
+	new_arena_size = fit_to_alloc ? size : size * (VkDeviceSize)REND_VK_ARENA_GROW;
+	if (new_arena_size < size)
+		new_arena_size = size;
 	new_arena_size = (new_arena_size < arena->block_min_size) ? arena->block_min_size : new_arena_size;
 
 	properties = arena->properties.memoryTypes[heap_index].propertyFlags;
