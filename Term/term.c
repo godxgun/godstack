@@ -9,6 +9,7 @@
 
 #define TERM_IS_C0(c)  (TERM_BETWEEN((c), 0, 0x1f) || (c) == TERM_DEL)
 #define TERM_IS_C1(c)  TERM_BETWEEN((c), 0x80, 0x9f)
+#define TERM_STYLE_MAX 65536u
 
 static void term_screen_init(TermScreen *s, uint32_t cols, uint32_t rows);
 static void term_screen_free(TermScreen *s);
@@ -53,8 +54,6 @@ static void term_screen_copy_on(TermScreen *s, TermCell *dst, uint32_t cols, uin
 static void term_move_to(Term *t, uint32_t x, uint32_t y);
 static void term_move_abs(Term *t, uint32_t x, uint32_t y);
 static void term_colors_default(TermColors *c);
-static uint32_t term_style_mix(uint32_t fg, uint32_t bg);
-static int  term_style_rehash(Term *t, uint32_t hash_n);
 static int  term_style_init(Term *t);
 static uint16_t term_style_intern(Term *t, uint32_t fg, uint32_t bg);
 static void term_cell_put(Term *t, TermCell *c, uint32_t cp, uint32_t fg, uint32_t bg);
@@ -80,111 +79,35 @@ term_colors_default(TermColors *c)
     *c = term_colors_stock;
 }
 
-static uint32_t
-term_style_mix(uint32_t fg, uint32_t bg)
-{
-    return fg * 2654435761u ^ (bg + (bg << 11) + (fg >> 3));
-}
-
-static int
-term_style_rehash(Term *t, uint32_t hash_n)
-{
-    uint16_t *hash;
-    uint32_t i;
-    uint32_t mask;
-
-    hash = malloc((size_t)hash_n * sizeof *hash);
-    if (!hash)
-        return 0;
-    memset(hash, 0xff, (size_t)hash_n * sizeof *hash);
-    mask = hash_n - 1;
-    for (i = 0; i < t->style_n; i++) {
-        uint32_t h;
-
-        h = term_style_mix(t->styles[i].fg, t->styles[i].bg) & mask;
-        while (hash[h] != 0xffffu)
-            h = (h + 1) & mask;
-        hash[h] = (uint16_t)i;
-    }
-    free(t->style_hash);
-    t->style_hash = hash;
-    t->style_hash_n = hash_n;
-    return 1;
-}
-
 static int
 term_style_init(Term *t)
 {
-    t->style_cap = 64;
-    t->styles = calloc(t->style_cap, sizeof *t->styles);
-    if (!t->styles) {
-        t->style_cap = 0;
+    t->styles = calloc(TERM_STYLE_MAX, sizeof *t->styles);
+    if (!t->styles)
         return 0;
-    }
+    t->style_cap = TERM_STYLE_MAX;
     t->style_n = 1;
-    if (!term_style_rehash(t, 128)) {
-        free(t->styles);
-        t->styles = NULL;
-        t->style_cap = 0;
-        t->style_n = 0;
-        return 0;
-    }
     return 1;
 }
 
 static uint16_t
 term_style_intern(Term *t, uint32_t fg, uint32_t bg)
 {
-    uint32_t h;
-    uint32_t mask;
-    uint16_t id;
+    uint32_t i;
 
-    if (!t || !t->styles || !t->style_hash || !t->style_hash_n)
+    if (!t || !t->styles)
         return 0;
     if (fg == 0 && bg == 0)
         return 0;
-    mask = t->style_hash_n - 1;
-    h = term_style_mix(fg, bg) & mask;
-    for (;;) {
-        id = t->style_hash[h];
-        if (id == 0xffffu)
-            break;
-        if (t->styles[id].fg == fg && t->styles[id].bg == bg)
-            return id;
-        h = (h + 1) & mask;
+    for (i = 1; i < t->style_n; i++) {
+        if (t->styles[i].fg == fg && t->styles[i].bg == bg)
+            return (uint16_t)i;
     }
-    if (t->style_n >= 65535u)
+    if (t->style_n >= TERM_STYLE_MAX - 1)
         return 0;
-    if (t->style_n >= t->style_cap) {
-        uint32_t cap;
-        TermStyle *next;
-
-        cap = t->style_cap * 2;
-        if (cap > 65536u)
-            cap = 65536u;
-        if (cap <= t->style_cap)
-            return 0;
-        next = realloc(t->styles, (size_t)cap * sizeof *next);
-        if (!next)
-            return 0;
-        memset(next + t->style_cap, 0, (size_t)(cap - t->style_cap) * sizeof *next);
-        t->styles = next;
-        t->style_cap = cap;
-    }
-    if (t->style_n * 4u >= t->style_hash_n * 3u) {
-        if (!term_style_rehash(t, t->style_hash_n * 2u))
-            return 0;
-        mask = t->style_hash_n - 1;
-        h = term_style_mix(fg, bg) & mask;
-        while (t->style_hash[h] != 0xffffu)
-            h = (h + 1) & mask;
-    }
-    id = (uint16_t)t->style_n;
-    t->styles[id].fg = fg;
-    t->styles[id].bg = bg;
-    t->style_hash[h] = id;
-    t->style_n++;
-    return id;
+    t->styles[t->style_n].fg = fg;
+    t->styles[t->style_n].bg = bg;
+    return (uint16_t)t->style_n++;
 }
 
 static void
