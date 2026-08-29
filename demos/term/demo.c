@@ -11,9 +11,9 @@ static int g_fails;
 
 static void expect(int ok, const char *what);
 static void title(const char *s);
-static void feed(Term *t, const char *s);
+static void pr(Term *t, const char *s);
+static void esc(Term *t, const char *s);
 static uint32_t cell_cp(Term *t, uint32_t x, uint32_t y);
-static int cell_dirty(Term *t, uint32_t x, uint32_t y);
 static uint32_t cell_bg(Term *t, uint32_t x, uint32_t y);
 static void test_term_max(void);
 static void test_putc_dirty(void);
@@ -49,9 +49,15 @@ title(const char *s)
 }
 
 void
-feed(Term *t, const char *s)
+pr(Term *t, const char *s)
 {
-    term_feed(t, s, strlen(s));
+    term_feed_printable(t, s, strlen(s));
+}
+
+void
+esc(Term *t, const char *s)
+{
+    term_feed_escape(t, s, strlen(s));
 }
 
 uint32_t
@@ -63,22 +69,15 @@ cell_cp(Term *t, uint32_t x, uint32_t y)
     return s->cell_buffer[y * s->cols + x].codepoint;
 }
 
-int
-cell_dirty(Term *t, uint32_t x, uint32_t y)
-{
-    TermScreen *s;
-
-    s = term_screen(t);
-    return s->cell_buffer[y * s->cols + x].is_dirty;
-}
-
 uint32_t
 cell_bg(Term *t, uint32_t x, uint32_t y)
 {
     TermScreen *s;
+    TermStyle st;
 
     s = term_screen(t);
-    return s->cell_buffer[y * s->cols + x].bg >> 8;
+    st = term_cell_style(t, &s->cell_buffer[y * s->cols + x]);
+    return st.bg >> 8;
 }
 
 void
@@ -95,11 +94,10 @@ test_putc_dirty(void)
 {
     Term t;
 
-    title("putc sets is_dirty");
+    title("putc writes A");
     term_init(&t, 8, 4, NULL);
-    feed(&t, "A");
+    pr(&t, "A");
     expect(cell_cp(&t, 0, 0) == 'A', "wrote A");
-    expect(cell_dirty(&t, 0, 0), "is_dirty after putc");
     term_destroy(&t);
 }
 
@@ -110,7 +108,9 @@ test_lf_keeps_column(void)
 
     title("LF is IND (Ghostty/xterm, LNM off)");
     term_init(&t, 8, 4, NULL);
-    feed(&t, "AB\nC");
+    pr(&t, "AB");
+    esc(&t, "\n");
+    pr(&t, "C");
     expect(t.cursor.x == 3, "cursor.x==3 after AB\\nC");
     expect(t.cursor.y == 1, "cursor.y==1");
     expect(cell_cp(&t, 2, 1) == 'C', "C at (2,1)");
@@ -124,7 +124,10 @@ test_lf_lnm(void)
 
     title("LNM (CSI 20 h) makes LF also CR");
     term_init(&t, 8, 4, NULL);
-    feed(&t, "\033[20hAB\nC");
+    esc(&t, "\033[20h");
+    pr(&t, "AB");
+    esc(&t, "\n");
+    pr(&t, "C");
     expect(t.cursor.x == 1, "C after CR+IND");
     expect(cell_cp(&t, 0, 1) == 'C', "C at (0,1)");
     term_destroy(&t);
@@ -137,7 +140,7 @@ test_decstbm_oneline(void)
 
     title("DECSTBM allows a 1-line region");
     term_init(&t, 80, 24, NULL);
-    feed(&t, "\033[10;10r");
+    esc(&t, "\033[10;10r");
     expect(t.top == 9 && t.bot == 9, "CSI 10;10 r -> top=bot=9");
     term_destroy(&t);
 }
@@ -149,9 +152,9 @@ test_cuu_top_margin(void)
 
     title("CUU inside region stops at top margin");
     term_init(&t, 80, 24, NULL);
-    feed(&t, "\033[5;20r");
-    feed(&t, "\033[6;1H");
-    feed(&t, "\033[10A");
+    esc(&t, "\033[5;20r");
+    esc(&t, "\033[6;1H");
+    esc(&t, "\033[10A");
     expect(t.top == 4 && t.bot == 19, "region 5..20");
     expect(t.cursor.y == 4, "CUU 10 from row 6 stops at row 5");
     term_destroy(&t);
@@ -164,9 +167,9 @@ test_cud_bot_margin(void)
 
     title("CUD inside region stops at bottom margin");
     term_init(&t, 80, 24, NULL);
-    feed(&t, "\033[5;20r");
-    feed(&t, "\033[20;1H");
-    feed(&t, "\033[10B");
+    esc(&t, "\033[5;20r");
+    esc(&t, "\033[20;1H");
+    esc(&t, "\033[10B");
     expect(t.cursor.y == 19, "CUD 10 from row 20 stays on row 20");
     term_destroy(&t);
 }
@@ -178,9 +181,9 @@ test_cuu_above_region(void)
 
     title("CUU above region is free (Ghostty/xterm)");
     term_init(&t, 80, 24, NULL);
-    feed(&t, "\033[10;20r");
-    feed(&t, "\033[3;1H");
-    feed(&t, "\033[10A");
+    esc(&t, "\033[10;20r");
+    esc(&t, "\033[3;1H");
+    esc(&t, "\033[10A");
     expect(t.cursor.y == 0, "from row 3, CUU 10 -> row 1");
     term_destroy(&t);
 }
@@ -192,9 +195,9 @@ test_cud_below_region(void)
 
     title("CUD below region is free (Ghostty/xterm)");
     term_init(&t, 80, 24, NULL);
-    feed(&t, "\033[5;10r");
-    feed(&t, "\033[20;1H");
-    feed(&t, "\033[10B");
+    esc(&t, "\033[5;10r");
+    esc(&t, "\033[20;1H");
+    esc(&t, "\033[10B");
     expect(t.cursor.y == 23, "from row 20, CUD 10 -> row 24");
     term_destroy(&t);
 }
@@ -210,9 +213,12 @@ test_decaln(void)
 
     title("ESC # 8 is DECALN");
     term_init(&t, 8, 4, NULL);
-    feed(&t, "\033[3;3H*\0337");
-    feed(&t, "\033[1;1HA");
-    feed(&t, "\033#8");
+    esc(&t, "\033[3;3H");
+    pr(&t, "*");
+    esc(&t, "\0337");
+    esc(&t, "\033[1;1H");
+    pr(&t, "A");
+    esc(&t, "\033#8");
     s = term_screen(&t);
     n = s->cols * s->rows;
     es = 0;
@@ -232,10 +238,10 @@ test_ris(void)
 
     title("ESC c RIS resets grid and modes");
     term_init(&t, 8, 4, NULL);
-    feed(&t, "HELLO");
-    feed(&t, "\033[4h");
-    feed(&t, "\033[?1049h");
-    feed(&t, "\033c");
+    pr(&t, "HELLO");
+    esc(&t, "\033[4h");
+    esc(&t, "\033[?1049h");
+    esc(&t, "\033c");
     expect(!(t.mode & TERM_MODE_ALTSCREEN), "left alt");
     expect(!(t.mode & TERM_MODE_INSERT), "IRM off");
     expect(t.cursor.x == 0 && t.cursor.y == 0, "cursor home");
@@ -257,7 +263,10 @@ test_sgr_256(void)
     c.fg_default = 7;
     c.bg_default = 0;
     term_init(&t, 8, 4, &c);
-    feed(&t, "\033[38;5;1mA\033[48;5;1mB");
+    esc(&t, "\033[38;5;1m");
+    pr(&t, "A");
+    esc(&t, "\033[48;5;1m");
+    pr(&t, "B");
     expect(cell_cp(&t, 0, 0) == 'A', "wrote A");
     expect(cell_bg(&t, 1, 0) == 0x111111, "48;5;1 == 38;5;1 == fg[1]");
     expect(cell_bg(&t, 1, 0) != 0x222222, "not the 8-color bg slot");
@@ -271,7 +280,8 @@ test_acs_g0(void)
 
     title("ESC ( 0 maps ACS q to U+2500");
     term_init(&t, 8, 4, NULL);
-    feed(&t, "\033(0q");
+    esc(&t, "\033(0");
+    pr(&t, "q");
     expect(cell_cp(&t, 0, 0) == 0x2500, "q -> U+2500");
     term_destroy(&t);
 }
@@ -286,7 +296,7 @@ test_resize_on_inplace(void)
 
     title("resize_on same pointers keeps cells");
     term_init(&t, 8, 4, NULL);
-    feed(&t, "X");
+    pr(&t, "X");
     scr = t.screen.cell_buffer;
     alt = t.alt.cell_buffer;
     cap = t.screen.capacity;
