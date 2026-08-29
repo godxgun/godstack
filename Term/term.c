@@ -95,6 +95,7 @@ term_style_intern(Term *t)
 {
     uint32_t fg;
     uint32_t bg;
+    uint32_t i;
     uint16_t id;
 
     if (!t || !t->styles)
@@ -105,12 +106,19 @@ term_style_intern(Term *t)
     if ((uint32_t)id < t->style_n &&
         t->styles[id].fg == fg && t->styles[id].bg == bg)
         return id;
-    if (fg == 0 && bg == 0) {
-        t->cursor.style = 0;
-        return 0;
+    for (i = 0; i < t->style_n; i++) {
+        if (t->styles[i].fg == fg && t->styles[i].bg == bg) {
+            t->cursor.style = (uint16_t)i;
+            return (uint16_t)i;
+        }
     }
-    if (t->style_n >= TERM_STYLE_MAX - 1)
-        return 0;
+    if (t->style_n >= TERM_STYLE_MAX) {
+        id = (uint16_t)(TERM_STYLE_MAX - 1);
+        t->styles[id].fg = fg;
+        t->styles[id].bg = bg;
+        t->cursor.style = id;
+        return id;
+    }
     t->styles[t->style_n].fg = fg;
     t->styles[t->style_n].bg = bg;
     t->cursor.style = (uint16_t)t->style_n;
@@ -121,7 +129,7 @@ static void
 term_cell_put(Term *t, TermCell *c, uint32_t cp)
 {
     c->codepoint = cp;
-    c->style = t->cursor.style;
+    c->style = term_style_intern(t);
     c->tag = TERM_CELL_CODE;
 }
 
@@ -824,7 +832,7 @@ term_clear_screen(Term *t, TermScreen *s)
 
     if (!s || !s->cell_buffer || !s->cols || !s->rows)
         return;
-    sid = t->cursor.style;
+    sid = term_style_intern(t);
     n = s->cols * s->rows;
     for (i = 0; i < n; i++) {
         s->cell_buffer[i].codepoint = 0;
@@ -1055,7 +1063,7 @@ term_clear_region(Term *t, uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1)
     x1 = TERM_MIN(x1, s->cols - 1);
     y1 = TERM_MIN(y1, s->rows - 1);
 
-    sid = t->cursor.style;
+    sid = term_style_intern(t);
     for (y = y0; y <= y1; y++) {
         for (x = x0; x <= x1; x++) {
             TermCell *c = &s->cell_buffer[y * s->cols + x];

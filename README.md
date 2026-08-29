@@ -21,7 +21,7 @@ Collection of modular and minimal libraries used by our software.
 | ------ | ------- | ------------------------------------------ |
 | Grit   | 0.2.1   | Allocators, math, rng, software raster.    |
 | Cast   | 0.0.0   | C parser.                                  |
-| Term   | 0.6.0   | Cell-grid terminal emulator as seen in [VT](https://github.com/valvesxyz/vt) |
+| Term   | 0.7.1   | Cell-grid terminal emulator as seen in [VT](https://github.com/valvesxyz/vt) |
 
 ## Web Related
 | Name   | Version | Description                                |

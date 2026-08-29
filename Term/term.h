@@ -25,7 +25,7 @@
 
 #define TERM_MAJOR 0
 #define TERM_MINOR 7
-#define TERM_PATCH 0
+#define TERM_PATCH 1
 
 /* CHANGE LOG
  * 0.1.0 - @vasco - extract from vt: feed, grid, live CSI
@@ -47,6 +47,7 @@
  * 0.6.0 - @vasco - term_cell_style; drop term_cell_fg / term_cell_bg
  * 0.6.1 - @vasco - TermCursor.style; intern on style change
  * 0.7.0 - @vasco - drop term_feed; typed printable / utf8 / escape only
+ * 0.7.1 - @vasco - intern scan; full table overwrites last id, not 0
  */
 
 #include <assert.h>
