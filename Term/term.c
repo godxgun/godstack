@@ -55,8 +55,8 @@ static void term_move_to(Term *t, uint32_t x, uint32_t y);
 static void term_move_abs(Term *t, uint32_t x, uint32_t y);
 static void term_colors_default(TermColors *c);
 static int  term_style_init(Term *t);
-static uint16_t term_style_intern(Term *t, uint32_t fg, uint32_t bg);
-static void term_cell_put(Term *t, TermCell *c, uint32_t cp, uint32_t fg, uint32_t bg);
+static uint16_t term_style_intern(Term *t);
+static void term_cell_put(Term *t, TermCell *c, uint32_t cp);
 
 static const TermColors term_colors_stock = {
     .fg = {
@@ -91,30 +91,37 @@ term_style_init(Term *t)
 }
 
 static uint16_t
-term_style_intern(Term *t, uint32_t fg, uint32_t bg)
+term_style_intern(Term *t)
 {
-    uint32_t i;
+    uint32_t fg;
+    uint32_t bg;
+    uint16_t id;
 
     if (!t || !t->styles)
         return 0;
-    if (fg == 0 && bg == 0)
+    fg = (t->cursor.fg << 8) | t->cursor.attr;
+    bg = t->cursor.bg << 8;
+    id = t->cursor.style;
+    if ((uint32_t)id < t->style_n &&
+        t->styles[id].fg == fg && t->styles[id].bg == bg)
+        return id;
+    if (fg == 0 && bg == 0) {
+        t->cursor.style = 0;
         return 0;
-    for (i = 1; i < t->style_n; i++) {
-        if (t->styles[i].fg == fg && t->styles[i].bg == bg)
-            return (uint16_t)i;
     }
     if (t->style_n >= TERM_STYLE_MAX - 1)
         return 0;
     t->styles[t->style_n].fg = fg;
     t->styles[t->style_n].bg = bg;
+    t->cursor.style = (uint16_t)t->style_n;
     return (uint16_t)t->style_n++;
 }
 
 static void
-term_cell_put(Term *t, TermCell *c, uint32_t cp, uint32_t fg, uint32_t bg)
+term_cell_put(Term *t, TermCell *c, uint32_t cp)
 {
     c->codepoint = cp;
-    c->style = term_style_intern(t, fg, bg);
+    c->style = t->cursor.style;
     c->tag = TERM_CELL_CODE;
 }
 
@@ -235,7 +242,6 @@ term_init_common(Term *t, uint32_t cols, uint32_t rows, const TermColors *colors
 
     t->cursor.fg = t->colors.fg[t->colors.fg_default < 16 ? t->colors.fg_default : 7];
     t->cursor.bg = t->colors.bg[t->colors.bg_default < 8 ? t->colors.bg_default : 0];
-    t->saved = t->cursor;
     t->mode = TERM_MODE_UTF8 | TERM_MODE_WRAP;
     t->top = 0;
     t->bot = rows - 1;
@@ -245,6 +251,8 @@ term_init_common(Term *t, uint32_t cols, uint32_t rows, const TermColors *colors
     if (!t->hist)
         t->hist_cap = 0;
     term_style_init(t);
+    term_style_intern(t);
+    t->saved = t->cursor;
     return 1;
 }
 
@@ -635,8 +643,6 @@ term_putc(Term *t, uint32_t c)
     TermScreen *s;
     int width;
     uint32_t idx;
-    uint32_t fg;
-    uint32_t bg;
 
     s = term_live(t);
     if ((t->cs_gl ? t->cs_g1 : t->cs_g0) && c >= 0x5Fu && c <= 0x7Eu)
@@ -661,15 +667,13 @@ term_putc(Term *t, uint32_t c)
     if (idx >= s->capacity)
         return;
 
-    fg = (t->cursor.fg << 8) | t->cursor.attr;
-    bg = t->cursor.bg << 8;
-    term_cell_put(t, &s->cell_buffer[idx], c, fg, bg);
+    term_cell_put(t, &s->cell_buffer[idx], c);
     term_cursor_forward(t);
 
     if (width == 2 && t->cursor.x != 0) {
         idx = t->cursor.x + t->cursor.y * s->cols;
         if (idx < s->capacity)
-            term_cell_put(t, &s->cell_buffer[idx], 0, fg, bg);
+            term_cell_put(t, &s->cell_buffer[idx], 0);
         term_cursor_forward(t);
     }
 }
@@ -816,15 +820,11 @@ term_clear_screen(Term *t, TermScreen *s)
 {
     uint32_t i;
     uint32_t n;
-    uint32_t fg;
-    uint32_t bg;
     uint16_t sid;
 
     if (!s || !s->cell_buffer || !s->cols || !s->rows)
         return;
-    fg = (t->cursor.fg << 8) | t->cursor.attr;
-    bg = t->cursor.bg << 8;
-    sid = term_style_intern(t, fg, bg);
+    sid = t->cursor.style;
     n = s->cols * s->rows;
     for (i = 0; i < n; i++) {
         s->cell_buffer[i].codepoint = 0;
@@ -839,8 +839,6 @@ term_decaln(Term *t)
     TermScreen *s;
     uint32_t i;
     uint32_t n;
-    uint32_t fg;
-    uint32_t bg;
 
     s = term_live(t);
     term_reset_margins(t);
@@ -849,11 +847,9 @@ term_decaln(Term *t)
     t->cursor.state &= (uint8_t)~TERM_WRAPNEXT;
     if (!s->cell_buffer || !s->cols || !s->rows)
         return;
-    fg = (t->cursor.fg << 8) | t->cursor.attr;
-    bg = t->cursor.bg << 8;
     n = s->cols * s->rows;
     for (i = 0; i < n; i++)
-        term_cell_put(t, &s->cell_buffer[i], 'E', fg, bg);
+        term_cell_put(t, &s->cell_buffer[i], 'E');
 }
 
 static void
@@ -875,6 +871,7 @@ term_reset(Term *t)
     t->cursor.y = 0;
     t->cursor.fg = t->colors.fg[t->colors.fg_default < 16 ? t->colors.fg_default : 7];
     t->cursor.bg = t->colors.bg[t->colors.bg_default < 8 ? t->colors.bg_default : 0];
+    term_style_intern(t);
     t->saved = t->cursor;
     memset(&t->csi, 0, sizeof t->csi);
     memset(&t->str, 0, sizeof t->str);
@@ -1046,8 +1043,6 @@ term_clear_region(Term *t, uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1)
     TermScreen *s;
     uint32_t y;
     uint32_t x;
-    uint32_t fg;
-    uint32_t bg;
     uint16_t sid;
 
     s = term_live(t);
@@ -1060,9 +1055,7 @@ term_clear_region(Term *t, uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1)
     x1 = TERM_MIN(x1, s->cols - 1);
     y1 = TERM_MIN(y1, s->rows - 1);
 
-    fg = (t->cursor.fg << 8) | t->cursor.attr;
-    bg = t->cursor.bg << 8;
-    sid = term_style_intern(t, fg, bg);
+    sid = t->cursor.style;
     for (y = y0; y <= y1; y++) {
         for (x = x0; x <= x1; x++) {
             TermCell *c = &s->cell_buffer[y * s->cols + x];
@@ -1102,11 +1095,9 @@ term_handle_c0(Term *t, unsigned char code)
         term_lf(t);
         return;
     case TERM_BEL:
-        if (t->state & TERM_ESC_STR_END)
-            term_handle_str(t);
         return;
     case TERM_ESC:
-        t->state &= ~(TERM_ESC_CSI | TERM_ESC_ALTCHARSET | TERM_ESC_TEST | TERM_ESC_STR | TERM_ESC_STR_END);
+        t->state &= ~(TERM_ESC_CSI | TERM_ESC_ALTCHARSET | TERM_ESC_TEST | TERM_ESC_STR);
         t->state |= TERM_ESC_START;
         memset(&t->csi, 0, sizeof t->csi);
         return;
@@ -1122,19 +1113,14 @@ term_handle_c0(Term *t, unsigned char code)
     default:
         break;
     }
-    t->state &= ~(TERM_ESC_STR_END | TERM_ESC_STR);
+    t->state &= ~TERM_ESC_STR;
 }
 
 static void
 term_handle_c1(Term *t, unsigned char code)
 {
-    switch (code) {
-    case 0x9f:
-        return;
-    default:
-        break;
-    }
-    t->state &= ~(TERM_ESC_STR_END | TERM_ESC_STR);
+    (void)code;
+    t->state &= ~TERM_ESC_STR;
 }
 
 static int
@@ -1146,12 +1132,6 @@ term_handle_esc(Term *t, unsigned char ascii)
         return 0;
     case '%':
         t->state |= TERM_ESC_UTF8;
-        return 0;
-    case 'P':
-    case '_':
-    case '^':
-    case ']':
-    case 'k':
         return 0;
     case 'n':
     case 'o':
@@ -1201,8 +1181,6 @@ term_handle_esc(Term *t, unsigned char ascii)
         term_move_to(t, t->cursor.x, t->cursor.y);
         break;
     case '\\':
-        if (t->state & TERM_ESC_STR_END)
-            term_handle_str(t);
         break;
     default:
         break;
@@ -1337,6 +1315,7 @@ term_cursor_sgr(Term *t, const int32_t *attr, int32_t n)
             break;
         }
     }
+    term_style_intern(t);
 }
 
 static int
@@ -1603,23 +1582,18 @@ term_handle_csi(Term *t)
 static void
 term_char_feed(Term *t, unsigned char ch)
 {
-    uint32_t cp;
-    int utf_st;
-    int control;
-
+    /* Escape path is 7-bit sequences. OSC payload is raw bytes, not UTF-8 decode. */
     if (t->state & TERM_ESC_STR) {
-        /* UTF-8 continuations live in 0x80-0x9F. 8-bit C1 ends OSC only in Latin-1. */
         if (ch == TERM_BEL || ch == TERM_CAN || ch == TERM_SUB || ch == TERM_ESC ||
             (!(t->mode & TERM_MODE_UTF8) && TERM_IS_C1(ch))) {
-            t->state &= ~(TERM_ESC_START | TERM_ESC_STR);
-            t->state |= TERM_ESC_STR_END;
+            if (ch == TERM_BEL || ch == TERM_ESC)
+                term_handle_str(t);
+            t->state = 0;
             t->utf8_rem = 0;
-            if (!(t->mode & TERM_MODE_UTF8) && TERM_IS_C1(ch))
-                term_handle_c1(t, ch);
-            else
-                term_handle_c0(t, ch);
-            if (!t->state)
-                t->last_ch = 0;
+            if (ch == TERM_ESC) {
+                t->state = TERM_ESC_START;
+                memset(&t->csi, 0, sizeof t->csi);
+            }
             return;
         }
         if (t->str.len + 1 < sizeof t->str_buf) {
@@ -1630,38 +1604,21 @@ term_char_feed(Term *t, unsigned char ch)
         return;
     }
 
-    for (;;) {
-        utf_st = term_utf8_consume(t, ch, &cp);
-        if (utf_st == 0)
-            return;
-        if (utf_st == 2) {
-            t->last_ch = 0;
-            term_putc(t, TERM_UTF_INVALID);
-            continue;
-        }
-        break;
-    }
-
-    control = (cp < 0x20 || cp == 0x7F || (cp >= 0x80 && cp <= 0x9F));
-    if (control) {
-        t->utf8_rem = 0;
-        if (cp >= 0x80)
-            term_handle_c1(t, (unsigned char)cp);
+    if (TERM_IS_C0(ch) || TERM_IS_C1(ch)) {
+        if (TERM_IS_C1(ch))
+            term_handle_c1(t, ch);
         else
-            term_handle_c0(t, (unsigned char)cp);
-        if (!t->state)
-            t->last_ch = 0;
+            term_handle_c0(t, ch);
         return;
     }
 
     if (t->state & TERM_ESC_START) {
-        if (cp > 0x7E) {
+        if (ch > 0x7E) {
             t->state = 0;
-            t->last_ch = cp;
-            term_putc(t, cp);
+            t->last_ch = ch;
+            term_putc(t, ch);
             return;
         }
-        ch = (unsigned char)cp;
         if (t->state & TERM_ESC_CSI) {
             if (t->csi.len < TERM_CSI_BUF_SIZ - 1)
                 t->csi.buf[t->csi.len++] = (char)ch;
@@ -1717,39 +1674,8 @@ term_char_feed(Term *t, unsigned char ch)
         return;
     }
 
-    t->last_ch = cp;
-    term_putc(t, cp);
-}
-
-void
-term_feed(Term *t, const char *bytes, size_t len)
-{
-    size_t i;
-
-    TASSERT(t, "Invalid term.");
-    if (!t || !bytes || !len)
-        return;
-
-    for (i = 0; i < len; i++) {
-        unsigned char ch = (unsigned char)bytes[i];
-
-        if (!(t->state & TERM_ESC_START) && !t->utf8_rem) {
-            if (ch == '\n') {
-                term_lf(t);
-                continue;
-            }
-            if (ch == '\r') {
-                term_move_to(t, 0, t->cursor.y);
-                continue;
-            }
-            if (ch >= 0x20 && ch < 0x7F) {
-                t->last_ch = ch;
-                term_putc(t, ch);
-                continue;
-            }
-        }
-        term_char_feed(t, ch);
-    }
+    t->last_ch = ch;
+    term_putc(t, ch);
 }
 
 void

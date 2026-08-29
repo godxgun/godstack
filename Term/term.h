@@ -14,7 +14,7 @@
  *     TermColors colors = {0};
  *     Term term;
  *     term_init(&term, 80, 24, &colors);
- *     term_feed(&term, bytes, len);
+ *     term_feed_printable(&term, bytes, len);
  *     TermScreen *s = term_screen(&term);
  *     term_destroy(&term);
  *
@@ -24,7 +24,7 @@
 #define TERM_H
 
 #define TERM_MAJOR 0
-#define TERM_MINOR 6
+#define TERM_MINOR 7
 #define TERM_PATCH 0
 
 /* CHANGE LOG
@@ -45,6 +45,8 @@
  * 0.4.3 - @vasco - UTF-8 OSC/DCS payload is not 8-bit C1
  * 0.5.0 - @vasco - 8-byte TermCell; interned style id; drop is_dirty; DECSET 2004
  * 0.6.0 - @vasco - term_cell_style; drop term_cell_fg / term_cell_bg
+ * 0.6.1 - @vasco - TermCursor.style; intern on style change
+ * 0.7.0 - @vasco - drop term_feed; typed printable / utf8 / escape only
  */
 
 #include <assert.h>
@@ -130,6 +132,7 @@ typedef struct TermCursor {
     uint32_t y;
     uint8_t attr;
     uint8_t state;
+    uint16_t style;
 } TermCursor;
 
 typedef struct TermStyle {
@@ -205,7 +208,7 @@ int  term_init_on(Term *t, uint32_t cols, uint32_t rows, const TermColors *color
 void term_destroy(Term *t);
 void term_resize(Term *t, uint32_t cols, uint32_t rows);
 void term_resize_on(Term *t, uint32_t cols, uint32_t rows, TermCell *screen, TermCell *alt, uint32_t cap);
-void term_feed(Term *t, const char *bytes, size_t len); /* any; vt avoids this */
+/* Term only accepts specific types of input. */
 void term_feed_printable(Term *t, const char *bytes, size_t len); /* 0x20-0x7E */
 void term_feed_utf8(Term *t, const char *bytes, size_t len); /* complete UTF-8, high bytes */
 void term_feed_escape(Term *t, const char *bytes, size_t len); /* C0 / ESC / CSI / OSC; 7-bit */
