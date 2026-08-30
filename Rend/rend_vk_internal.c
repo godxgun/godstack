@@ -228,6 +228,19 @@ rend_vk_align_forward(uintptr_t ptr, size_t align)
 	return p;
 }
 
+#if defined(_WIN32)
+#include <malloc.h>
+static inline int
+posix_memalign(void **memptr, size_t alignment, size_t size)
+{
+	void *ptr = _aligned_malloc(size, alignment);
+	if (!ptr)
+		return 12;
+	*memptr = ptr;
+	return 0;
+}
+#endif
+
 static size_t
 rend_vk_host_header_pad(size_t alignment)
 {
@@ -302,7 +315,11 @@ rend_vk_allocator_free(void *pUserData, void *pMemory)
 		return;
 	}
 	header = (RendVkAllocatorHeader *)pMemory - 1;
+#if defined(_WIN32)
+	_aligned_free((unsigned char *)pMemory - header->pad);
+#else
 	free((unsigned char *)pMemory - header->pad);
+#endif
 }
 
 static void
