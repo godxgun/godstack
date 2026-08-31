@@ -60,7 +60,7 @@
 
 #define PEAK_MAJOR "0"
 #define PEAK_MINOR "10"
-#define PEAK_PATCH "1"
+#define PEAK_PATCH "2"
 
 /* CHANGE LOG
  * 0.0.0 - @vasco - prototyping
@@ -93,6 +93,7 @@
  * 0.9.1 - @vasco - PEAK_NO_AUDIO; linux skips pthread and pulse
  * 0.10.0 - @vasco - peak_aligned_alloc / peak_aligned_free
  * 0.10.1 - @vasco - wayland marshal new_id slots; create_pool no longer sends size as fd
+ * 0.10.2 - @vasco - wayland seat v4; wl_keyboard.repeat_info; xdg_toplevel bounds/caps
  */
 
 #include <assert.h>

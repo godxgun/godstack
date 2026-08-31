@@ -109,6 +109,8 @@ static void peak_wayland_wm_ping(void *data, struct xdg_wm_base *wm, uint32_t se
 static void peak_wayland_xdg_configure(void *data, struct xdg_surface *surf, uint32_t serial);
 static void peak_wayland_toplevel_configure(void *data, struct xdg_toplevel *top, int32_t w, int32_t h, struct wl_array *states);
 static void peak_wayland_toplevel_close(void *data, struct xdg_toplevel *top);
+static void peak_wayland_toplevel_bounds(void *data, struct xdg_toplevel *top, int32_t w, int32_t h);
+static void peak_wayland_toplevel_caps(void *data, struct xdg_toplevel *top, struct wl_array *caps);
 static void peak_wayland_pointer_enter(void *data, struct wl_pointer *p, uint32_t serial, struct wl_surface *s, wl_fixed_t x, wl_fixed_t y);
 static void peak_wayland_pointer_leave(void *data, struct wl_pointer *p, uint32_t serial, struct wl_surface *s);
 static void peak_wayland_pointer_motion(void *data, struct wl_pointer *p, uint32_t time, wl_fixed_t x, wl_fixed_t y);
@@ -119,6 +121,7 @@ static void peak_wayland_keyboard_enter(void *data, struct wl_keyboard *k, uint3
 static void peak_wayland_keyboard_leave(void *data, struct wl_keyboard *k, uint32_t serial, struct wl_surface *s);
 static void peak_wayland_keyboard_key(void *data, struct wl_keyboard *k, uint32_t serial, uint32_t time, uint32_t key, uint32_t state);
 static void peak_wayland_keyboard_mod(void *data, struct wl_keyboard *k, uint32_t serial, uint32_t depressed, uint32_t latched, uint32_t locked, uint32_t group);
+static void peak_wayland_keyboard_repeat(void *data, struct wl_keyboard *k, int32_t rate, int32_t delay);
 static void peak_wayland_touch_down(void *data, struct wl_touch *t, uint32_t serial, uint32_t time, struct wl_surface *s, int32_t id, wl_fixed_t x, wl_fixed_t y);
 static void peak_wayland_touch_up(void *data, struct wl_touch *t, uint32_t serial, uint32_t time, int32_t id);
 static void peak_wayland_touch_motion(void *data, struct wl_touch *t, uint32_t time, int32_t id, wl_fixed_t x, wl_fixed_t y);
@@ -240,6 +243,8 @@ peak_wayland_registry_global(void *data, struct wl_registry *reg, uint32_t name,
 		peak_wayland.shm = (struct wl_shm *)peak_wayland_marshal((struct wl_proxy *)reg, 0, &wl_shm_interface, args);
 	} else if (!strcmp(iface, "wl_seat") && !peak_wayland.seat) {
 		args[1].s = "wl_seat";
+		if (ver > 4)
+			args[2].u = 4;
 		peak_wayland.seat = (struct wl_seat *)peak_wayland_marshal((struct wl_proxy *)reg, 0, &wl_seat_interface, args);
 	} else if (!strcmp(iface, "xdg_wm_base") && !peak_wayland.wm) {
 		args[1].s = "xdg_wm_base";
@@ -315,6 +320,23 @@ peak_wayland_toplevel_close(void *data, struct xdg_toplevel *top)
 	memset(&ev, 0, sizeof ev);
 	ev.type = PEAK_EVENT_WINDOW_CLOSE;
 	peak_q_push(&w->q, ev);
+}
+
+static void
+peak_wayland_toplevel_bounds(void *data, struct xdg_toplevel *top, int32_t w, int32_t h)
+{
+	(void)data;
+	(void)top;
+	(void)w;
+	(void)h;
+}
+
+static void
+peak_wayland_toplevel_caps(void *data, struct xdg_toplevel *top, struct wl_array *caps)
+{
+	(void)data;
+	(void)top;
+	(void)caps;
 }
 
 static void
@@ -549,6 +571,15 @@ peak_wayland_keyboard_mod(void *data, struct wl_keyboard *k, uint32_t serial, ui
 }
 
 static void
+peak_wayland_keyboard_repeat(void *data, struct wl_keyboard *k, int32_t rate, int32_t delay)
+{
+	(void)data;
+	(void)k;
+	(void)rate;
+	(void)delay;
+}
+
+static void
 peak_wayland_touch_down(void *data, struct wl_touch *t, uint32_t serial, uint32_t time, struct wl_surface *s, int32_t id, wl_fixed_t x, wl_fixed_t y)
 {
 	struct peak_wayland_win *w;
@@ -661,9 +692,10 @@ peak_wayland_seat_caps(void *data, struct wl_seat *seat, uint32_t caps)
 		void (*leave)(void *, struct wl_keyboard *, uint32_t, struct wl_surface *);
 		void (*key)(void *, struct wl_keyboard *, uint32_t, uint32_t, uint32_t, uint32_t);
 		void (*mod)(void *, struct wl_keyboard *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
+		void (*repeat)(void *, struct wl_keyboard *, int32_t, int32_t);
 	} kl = {
 		peak_wayland_keyboard_keymap, peak_wayland_keyboard_enter, peak_wayland_keyboard_leave,
-		peak_wayland_keyboard_key, peak_wayland_keyboard_mod
+		peak_wayland_keyboard_key, peak_wayland_keyboard_mod, peak_wayland_keyboard_repeat
 	};
 	static const struct {
 		void (*down)(void *, struct wl_touch *, uint32_t, uint32_t, struct wl_surface *, int32_t, wl_fixed_t, wl_fixed_t);
@@ -828,7 +860,12 @@ peak_wayland_window_open(const char *name, uint32_t width, uint32_t height, uint
 	static const struct {
 		void (*configure)(void *, struct xdg_toplevel *, int32_t, int32_t, struct wl_array *);
 		void (*close)(void *, struct xdg_toplevel *);
-	} xtl = { peak_wayland_toplevel_configure, peak_wayland_toplevel_close };
+		void (*bounds)(void *, struct xdg_toplevel *, int32_t, int32_t);
+		void (*caps)(void *, struct xdg_toplevel *, struct wl_array *);
+	} xtl = {
+		peak_wayland_toplevel_configure, peak_wayland_toplevel_close,
+		peak_wayland_toplevel_bounds, peak_wayland_toplevel_caps
+	};
 
 	if (!peak_wayland.display && !peak_wayland_init())
 		return intern;
