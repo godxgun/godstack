@@ -250,7 +250,8 @@ rend_vk_allocator_alloc(void *pUserData, size_t size, size_t alignment, VkSystem
 	}
 
 	pad = rend_vk_host_header_pad(alignment);
-	if (posix_memalign((void **)&block, alignment, pad + size) != 0) {
+	block = peak_aligned_alloc(pad + size, alignment);
+	if (!block) {
 		return NULL;
 	}
 	memset(block, 0, pad + size);
@@ -300,7 +301,7 @@ rend_vk_allocator_free(void *pUserData, void *pMemory)
 		return;
 	}
 	header = (RendVkAllocatorHeader *)pMemory - 1;
-	free((unsigned char *)pMemory - header->pad);
+	peak_aligned_free((unsigned char *)pMemory - header->pad);
 }
 
 static void

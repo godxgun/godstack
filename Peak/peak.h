@@ -59,8 +59,8 @@
 #endif
 
 #define PEAK_MAJOR "0"
-#define PEAK_MINOR "9"
-#define PEAK_PATCH "1"
+#define PEAK_MINOR "10"
+#define PEAK_PATCH "0"
 
 /* CHANGE LOG
  * 0.0.0 - @vasco - prototyping
@@ -91,6 +91,7 @@
  * 0.8.0 - @vasco - keys F1-12 Home End Page Super; title size fullscreen cursor relative scale; text/drop; filesystem; sock_connect; wayland then x11; pointer connect
  * 0.9.0 - @vasco - pid, env, dir list, symlink, child reap fd, sock SCM_RIGHTS, pointer pid
  * 0.9.1 - @vasco - PEAK_NO_AUDIO; linux skips pthread and pulse
+ * 0.10.0 - @vasco - peak_aligned_alloc / peak_aligned_free
  */
 
 #include <assert.h>
@@ -325,6 +326,8 @@ PEAK void     peak_sleep_ns(int64_t ns);
 PEAK int   peak_file_exists(const char *path);
 PEAK void *peak_file_alloc(const char *path, unsigned long *buf_size);
 PEAK int   peak_file_write(const char *path, const void *buf, size_t n); /* create/overwrite */
+PEAK void *peak_aligned_alloc(size_t size, size_t alignment); /* power-of-two; 0 on fail */
+PEAK void  peak_aligned_free(void *p);
 
 PEAK int peak_pid(void);
 PEAK int peak_env_set(const char *name, const char *value); /* NULL unsets */

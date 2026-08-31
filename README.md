@@ -12,9 +12,9 @@ Collection of modular and minimal libraries used by our software.
 | Name   | Version | Description                                |
 | ------ | ------- | ------------------------------------------ |
 | Poof   | 0.2.0   | Build system.                              |
-| Peak   | 0.9.1   | Platform library that automatically links the correct system libraries. |
+| Peak   | 0.10.0  | Platform library that automatically links the correct system libraries. |
 | Fuse   | 0.8.0   | Immediate-mode UI command buffer.          |
-| Rend   | 1.6.4   | Modern graphics API layer.                 |
+| Rend   | 1.6.5   | Modern graphics API layer.                 |
 
 ## Utilities
 | Name   | Version | Description                                |
