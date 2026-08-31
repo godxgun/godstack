@@ -21,6 +21,7 @@
  *
  * MACRO FLAGS (you define):
  * - PEAK_VULKAN         Vulkan WSI. Sets VK_USE_PLATFORM_*.
+ * - PEAK_NO_AUDIO       audio off. start returns 0. no pthread / pulse.
  * - P_LOG_WARN_ENABLED  default 1. PWARN.
  * - P_LOG_INFO_ENABLED  default 1. PINFO.
  * - P_LOG_DEBUG_ENABLED default 0. PDEBUG.
@@ -59,7 +60,7 @@
 
 #define PEAK_MAJOR "0"
 #define PEAK_MINOR "9"
-#define PEAK_PATCH "0"
+#define PEAK_PATCH "1"
 
 /* CHANGE LOG
  * 0.0.0 - @vasco - prototyping
@@ -89,6 +90,7 @@
  * 0.7.0 - @vasco - clipboard; keymod flags; Insert; pointer.mod; PEAK_EVENT_CLIP
  * 0.8.0 - @vasco - keys F1-12 Home End Page Super; title size fullscreen cursor relative scale; text/drop; filesystem; sock_connect; wayland then x11; pointer connect
  * 0.9.0 - @vasco - pid, env, dir list, symlink, child reap fd, sock SCM_RIGHTS, pointer pid
+ * 0.9.1 - @vasco - PEAK_NO_AUDIO; linux skips pthread and pulse
  */
 
 #include <assert.h>

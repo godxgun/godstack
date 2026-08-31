@@ -6,7 +6,9 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/joystick.h>
+#ifndef PEAK_NO_AUDIO
 #include <pthread.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,6 +21,7 @@
 #endif
 
 #define PEAK_X11_LINUX "libX11.so.6"
+#ifndef PEAK_NO_AUDIO
 #define PEAK_PULSE_LINUX "libpulse-simple.so.0"
 #define PEAK_AUDIO_FRAMES 256
 
@@ -26,6 +29,7 @@
     X(pa_simple_new,   void *, (const char *, const char *, int, const char *, const char *, const void *, const void *, const void *, int *)) \
     X(pa_simple_free,  void,   (void *)) \
     X(pa_simple_write, int,    (void *, const void *, size_t, int *))
+#endif
 
 #define PEAK_X11_API(X) \
 	X(XOpenDisplay,        Display *, (const char *)) \
@@ -78,6 +82,7 @@ typedef struct {
 #undef X
 } PeakX11Api;
 
+#ifndef PEAK_NO_AUDIO
 typedef struct {
 #define X(name, ret, args) ret (*name) args;
 	PEAK_PULSE_API(X)
@@ -89,6 +94,7 @@ typedef struct {
 	uint32_t rate;
 	uint8_t channels;
 } PeakPaSampleSpec;
+#endif
 
 typedef struct {
 	Display *display;
@@ -115,6 +121,7 @@ typedef struct {
 	Atom net_wm_pid;
 } PeakLinux;
 
+#ifndef PEAK_NO_AUDIO
 typedef struct {
 	volatile int run;
 	int thread_on;
@@ -125,6 +132,7 @@ typedef struct {
 	void (*fill)(int16_t *out, size_t frames, void *userdata);
 	void *userdata;
 } PeakAudio;
+#endif
 
 struct peak_linux_win {
 	Window window;
@@ -151,7 +159,9 @@ struct peak_linux_win {
 
 static PeakLinux peak_linux;
 static PeakX11Api peak_x11;
+#ifndef PEAK_NO_AUDIO
 static PeakPulseApi peak_pulse;
+#endif
 static char *peak_clip_incr;
 static size_t peak_clip_incr_n;
 static PeakClip peak_clip_incr_which;
@@ -159,7 +169,9 @@ static int peak_clip_incr_on;
 static PeakClip peak_clip_req_which;
 static int peak_clip_req_on;
 static int peak_clip_req_xa;
+#ifndef PEAK_NO_AUDIO
 static PeakAudio peak_audio;
+#endif
 static int peak_linux_kind;
 #define PEAK_LINUX_NONE    0
 #define PEAK_LINUX_WAYLAND 1
@@ -1242,6 +1254,7 @@ peak_platform_pending(PeakWindowInternal *intern)
 	return 1;
 }
 
+#ifndef PEAK_NO_AUDIO
 static int
 peak_internal_pulse_load(void)
 {
@@ -1323,6 +1336,7 @@ peak_platform_audio_start(uint32_t channels, uint32_t rate, void (*fill)(int16_t
 	peak_audio.thread_on = 1;
 	return 1;
 }
+#endif
 
 static uint64_t
 peak_platform_get_time(void)
@@ -1376,6 +1390,7 @@ peak_platform_vulkan_create_surface(PeakWindowInternal *intern, void *instance, 
 #endif
 }
 
+#ifndef PEAK_NO_AUDIO
 static void
 peak_platform_audio_stop(void)
 {
@@ -1395,6 +1410,22 @@ peak_platform_audio_stop(void)
 	peak_audio.fill = NULL;
 	peak_audio.userdata = NULL;
 }
+#else
+static int
+peak_platform_audio_start(uint32_t channels, uint32_t rate, void (*fill)(int16_t *out, size_t frames, void *userdata), void *userdata)
+{
+	(void)channels;
+	(void)rate;
+	(void)fill;
+	(void)userdata;
+	return 0;
+}
+
+static void
+peak_platform_audio_stop(void)
+{
+}
+#endif
 
 static int
 peak_linux_net_pid(Window w)
