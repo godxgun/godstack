@@ -224,11 +224,12 @@ peak_wayland_marshal(struct wl_proxy *p, uint32_t op, const struct wl_interface 
 static void
 peak_wayland_registry_global(void *data, struct wl_registry *reg, uint32_t name, const char *iface, uint32_t ver)
 {
-	union wl_argument args[3];
+	union wl_argument args[4];
 
 	(void)data;
 	if (!iface)
 		return;
+	memset(args, 0, sizeof args);
 	args[0].u = name;
 	args[2].u = ver;
 	if (!strcmp(iface, "wl_compositor") && !peak_wayland.compositor) {
@@ -735,16 +736,18 @@ peak_wayland_shm_resize(struct peak_wayland_win *w, uint32_t width, uint32_t hei
 		return 0;
 	}
 	w->shm_n = n;
-	args[0].h = w->shm_fd;
-	args[1].i = (int32_t)n;
+	memset(args, 0, sizeof args);
+	args[1].h = w->shm_fd;
+	args[2].i = (int32_t)n;
 	pool = (struct wl_shm_pool *)peak_wayland_marshal((struct wl_proxy *)peak_wayland.shm, 0, &wl_shm_pool_interface, args);
 	if (!pool)
 		return 0;
-	args[0].i = 0;
-	args[1].i = (int32_t)width;
-	args[2].i = (int32_t)height;
-	args[3].i = (int32_t)(width * 4);
-	args[4].u = 0; /* WL_SHM_FORMAT_ARGB8888 */
+	memset(args, 0, sizeof args);
+	args[1].i = 0;
+	args[2].i = (int32_t)width;
+	args[3].i = (int32_t)height;
+	args[4].i = (int32_t)(width * 4);
+	args[5].u = 0; /* WL_SHM_FORMAT_ARGB8888 */
 	w->wl_buf = (struct wl_buffer *)peak_wayland_marshal((struct wl_proxy *)pool, 0, &wl_buffer_interface, args);
 	peak_wl.wl_proxy_destroy((struct wl_proxy *)pool);
 	if (!w->wl_buf)
@@ -792,9 +795,10 @@ peak_wayland_init(void)
 	if (peak_wayland.seat)
 		peak_wl.wl_proxy_add_listener((struct wl_proxy *)peak_wayland.seat, (void (**)(void))(void *)&sl, NULL);
 	if (peak_wayland.ddm && peak_wayland.seat && wl_data_device_interface.name) {
-		union wl_argument dargs[1];
+		union wl_argument dargs[2];
 
-		dargs[0].o = (struct wl_object *)peak_wayland.seat;
+		memset(dargs, 0, sizeof dargs);
+		dargs[1].o = (struct wl_object *)peak_wayland.seat;
 		peak_wayland.dd = (struct wl_data_device *)peak_wayland_marshal((struct wl_proxy *)peak_wayland.ddm, 0, &wl_data_device_interface, dargs);
 	}
 	peak_wl.wl_display_roundtrip(peak_wayland.display);
@@ -817,7 +821,7 @@ peak_wayland_window_open(const char *name, uint32_t width, uint32_t height, uint
 {
 	PeakWindowInternal intern = {0};
 	struct peak_wayland_win *w;
-	union wl_argument args[3];
+	union wl_argument args[2];
 	static const struct {
 		void (*configure)(void *, struct xdg_surface *, uint32_t);
 	} xsl = { peak_wayland_xdg_configure };
@@ -837,7 +841,8 @@ peak_wayland_window_open(const char *name, uint32_t width, uint32_t height, uint
 	w->surface = (struct wl_surface *)peak_wayland_marshal((struct wl_proxy *)peak_wayland.compositor, 0, &wl_surface_interface, NULL);
 	if (!w->surface)
 		goto fail;
-	args[0].o = (struct wl_object *)w->surface;
+	memset(args, 0, sizeof args);
+	args[1].o = (struct wl_object *)w->surface;
 	w->xdg_surface = (struct xdg_surface *)peak_wayland_marshal((struct wl_proxy *)peak_wayland.wm, 2, &xdg_surface_interface, args);
 	if (!w->xdg_surface)
 		goto fail;
@@ -846,10 +851,13 @@ peak_wayland_window_open(const char *name, uint32_t width, uint32_t height, uint
 	if (!w->xdg_toplevel)
 		goto fail;
 	peak_wl.wl_proxy_add_listener((struct wl_proxy *)w->xdg_toplevel, (void (**)(void))(void *)&xtl, w);
+	memset(args, 0, sizeof args);
 	args[0].s = name;
 	peak_wayland_marshal((struct wl_proxy *)w->xdg_toplevel, 2, NULL, args);
-	if (flags & PEAK_WINDOW_FULLSCREEN)
+	if (flags & PEAK_WINDOW_FULLSCREEN) {
+		memset(args, 0, sizeof args);
 		peak_wayland_marshal((struct wl_proxy *)w->xdg_toplevel, 11, NULL, args);
+	}
 	if (!peak_wayland_shm_resize(w, width, height))
 		goto fail;
 	peak_wl.wl_display_roundtrip(peak_wayland.display);

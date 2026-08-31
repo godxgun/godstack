@@ -60,7 +60,7 @@
 
 #define PEAK_MAJOR "0"
 #define PEAK_MINOR "10"
-#define PEAK_PATCH "0"
+#define PEAK_PATCH "1"
 
 /* CHANGE LOG
  * 0.0.0 - @vasco - prototyping
@@ -92,6 +92,7 @@
  * 0.9.0 - @vasco - pid, env, dir list, symlink, child reap fd, sock SCM_RIGHTS, pointer pid
  * 0.9.1 - @vasco - PEAK_NO_AUDIO; linux skips pthread and pulse
  * 0.10.0 - @vasco - peak_aligned_alloc / peak_aligned_free
+ * 0.10.1 - @vasco - wayland marshal new_id slots; create_pool no longer sends size as fd
  */
 
 #include <assert.h>
