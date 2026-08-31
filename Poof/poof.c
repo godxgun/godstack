@@ -1,5 +1,9 @@
 #include "poof.h"
 
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
+
 #if defined(_WIN32)
 #define POOF_DEV_NULL "nul 2>&1"
 #else
@@ -41,6 +45,84 @@ poof_cc_available(void)
     }
 
     return available;
+}
+
+extern bool
+poof_has_cmd(const char *name)
+{
+    char buffer[256];
+
+    if (!name || !name[0]) return false;
+#if defined(_WIN32)
+    snprintf(buffer, sizeof(buffer), "where %s > " POOF_DEV_NULL, name);
+#else
+    snprintf(buffer, sizeof(buffer), "command -v %s > " POOF_DEV_NULL, name);
+#endif
+    return (system(buffer) == 0);
+}
+
+extern uint32_t
+poof_cpu_available(void)
+{
+    uint32_t available = 0;
+
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+#if defined(__GNUC__) || defined(__clang__)
+    if (__builtin_cpu_supports("sse"))     available |= POOF_MSSE;
+    if (__builtin_cpu_supports("sse2"))    available |= POOF_MSSE2;
+    if (__builtin_cpu_supports("avx"))     available |= POOF_AVX;
+    if (__builtin_cpu_supports("avx2"))    available |= POOF_AVX2;
+    if (__builtin_cpu_supports("avx512f")) available |= POOF_AVX512F;
+    if (__builtin_cpu_supports("bmi"))     available |= POOF_BMI;
+#elif defined(_MSC_VER)
+    int info[4] = {0};
+    __cpuid(info, 1);
+    if (info[3] & (1 << 25)) available |= POOF_MSSE;
+    if (info[3] & (1 << 26)) available |= POOF_MSSE2;
+    if (info[2] & (1 << 28)) available |= POOF_AVX;
+    __cpuidex(info, 7, 0);
+    if (info[1] & (1 << 3))  available |= POOF_BMI;
+    if (info[1] & (1 << 5))  available |= POOF_AVX2;
+    if (info[1] & (1 << 16)) available |= POOF_AVX512F;
+#endif
+#endif
+    return available;
+}
+
+extern void
+poof_support_line(const char *name, int yes)
+{
+    if (!name) return;
+    if (yes)
+        poof_print(0x00FF88, "  - %s: yes\n", name);
+    else
+        poof_print(0x888888, "  - %s: no\n", name);
+}
+
+extern uint32_t
+poof_support_internal(const char *label, ...)
+{
+    uint32_t simd;
+    va_list args;
+    const char *name;
+
+    poof_print(0xFE9900, "[%s] support:\n", label ? label : "POOF");
+
+    va_start(args, label);
+    while ((name = va_arg(args, const char *)) != NULL) {
+        int yes = va_arg(args, int);
+        poof_support_line(name, yes);
+    }
+    va_end(args);
+
+    simd = poof_cpu_available();
+    poof_support_line("AVX2", POOF_IS_SET(simd, POOF_AVX2));
+    poof_support_line("AVX", POOF_IS_SET(simd, POOF_AVX));
+    poof_support_line("SSE", POOF_IS_SET(simd, POOF_MSSE));
+    poof_support_line("SSE2", POOF_IS_SET(simd, POOF_MSSE2));
+    poof_support_line("AVX512F", POOF_IS_SET(simd, POOF_AVX512F));
+    poof_support_line("BMI", POOF_IS_SET(simd, POOF_BMI));
+    return simd;
 }
 
 extern void
@@ -211,6 +293,7 @@ poof__cc_build_cmd(const Poof_CC *cc, uint8_t target_platform, bool multi_target
     if (POOF_IS_SET(cc->optimization, POOF_AVX)) poof_cmd_append(&cmd, is_msvc ? "/arch:AVX" : "-mavx");
     if (POOF_IS_SET(cc->optimization, POOF_AVX2)) poof_cmd_append(&cmd, is_msvc ? "/arch:AVX2" : "-mavx2");
     if (POOF_IS_SET(cc->optimization, POOF_AVX512F)) poof_cmd_append(&cmd, is_msvc ? "/arch:AVX512" : "-mavx512f");
+    if (POOF_IS_SET(cc->optimization, POOF_BMI) && !is_msvc) poof_cmd_append(&cmd, "-mbmi");
 
     // Defines
     for (size_t i = 0; i < cc->defines.count; ++i) {

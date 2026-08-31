@@ -21,14 +21,15 @@
 #endif
 
 #define POOF_MAJOR 0
-#define POOF_MINOR 1
-#define POOF_PATCH 4
+#define POOF_MINOR 2
+#define POOF_PATCH 0
 
 /* CHANGE LOG
  * 0.1.1 - @vasco - rebuild finds poof.h from more paths
  * 0.1.2 - @vasco - include poof.c; no POOF_IMPLEMENTATION
  * 0.1.3 - @vasco - macos clang -x objective-c before sources
  * 0.1.4 - @vasco - macos _SC_NPROCESSORS_ONLN via _DARWIN_C_SOURCE
+ * 0.2.0 - @vasco - host SIMD probe, poof_has_cmd, POOF_BMI, poof_support
  */
 
 #include <stdint.h>
@@ -76,6 +77,7 @@ enum PoofOptimizationFlags {
     POOF_AVX      = 1 << 5,
     POOF_AVX2     = 1 << 6,
     POOF_AVX512F  = 1 << 7,
+    POOF_BMI      = 1 << 8,
 };
 
 #define POOF_IS_SET(var, flag) (((var) & (flag)) != 0)
@@ -134,6 +136,8 @@ extern bool poof_batch_run_parallel(Poof_Batch *batch, const char *label, size_t
 
 /* Compiler abstraction */
 extern uint8_t poof_cc_available(void);
+extern uint32_t poof_cpu_available(void);
+extern bool poof_has_cmd(const char *name);
 extern void poof_cc_init(Poof_CC *cc, uint8_t compiler, uint8_t target_platform);
 extern void poof_cc_free(Poof_CC *cc);
 extern bool poof_cc_run(Poof_CC *cc);
@@ -148,6 +152,9 @@ extern bool poof_needs_rebuild(const char *target, const char **sources, size_t 
 
 /* Output and pretty printing */
 extern int poof_print(uint32_t col, const char *text, ...);
+extern void poof_support_line(const char *name, int yes);
+extern uint32_t poof_support_internal(const char *label, ...);
+#define poof_support(...) poof_support_internal(__VA_ARGS__, NULL)
 extern int poof_progress_bar(const char *label, float value, float min, float max, float width);
 
 /* Rebuild self macro */
