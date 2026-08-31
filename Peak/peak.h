@@ -6,6 +6,13 @@
  * Platform layer.
  * It just works, don't think about it too much.
  *
+ * SURVIVOR:
+ * - One header. OS lives in p_linux.c / p_wayland.c / p_win32.c /
+ *   p_macos.c / p_posix.c / p_emscripten.c. peak.c dispatches.
+ * - Callers use peak_* and PEAK_HANDLE. They do not include OS headers
+ *   for Peak work. Missing: 0 / PEAK_HANDLE_INVALID, never #error a living OS.
+ * - PEAK_* detect macros are for Peak .c and rare WSI. Detecting != supported.
+ *
  * SUPPORTED PLATFORMS:
  * - Desktop: Win32, MacOS and Linux (Wayland & X11).
  * - Web via emscripten.
@@ -51,7 +58,7 @@
 #endif
 
 #define PEAK_MAJOR "0"
-#define PEAK_MINOR "8"
+#define PEAK_MINOR "9"
 #define PEAK_PATCH "0"
 
 /* CHANGE LOG
@@ -81,6 +88,7 @@
  * 0.6.6 - @vasco - pending is this window only; WSI events no longer spin poll
  * 0.7.0 - @vasco - clipboard; keymod flags; Insert; pointer.mod; PEAK_EVENT_CLIP
  * 0.8.0 - @vasco - keys F1-12 Home End Page Super; title size fullscreen cursor relative scale; text/drop; filesystem; sock_connect; wayland then x11; pointer connect
+ * 0.9.0 - @vasco - pid, env, dir list, symlink, child reap fd, sock SCM_RIGHTS, pointer pid
  */
 
 #include <assert.h>
@@ -316,11 +324,17 @@ PEAK int   peak_file_exists(const char *path);
 PEAK void *peak_file_alloc(const char *path, unsigned long *buf_size);
 PEAK int   peak_file_write(const char *path, const void *buf, size_t n); /* create/overwrite */
 
+PEAK int peak_pid(void);
+PEAK int peak_env_set(const char *name, const char *value); /* NULL unsets */
+
 PEAK int peak_filesystem_mkdir(const char *path); /* one level */
 PEAK int peak_filesystem_rm(const char *path); /* unlink, or rmdir if empty */
 PEAK int peak_filesystem_cwd(char *buf, size_t cap);
 PEAK int peak_filesystem_chdir(const char *path);
 PEAK int peak_filesystem_rename(const char *from, const char *to);
+PEAK int peak_filesystem_list(const char *path, int (*fn)(const char *name, void *ud), void *ud); /* fn 0 stops; 1 if opened */
+PEAK int peak_filesystem_symlink(const char *target, const char *path);
+PEAK int peak_filesystem_readlink(const char *path, char *dst, size_t cap);
 
 // ███ ███ ███ ███
 // █ █ █   █ █ █
@@ -346,6 +360,16 @@ PEAK int      peak_job_reap(PeakProc *job, int *code); /* 1 if exited */
 PEAK void     peak_job_kill(PeakProc *job);
 PEAK int      peak_pid_cwd(int pid, char *buf, size_t cap);
 
+/* Dead-child wakeup. fd pollable or INVALID. Missing OS: arm 1, fd INVALID, reap 0. */
+PEAK int         peak_child_arm(void);
+PEAK void        peak_child_disarm(void);
+PEAK PEAK_HANDLE peak_child_fd(void);
+PEAK void        peak_child_ack(void);
+PEAK int         peak_child_reap(int *pid, int *code); /* 1 if one */
+
+PEAK int peak_stdout_silence(void); /* stdout -> platform null */
+PEAK int peak_stdout_restore(void);
+
 // █
 //
 // █ ███
@@ -361,6 +385,10 @@ PEAK int         peak_runtime_dir(char *buf, size_t cap, const char *app);
 PEAK PEAK_HANDLE peak_sock_listen(const char *path);
 PEAK PEAK_HANDLE peak_sock_accept(PEAK_HANDLE listen_fd);
 PEAK PEAK_HANDLE peak_sock_connect(const char *path);
+PEAK int         peak_sock_send(PEAK_HANDLE sock, const void *buf, size_t n, PEAK_HANDLE pass);
+PEAK int         peak_sock_recv(PEAK_HANDLE sock, void *buf, size_t n, PEAK_HANDLE *pass);
+PEAK int         peak_pointer_pid(PeakWindow *win); /* _NET_WM_PID under pointer; 0 if none */
+PEAK int         peak_pointer_local(PeakWindow *win, int *x, int *y); /* 1 if pointer is in this window */
 
 /* Byte IO on Peak fds (pty, sock, job). -1 would-block, 0 EOF, >0 count. */
 PEAK int  peak_fd_read(PEAK_HANDLE fd, void *buf, size_t n);

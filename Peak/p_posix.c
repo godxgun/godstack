@@ -1,3 +1,4 @@
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -29,6 +30,12 @@ static int peak_internal_nb(int fd);
 static PeakProc peak_internal_proc_fail(void);
 static int peak_internal_memfd(void);
 static size_t peak_internal_io_n(size_t n);
+static int peak_internal_status_code(int status);
+static void peak_internal_sigchld(int sig);
+
+static int peak_child_r = -1;
+static int peak_child_w = -1;
+static int peak_stdout_saved = -1;
 
 static int
 peak_internal_nb(int fd)
@@ -79,6 +86,30 @@ peak_internal_io_n(size_t n)
 	if (n > (size_t)0x40000000)
 		return (size_t)0x40000000;
 	return n;
+}
+
+static int
+peak_internal_status_code(int status)
+{
+	if (WIFEXITED(status))
+		return WEXITSTATUS(status);
+	if (WIFSIGNALED(status))
+		return 128 + WTERMSIG(status);
+	return 1;
+}
+
+static void
+peak_internal_sigchld(int sig)
+{
+	int saved;
+	char x;
+
+	(void)sig;
+	saved = errno;
+	x = 0;
+	if (peak_child_w >= 0)
+		(void)write(peak_child_w, &x, 1);
+	errno = saved;
 }
 
 PeakProc
@@ -293,6 +324,122 @@ peak_sock_connect(const char *path)
 }
 
 int
+peak_sock_send(PEAK_HANDLE sock, const void *buf, size_t n, PEAK_HANDLE pass)
+{
+	struct msghdr msg;
+	struct iovec iov;
+	union {
+		struct cmsghdr c;
+		char b[CMSG_SPACE(sizeof(int))];
+	} u;
+	struct cmsghdr *c;
+	int pfd;
+	ssize_t r;
+
+	if (sock < 0 || !buf || !n)
+		return 0;
+	memset(&msg, 0, sizeof msg);
+	iov.iov_base = (void *)buf;
+	iov.iov_len = n;
+	msg.msg_iov = &iov;
+	msg.msg_iovlen = 1;
+	if (pass != PEAK_HANDLE_INVALID) {
+		memset(&u, 0, sizeof u);
+		msg.msg_control = u.b;
+		msg.msg_controllen = sizeof u.b;
+		c = CMSG_FIRSTHDR(&msg);
+		if (!c)
+			return 0;
+		c->cmsg_level = SOL_SOCKET;
+		c->cmsg_type = SCM_RIGHTS;
+		c->cmsg_len = CMSG_LEN(sizeof(int));
+		pfd = (int)pass;
+		memcpy(CMSG_DATA(c), &pfd, sizeof pfd);
+	}
+	for (;;) {
+		r = sendmsg(sock, &msg, 0);
+		if (r > 0)
+			return 1;
+		if (r == 0)
+			return 0;
+		if (errno == EINTR)
+			continue;
+		return 0;
+	}
+}
+
+int
+peak_sock_recv(PEAK_HANDLE sock, void *buf, size_t n, PEAK_HANDLE *pass)
+{
+	struct msghdr msg;
+	struct iovec iov;
+	union {
+		struct cmsghdr c;
+		char b[CMSG_SPACE(sizeof(int))];
+	} u;
+	struct cmsghdr *c;
+	ssize_t r;
+	int pfd;
+
+	if (pass)
+		*pass = PEAK_HANDLE_INVALID;
+	if (sock < 0 || !buf || !n)
+		return -1;
+	memset(&msg, 0, sizeof msg);
+	memset(&u, 0, sizeof u);
+	iov.iov_base = buf;
+	iov.iov_len = peak_internal_io_n(n);
+	msg.msg_iov = &iov;
+	msg.msg_iovlen = 1;
+	msg.msg_control = u.b;
+	msg.msg_controllen = sizeof u.b;
+	for (;;) {
+		r = recvmsg(sock, &msg, 0);
+		if (r > 0)
+			break;
+		if (r == 0)
+			return 0;
+		if (errno == EINTR)
+			continue;
+		if (errno == EAGAIN || errno == EWOULDBLOCK)
+			return -1;
+		return 0;
+	}
+	for (c = CMSG_FIRSTHDR(&msg); c; c = CMSG_NXTHDR(&msg, c)) {
+		if (c->cmsg_level != SOL_SOCKET || c->cmsg_type != SCM_RIGHTS)
+			continue;
+		if (c->cmsg_len < CMSG_LEN(sizeof(int)))
+			continue;
+		memcpy(&pfd, CMSG_DATA(c), sizeof pfd);
+		if (pfd < 0)
+			continue;
+		if (pass && *pass == PEAK_HANDLE_INVALID)
+			*pass = peak_internal_nb(pfd);
+		else
+			close(pfd);
+	}
+	return (int)r;
+}
+
+#ifndef PEAK_HAS_POINTER_PID
+int
+peak_pointer_pid(PeakWindow *win)
+{
+	(void)win;
+	return 0;
+}
+
+int
+peak_pointer_local(PeakWindow *win, int *x, int *y)
+{
+	(void)win;
+	(void)x;
+	(void)y;
+	return 0;
+}
+#endif
+
+int
 peak_filesystem_mkdir(const char *path)
 {
 	if (!path || !path[0])
@@ -334,6 +481,180 @@ peak_filesystem_rename(const char *from, const char *to)
 	if (!from || !from[0] || !to || !to[0])
 		return 0;
 	return rename(from, to) == 0;
+}
+
+int
+peak_pid(void)
+{
+	return (int)getpid();
+}
+
+int
+peak_env_set(const char *name, const char *value)
+{
+	if (!name || !name[0])
+		return 0;
+	if (value)
+		return setenv(name, value, 1) == 0;
+	return unsetenv(name) == 0;
+}
+
+int
+peak_filesystem_list(const char *path, int (*fn)(const char *name, void *ud), void *ud)
+{
+	DIR *d;
+	struct dirent *e;
+
+	if (!path || !path[0] || !fn)
+		return 0;
+	d = opendir(path);
+	if (!d)
+		return 0;
+	while ((e = readdir(d))) {
+		if (!e->d_name[0])
+			continue;
+		if (fn(e->d_name, ud) == 0)
+			break;
+	}
+	closedir(d);
+	return 1;
+}
+
+int
+peak_filesystem_symlink(const char *target, const char *path)
+{
+	if (!target || !target[0] || !path || !path[0])
+		return 0;
+	return symlink(target, path) == 0;
+}
+
+int
+peak_filesystem_readlink(const char *path, char *dst, size_t cap)
+{
+	ssize_t n;
+
+	if (!path || !path[0] || !dst || cap < 2)
+		return 0;
+	n = readlink(path, dst, cap - 1);
+	if (n < 0)
+		return 0;
+	dst[n] = 0;
+	return 1;
+}
+
+int
+peak_child_arm(void)
+{
+	int p[2];
+	struct sigaction sa;
+
+	if (peak_child_r >= 0)
+		return 1;
+	if (pipe(p) < 0)
+		return 0;
+	peak_internal_nb(p[0]);
+	peak_internal_nb(p[1]);
+	memset(&sa, 0, sizeof sa);
+	sa.sa_handler = peak_internal_sigchld;
+	sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+	sigemptyset(&sa.sa_mask);
+	if (sigaction(SIGCHLD, &sa, NULL) != 0) {
+		close(p[0]);
+		close(p[1]);
+		return 0;
+	}
+	peak_child_r = p[0];
+	peak_child_w = p[1];
+	return 1;
+}
+
+void
+peak_child_disarm(void)
+{
+	struct sigaction sa;
+
+	memset(&sa, 0, sizeof sa);
+	sa.sa_handler = SIG_DFL;
+	sigemptyset(&sa.sa_mask);
+	sigaction(SIGCHLD, &sa, NULL);
+	if (peak_child_r >= 0) {
+		close(peak_child_r);
+		peak_child_r = -1;
+	}
+	if (peak_child_w >= 0) {
+		close(peak_child_w);
+		peak_child_w = -1;
+	}
+}
+
+PEAK_HANDLE
+peak_child_fd(void)
+{
+	return peak_child_r >= 0 ? peak_child_r : PEAK_HANDLE_INVALID;
+}
+
+void
+peak_child_ack(void)
+{
+	char buf[64];
+
+	if (peak_child_r < 0)
+		return;
+	while (read(peak_child_r, buf, sizeof buf) > 0)
+		;
+}
+
+int
+peak_child_reap(int *pid, int *code)
+{
+	int r, status;
+
+	r = waitpid(-1, &status, WNOHANG);
+	if (r <= 0)
+		return 0;
+	if (pid)
+		*pid = r;
+	if (code)
+		*code = peak_internal_status_code(status);
+	return 1;
+}
+
+int
+peak_stdout_silence(void)
+{
+	int nfd;
+
+	if (peak_stdout_saved >= 0)
+		return 1;
+	peak_stdout_saved = dup(STDOUT_FILENO);
+	if (peak_stdout_saved < 0)
+		return 0;
+	nfd = open("/dev/null", O_WRONLY);
+	if (nfd < 0) {
+		close(peak_stdout_saved);
+		peak_stdout_saved = -1;
+		return 0;
+	}
+	if (dup2(nfd, STDOUT_FILENO) < 0) {
+		close(nfd);
+		close(peak_stdout_saved);
+		peak_stdout_saved = -1;
+		return 0;
+	}
+	close(nfd);
+	return 1;
+}
+
+int
+peak_stdout_restore(void)
+{
+	if (peak_stdout_saved < 0)
+		return 0;
+	fflush(stdout);
+	dup2(peak_stdout_saved, STDOUT_FILENO);
+	close(peak_stdout_saved);
+	peak_stdout_saved = -1;
+	return 1;
 }
 
 int
@@ -440,14 +761,8 @@ peak_job_reap(PeakProc *job, int *code)
 	if (r <= 0)
 		return 0;
 	job->pid = 0;
-	if (code) {
-		if (WIFEXITED(status))
-			*code = WEXITSTATUS(status);
-		else if (WIFSIGNALED(status))
-			*code = 128 + WTERMSIG(status);
-		else
-			*code = 1;
-	}
+	if (code)
+		*code = peak_internal_status_code(status);
 	return 1;
 }
 

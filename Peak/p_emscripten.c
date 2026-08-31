@@ -496,6 +496,38 @@ peak_sock_connect(const char *path)
 }
 
 int
+peak_sock_send(PEAK_HANDLE sock, const void *buf, size_t n, PEAK_HANDLE pass)
+{
+	(void)sock; (void)buf; (void)n; (void)pass;
+	return 0;
+}
+
+int
+peak_sock_recv(PEAK_HANDLE sock, void *buf, size_t n, PEAK_HANDLE *pass)
+{
+	if (pass)
+		*pass = PEAK_HANDLE_INVALID;
+	(void)sock; (void)buf; (void)n;
+	return -1;
+}
+
+int
+peak_pointer_pid(PeakWindow *win)
+{
+	(void)win;
+	return 0;
+}
+
+int
+peak_pointer_local(PeakWindow *win, int *x, int *y)
+{
+	(void)win;
+	(void)x;
+	(void)y;
+	return 0;
+}
+
+int
 peak_filesystem_mkdir(const char *path)
 {
 	if (!path || !path[0])
@@ -535,6 +567,90 @@ peak_filesystem_rename(const char *from, const char *to)
 	if (!from || !from[0] || !to || !to[0])
 		return 0;
 	return rename(from, to) == 0;
+}
+
+int
+peak_pid(void)
+{
+	return (int)getpid();
+}
+
+int
+peak_env_set(const char *name, const char *value)
+{
+	if (!name || !name[0])
+		return 0;
+	if (value)
+		return setenv(name, value, 1) == 0;
+	return unsetenv(name) == 0;
+}
+
+int
+peak_filesystem_list(const char *path, int (*fn)(const char *name, void *ud), void *ud)
+{
+	(void)path;
+	(void)fn;
+	(void)ud;
+	return 0;
+}
+
+int
+peak_filesystem_symlink(const char *target, const char *path)
+{
+	(void)target;
+	(void)path;
+	return 0;
+}
+
+int
+peak_filesystem_readlink(const char *path, char *dst, size_t cap)
+{
+	(void)path;
+	(void)dst;
+	(void)cap;
+	return 0;
+}
+
+int
+peak_child_arm(void)
+{
+	return 1;
+}
+
+void
+peak_child_disarm(void)
+{
+}
+
+PEAK_HANDLE
+peak_child_fd(void)
+{
+	return PEAK_HANDLE_INVALID;
+}
+
+void
+peak_child_ack(void)
+{
+}
+
+int
+peak_child_reap(int *pid, int *code)
+{
+	(void)pid;
+	(void)code;
+	return 0;
+}
+
+int
+peak_stdout_silence(void)
+{
+	return 0;
+}
+
+int
+peak_stdout_restore(void)
+{
+	return 0;
 }
 
 PEAK_HANDLE

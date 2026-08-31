@@ -8,6 +8,11 @@
  * - Peak owns the window.
  * - Caller owns SPIR-V or C entries.
  *
+ * SURVIVOR:
+ * - One header. Backends rend_vk14.c and rend_cpu.c. Dispatch is RendVTable in rend.c.
+ * - Vulkan is compile-optional. CPU is not. AUTO falls back. No OS window APIs here.
+ * - Do not delete CPU to tidy Vulkan. Do not put PEAK_WIN32 / X11 in the command path.
+ *
  * SUPPORTED BACKENDS:
  * - Vulkan 1.4
  * - CPU Software Raster

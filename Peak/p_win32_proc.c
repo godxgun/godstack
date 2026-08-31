@@ -1,3 +1,6 @@
+#include <fcntl.h>
+#include <io.h>
+
 #ifndef PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE
 #define PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE 0x00020016
 #endif
@@ -27,6 +30,7 @@ static PeakResizePseudoConsole peak_resize_pc;
 static PeakClosePseudoConsole peak_close_pc;
 static int peak_conpty_tried;
 static char peak_pipe_name[MAX_PATH];
+static int peak_stdout_saved = -1;
 
 static PeakProc peak_internal_proc_fail(void);
 static void peak_internal_conpty_load(void);
@@ -446,6 +450,37 @@ peak_sock_connect(const char *path)
 }
 
 int
+peak_sock_send(PEAK_HANDLE sock, const void *buf, size_t n, PEAK_HANDLE pass)
+{
+	(void)pass;
+	return peak_fd_write(sock, buf, n) > 0;
+}
+
+int
+peak_sock_recv(PEAK_HANDLE sock, void *buf, size_t n, PEAK_HANDLE *pass)
+{
+	if (pass)
+		*pass = PEAK_HANDLE_INVALID;
+	return peak_fd_read(sock, buf, n);
+}
+
+int
+peak_pointer_pid(PeakWindow *win)
+{
+	(void)win;
+	return 0;
+}
+
+int
+peak_pointer_local(PeakWindow *win, int *x, int *y)
+{
+	(void)win;
+	(void)x;
+	(void)y;
+	return 0;
+}
+
+int
 peak_filesystem_mkdir(const char *path)
 {
 	if (!path || !path[0])
@@ -710,4 +745,125 @@ peak_mirror_unmap(void *p, size_t size)
 		return;
 	UnmapViewOfFile(p);
 	UnmapViewOfFile((char *)p + size);
+}
+
+int
+peak_pid(void)
+{
+	return (int)GetCurrentProcessId();
+}
+
+int
+peak_env_set(const char *name, const char *value)
+{
+	if (!name || !name[0])
+		return 0;
+	return SetEnvironmentVariableA(name, value) != 0;
+}
+
+int
+peak_filesystem_list(const char *path, int (*fn)(const char *name, void *ud), void *ud)
+{
+	char pat[MAX_PATH];
+	WIN32_FIND_DATAA fd;
+	HANDLE h;
+
+	if (!path || !path[0] || !fn)
+		return 0;
+	if (snprintf(pat, sizeof pat, "%s\\*", path) < 0)
+		return 0;
+	h = FindFirstFileA(pat, &fd);
+	if (h == INVALID_HANDLE_VALUE)
+		return 0;
+	do {
+		if (fn(fd.cFileName, ud) == 0)
+			break;
+	} while (FindNextFileA(h, &fd));
+	FindClose(h);
+	return 1;
+}
+
+int
+peak_filesystem_symlink(const char *target, const char *path)
+{
+	(void)target;
+	(void)path;
+	return 0;
+}
+
+int
+peak_filesystem_readlink(const char *path, char *dst, size_t cap)
+{
+	(void)path;
+	(void)dst;
+	(void)cap;
+	return 0;
+}
+
+int
+peak_child_arm(void)
+{
+	return 1;
+}
+
+void
+peak_child_disarm(void)
+{
+}
+
+PEAK_HANDLE
+peak_child_fd(void)
+{
+	return PEAK_HANDLE_INVALID;
+}
+
+void
+peak_child_ack(void)
+{
+}
+
+int
+peak_child_reap(int *pid, int *code)
+{
+	(void)pid;
+	(void)code;
+	return 0;
+}
+
+int
+peak_stdout_silence(void)
+{
+	int nfd;
+
+	if (peak_stdout_saved >= 0)
+		return 1;
+	peak_stdout_saved = _dup(_fileno(stdout));
+	if (peak_stdout_saved < 0)
+		return 0;
+	nfd = _open("NUL", _O_WRONLY);
+	if (nfd < 0) {
+		_close(peak_stdout_saved);
+		peak_stdout_saved = -1;
+		return 0;
+	}
+	if (_dup2(nfd, _fileno(stdout)) < 0) {
+		_close(nfd);
+		_close(peak_stdout_saved);
+		peak_stdout_saved = -1;
+		return 0;
+	}
+	_close(nfd);
+	return 1;
+}
+
+int
+peak_stdout_restore(void)
+{
+	if (peak_stdout_saved < 0)
+		return 0;
+	fflush(stdout);
+	_dup2(peak_stdout_saved, _fileno(stdout));
+	_close(peak_stdout_saved);
+	peak_stdout_saved = -1;
+	return 1;
 }

@@ -69,7 +69,8 @@
 	X(XGrabPointer,        int, (Display *, Window, Bool, unsigned int, int, int, Window, Cursor, Time)) \
 	X(XUngrabPointer,      int, (Display *, Time)) \
 	X(XGetWindowAttributes, Status, (Display *, Window, XWindowAttributes *)) \
-	X(XQueryPointer,       Bool, (Display *, Window, Window *, Window *, int *, int *, int *, int *, unsigned int *))
+	X(XQueryPointer,       Bool, (Display *, Window, Window *, Window *, int *, int *, int *, int *, unsigned int *)) \
+	X(XQueryTree,          Status, (Display *, Window, Window *, Window *, Window **, unsigned int *))
 
 typedef struct {
 #define X(name, ret, args) ret (*name) args;
@@ -109,7 +110,9 @@ typedef struct {
 	Atom xdnd_selection;
 	Atom xdnd_type_list;
 	Atom xdnd_action_copy;
+	Atom xdnd_prop;
 	Atom uri_list;
+	Atom net_wm_pid;
 } PeakLinux;
 
 typedef struct {
@@ -141,6 +144,8 @@ struct peak_linux_win {
 	int touch_n;
 	float last_x, last_y;
 	Cursor blank;
+	Window xdnd_source;
+	Time xdnd_time;
 	PeakEvent extra;
 };
 
@@ -399,7 +404,9 @@ peak_platform_init(void)
 		peak_linux.xdnd_selection = peak_x11.XInternAtom(peak_linux.display, "XdndSelection", False);
 		peak_linux.xdnd_type_list = peak_x11.XInternAtom(peak_linux.display, "XdndTypeList", False);
 		peak_linux.xdnd_action_copy = peak_x11.XInternAtom(peak_linux.display, "XdndActionCopy", False);
+		peak_linux.xdnd_prop = peak_x11.XInternAtom(peak_linux.display, "PEAK_XDND", False);
 		peak_linux.uri_list = peak_x11.XInternAtom(peak_linux.display, "text/uri-list", False);
+		peak_linux.net_wm_pid = peak_x11.XInternAtom(peak_linux.display, "_NET_WM_PID", False);
 	}
 	peak_linux_kind = PEAK_LINUX_X11;
 	return 1;
@@ -459,7 +466,7 @@ peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uin
 	XVisualInfo vi;
 	int screen;
 	long evmask;
-	uint32_t xdnd_ver = 5;
+	unsigned long xdnd_ver = 5;
 
 	if (peak_linux_kind != PEAK_LINUX_X11 && peak_platform_init() && peak_linux_kind == PEAK_LINUX_WAYLAND)
 		return peak_wayland_window_open(name, width, height, flags);
@@ -517,6 +524,13 @@ peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uin
 	if (peak_linux.xdnd_aware)
 		peak_x11.XChangeProperty(peak_linux.display, w->window, peak_linux.xdnd_aware, XA_ATOM, 32,
 			PropModeReplace, (unsigned char *)&xdnd_ver, 1);
+	if (peak_linux.net_wm_pid) {
+		unsigned long pid;
+
+		pid = (unsigned long)getpid();
+		peak_x11.XChangeProperty(peak_linux.display, w->window, peak_linux.net_wm_pid, XA_CARDINAL, 32,
+			PropModeReplace, (unsigned char *)&pid, 1);
+	}
 	if (flags & PEAK_WINDOW_FULLSCREEN)
 		peak_platform_window_fullscreen(&intern, 1);
 	peak_x11.XMapRaised(peak_linux.display, w->window);
@@ -975,6 +989,26 @@ peak_platform_clip_request(PeakWindowInternal *intern, PeakClip which)
 	return 1;
 }
 
+static void
+peak_linux_xdnd_finished(struct peak_linux_win *w, int ok)
+{
+	XEvent r;
+
+	if (!w || !w->xdnd_source || !peak_linux.display || !peak_linux.xdnd_finished)
+		return;
+	memset(&r, 0, sizeof r);
+	r.xclient.type = ClientMessage;
+	r.xclient.display = peak_linux.display;
+	r.xclient.window = w->xdnd_source;
+	r.xclient.message_type = peak_linux.xdnd_finished;
+	r.xclient.format = 32;
+	r.xclient.data.l[0] = (long)w->window;
+	r.xclient.data.l[1] = ok ? 1 : 0;
+	r.xclient.data.l[2] = ok ? (long)peak_linux.xdnd_action_copy : 0;
+	peak_x11.XSendEvent(peak_linux.display, w->xdnd_source, False, 0, &r);
+	peak_x11.XFlush(peak_linux.display);
+}
+
 static bool
 peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 {
@@ -1004,26 +1038,37 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 				ev->type = PEAK_EVENT_WINDOW_CLOSE;
 				return 1;
 			}
-			if (xev.xclient.message_type == peak_linux.xdnd_enter)
+			if (xev.xclient.message_type == peak_linux.xdnd_enter) {
+				w->xdnd_source = (Window)xev.xclient.data.l[0];
 				continue;
+			}
 			if (xev.xclient.message_type == peak_linux.xdnd_position) {
 				XEvent r;
 
+				w->xdnd_source = (Window)xev.xclient.data.l[0];
 				memset(&r, 0, sizeof r);
 				r.xclient.type = ClientMessage;
 				r.xclient.display = peak_linux.display;
-				r.xclient.window = (Window)xev.xclient.data.l[0];
+				r.xclient.window = w->xdnd_source;
 				r.xclient.message_type = peak_linux.xdnd_status;
 				r.xclient.format = 32;
 				r.xclient.data.l[0] = (long)w->window;
-				r.xclient.data.l[1] = 1;
+				r.xclient.data.l[1] = 3;
 				r.xclient.data.l[4] = (long)peak_linux.xdnd_action_copy;
-				peak_x11.XSendEvent(peak_linux.display, r.xclient.window, False, 0, &r);
+				peak_x11.XSendEvent(peak_linux.display, w->xdnd_source, False, 0, &r);
+				peak_x11.XFlush(peak_linux.display);
 				continue;
 			}
 			if (xev.xclient.message_type == peak_linux.xdnd_drop) {
+				Time t;
+
+				w->xdnd_source = (Window)xev.xclient.data.l[0];
+				t = (Time)xev.xclient.data.l[2];
+				w->xdnd_time = t ? t : CurrentTime;
 				peak_x11.XConvertSelection(peak_linux.display, peak_linux.xdnd_selection,
-					peak_linux.uri_list, peak_linux.clip_prop, w->window, CurrentTime);
+					peak_linux.uri_list, peak_linux.xdnd_prop ? peak_linux.xdnd_prop : peak_linux.clip_prop,
+					w->window, w->xdnd_time);
+				peak_x11.XFlush(peak_linux.display);
 				continue;
 			}
 			continue;
@@ -1103,13 +1148,17 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 		case SelectionClear:
 			continue;
 		case SelectionNotify:
-			if (xev.xselection.selection == peak_linux.xdnd_selection && xev.xselection.property != None) {
+			if (xev.xselection.selection == peak_linux.xdnd_selection) {
 				Atom type = 0;
 				int fmt = 0;
 				unsigned long nitems = 0, after = 0;
 				unsigned char *data = NULL;
 				const char *p, *nl;
 
+				if (xev.xselection.property == None) {
+					peak_linux_xdnd_finished(w, 0);
+					continue;
+				}
 				if (peak_x11.XGetWindowProperty(peak_linux.display, w->window, xev.xselection.property,
 						0, 0x10000, True, AnyPropertyType, &type, &fmt, &nitems, &after, &data) == Success && data) {
 					p = (const char *)data;
@@ -1123,10 +1172,12 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 					ev->type = PEAK_EVENT_DROP;
 					ev->drop.n = (size_t)nitems;
 					peak_x11.XFree(data);
+					peak_linux_xdnd_finished(w, 1);
 					return 1;
 				}
 				if (data)
 					peak_x11.XFree(data);
+				peak_linux_xdnd_finished(w, 0);
 				continue;
 			}
 			if (!peak_clip_req_on)
@@ -1345,4 +1396,133 @@ peak_platform_audio_stop(void)
 	peak_audio.userdata = NULL;
 }
 
+static int
+peak_linux_net_pid(Window w)
+{
+	Atom type;
+	int fmt;
+	unsigned long nitems;
+	unsigned long after;
+	unsigned char *data;
+	int pid;
+
+	type = 0;
+	fmt = 0;
+	nitems = 0;
+	after = 0;
+	data = NULL;
+	pid = 0;
+	if (!peak_linux.display || !peak_linux.net_wm_pid || !w)
+		return 0;
+	if (peak_x11.XGetWindowProperty(peak_linux.display, w, peak_linux.net_wm_pid,
+			0, 1, False, XA_CARDINAL, &type, &fmt, &nitems, &after, &data) == Success
+			&& data && nitems)
+		pid = (int)(*(unsigned long *)data);
+	if (data)
+		peak_x11.XFree(data);
+	return pid;
+}
+
+int
+peak_pointer_pid(PeakWindow *win)
+{
+	Window root;
+	Window root_ret;
+	Window child;
+	Window parent;
+	Window w;
+	Window *kids;
+	int rx;
+	int ry;
+	int wx;
+	int wy;
+	unsigned int mask;
+	unsigned int n;
+	int pid;
+
+	(void)win;
+	if (peak_linux_kind != PEAK_LINUX_X11 || !peak_linux.display || !peak_x11.XQueryPointer
+			|| !peak_x11.XQueryTree)
+		return 0;
+	root = DefaultRootWindow(peak_linux.display);
+	child = 0;
+	if (!peak_x11.XQueryPointer(peak_linux.display, root, &root_ret, &child,
+			&rx, &ry, &wx, &wy, &mask) || !child)
+		return 0;
+	w = child;
+	for (;;) {
+		child = 0;
+		if (!peak_x11.XQueryPointer(peak_linux.display, w, &root_ret, &child,
+				&rx, &ry, &wx, &wy, &mask) || !child || child == w)
+			break;
+		w = child;
+	}
+	for (;;) {
+		pid = peak_linux_net_pid(w);
+		if (pid)
+			return pid;
+		kids = NULL;
+		n = 0;
+		parent = 0;
+		if (!peak_x11.XQueryTree(peak_linux.display, w, &root_ret, &parent, &kids, &n))
+			return 0;
+		if (kids)
+			peak_x11.XFree(kids);
+		if (!parent || parent == root_ret || parent == w)
+			return 0;
+		w = parent;
+	}
+}
+
+int
+peak_pointer_local(PeakWindow *win, int *x, int *y)
+{
+	struct peak_linux_win *xw;
+	struct peak_wayland_win *ww;
+	Window root;
+	Window child;
+	int rx;
+	int ry;
+	int wx;
+	int wy;
+	unsigned int mask;
+	int pid;
+
+	if (!win || !win->internal.w)
+		return 0;
+	if (peak_linux_kind == PEAK_LINUX_WAYLAND) {
+		ww = win->internal.w;
+		if (!ww->pointer_in)
+			return 0;
+		wx = (int)ww->last_x;
+		wy = (int)ww->last_y;
+		if (wx < 0 || wy < 0 || wx >= (int)ww->width || wy >= (int)ww->height)
+			return 0;
+		if (x)
+			*x = wx;
+		if (y)
+			*y = wy;
+		return 1;
+	}
+	if (peak_linux_kind != PEAK_LINUX_X11 || !peak_linux.display || !peak_x11.XQueryPointer)
+		return 0;
+	xw = win->internal.w;
+	if (!xw->window)
+		return 0;
+	if (!peak_x11.XQueryPointer(peak_linux.display, xw->window, &root, &child,
+			&rx, &ry, &wx, &wy, &mask))
+		return 0;
+	if (wx < 0 || wy < 0 || wx >= (int)xw->width || wy >= (int)xw->height)
+		return 0;
+	pid = peak_pointer_pid(win);
+	if (pid && pid != (int)getpid())
+		return 0;
+	if (x)
+		*x = wx;
+	if (y)
+		*y = wy;
+	return 1;
+}
+
+#define PEAK_HAS_POINTER_PID 1
 #include "p_posix.c"

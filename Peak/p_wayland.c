@@ -75,6 +75,7 @@ struct peak_wayland_win {
 	int cursor_on;
 	int relative;
 	int touch_n;
+	int pointer_in;
 	float last_x, last_y;
 	PeakQ q;
 };
@@ -323,6 +324,7 @@ peak_wayland_pointer_enter(void *data, struct wl_pointer *p, uint32_t serial, st
 	(void)s;
 	peak_wayland.serial = serial;
 	if (peak_wayland.focus) {
+		peak_wayland.focus->pointer_in = 1;
 		peak_wayland.focus->last_x = (float)wl_fixed_to_double(x);
 		peak_wayland.focus->last_y = (float)wl_fixed_to_double(y);
 	}
@@ -335,6 +337,8 @@ peak_wayland_pointer_leave(void *data, struct wl_pointer *p, uint32_t serial, st
 	(void)p;
 	(void)serial;
 	(void)s;
+	if (peak_wayland.focus)
+		peak_wayland.focus->pointer_in = 0;
 }
 
 static void
