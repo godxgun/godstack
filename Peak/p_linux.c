@@ -963,6 +963,17 @@ peak_platform_window_scale(PeakWindowInternal *intern)
 }
 
 static int
+peak_platform_drop_drag(PeakWindowInternal *intern, const char *utf8, size_t n)
+{
+	if (peak_linux_kind == PEAK_LINUX_WAYLAND)
+		return peak_wayland_drop_drag(intern, utf8, n);
+	(void)intern;
+	(void)utf8;
+	(void)n;
+	return 0;
+}
+
+static int
 peak_platform_clip_set(PeakWindowInternal *intern, PeakClip which, const char *utf8, size_t n)
 {
 	if (peak_linux_kind == PEAK_LINUX_WAYLAND)

@@ -545,6 +545,16 @@ peak_text_take(PeakWindow *win, char *dst, size_t cap, size_t *n)
 }
 
 int
+peak_drop_drag(PeakWindow *win, const char *utf8, size_t n)
+{
+    if (!win || (n && !utf8))
+        return 0;
+    if (n > PEAK_CLIP_MAX)
+        n = PEAK_CLIP_MAX;
+    return peak_platform_drop_drag(&win->internal, utf8, n);
+}
+
+int
 peak_drop_take(PeakWindow *win, char *dst, size_t cap, size_t *n)
 {
     size_t c;

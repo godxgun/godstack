@@ -60,7 +60,7 @@
 
 #define PEAK_MAJOR "0"
 #define PEAK_MINOR "10"
-#define PEAK_PATCH "2"
+#define PEAK_PATCH "7"
 
 /* CHANGE LOG
  * 0.0.0 - @vasco - prototyping
@@ -94,6 +94,11 @@
  * 0.10.0 - @vasco - peak_aligned_alloc / peak_aligned_free
  * 0.10.1 - @vasco - wayland marshal new_id slots; create_pool no longer sends size as fd
  * 0.10.2 - @vasco - wayland seat v4; wl_keyboard.repeat_info; xdg_toplevel bounds/caps
+ * 0.10.3 - @vasco - wayland read socket; data device clip; pointer/key mods
+ * 0.10.4 - @vasco - wayland pump drains socket; xdg first commit before map
+ * 0.10.5 - @vasco - wayland client key repeat (repeat_info + timerfd)
+ * 0.10.6 - @vasco - wayland file drop + peak_drop_drag (data_device v3)
+ * 0.10.7 - @vasco - wayland dnd: defer offer destroy across drop+leave; finish live copy/move only
  */
 
 #include <assert.h>
@@ -446,6 +451,7 @@ PEAK int peak_clip_take(PeakWindow *win, char *dst, size_t cap, size_t *n);
 /* UTF-8 text / drop path. Cap 1 MiB. Completes as PEAK_EVENT_TEXT / DROP; take copies. */
 PEAK int peak_text_take(PeakWindow *win, char *dst, size_t cap, size_t *n);
 PEAK int peak_drop_take(PeakWindow *win, char *dst, size_t cap, size_t *n);
+PEAK int peak_drop_drag(PeakWindow *win, const char *utf8, size_t n); /* start OS drag; 0 if none */
 
 //   █     █
 //   █     █

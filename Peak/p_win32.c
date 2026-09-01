@@ -673,6 +673,15 @@ peak_platform_window_present(PeakWindowInternal *intern)
 }
 
 static int
+peak_platform_drop_drag(PeakWindowInternal *intern, const char *utf8, size_t n)
+{
+	(void)intern;
+	(void)utf8;
+	(void)n;
+	return 0;
+}
+
+static int
 peak_platform_clip_set(PeakWindowInternal *intern, PeakClip which, const char *utf8, size_t n)
 {
 	struct peak_win32_win *w;
