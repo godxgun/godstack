@@ -1,5 +1,6 @@
 /*
- * Wayland window, input, shm present, and WSI. libwayland-client is dlopened.
+ * Wayland window, input, shm present, and WSI.
+ * libwayland-client and libxkbcommon are dlopened.
  */
 
 #include <dlfcn.h>
@@ -22,6 +23,40 @@ long syscall(long number, ...);
 #endif
 
 #define PEAK_WL_CLIENT "libwayland-client.so.0"
+#define PEAK_XKB_SO "libxkbcommon.so.0"
+
+struct xkb_context;
+struct xkb_keymap;
+struct xkb_state;
+struct xkb_compose_table;
+struct xkb_compose_state;
+
+#define PEAK_XKB_API(X) \
+	X(xkb_context_new, struct xkb_context *, (int)) \
+	X(xkb_context_unref, void, (struct xkb_context *)) \
+	X(xkb_keymap_new_from_buffer, struct xkb_keymap *, (struct xkb_context *, const char *, size_t, int, int)) \
+	X(xkb_keymap_unref, void, (struct xkb_keymap *)) \
+	X(xkb_state_new, struct xkb_state *, (struct xkb_keymap *)) \
+	X(xkb_state_unref, void, (struct xkb_state *)) \
+	X(xkb_state_update_mask, int, (struct xkb_state *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t)) \
+	X(xkb_state_key_get_utf8, int, (struct xkb_state *, uint32_t, char *, size_t)) \
+	X(xkb_state_key_get_one_sym, uint32_t, (struct xkb_state *, uint32_t)) \
+	X(xkb_state_mod_name_is_active, int, (struct xkb_state *, const char *, int)) \
+	X(xkb_compose_table_new_from_locale, struct xkb_compose_table *, (struct xkb_context *, const char *, int)) \
+	X(xkb_compose_table_unref, void, (struct xkb_compose_table *)) \
+	X(xkb_compose_state_new, struct xkb_compose_state *, (struct xkb_compose_table *, int)) \
+	X(xkb_compose_state_unref, void, (struct xkb_compose_state *)) \
+	X(xkb_compose_state_feed, int, (struct xkb_compose_state *, uint32_t)) \
+	X(xkb_compose_state_get_status, int, (struct xkb_compose_state *)) \
+	X(xkb_compose_state_get_utf8, int, (struct xkb_compose_state *, char *, size_t)) \
+	X(xkb_compose_state_reset, void, (struct xkb_compose_state *))
+
+typedef struct {
+#define X(name, ret, args) ret (*name) args;
+	PEAK_XKB_API(X)
+#undef X
+	void *handle;
+} PeakXkbApi;
 
 #define PEAK_WL_API(X) \
 	X(wl_display_connect, struct wl_display *, (const char *)) \
@@ -130,9 +165,15 @@ typedef struct {
 	uint32_t repeat_key;
 	int timer_fd;
 	int epoll_fd;
+	struct xkb_context *xkb_ctx;
+	struct xkb_keymap *xkb_keymap;
+	struct xkb_state *xkb_state;
+	struct xkb_compose_table *xkb_compose_table;
+	struct xkb_compose_state *xkb_compose;
 } PeakWayland;
 
 static PeakWlApi peak_wl;
+static PeakXkbApi peak_xkb;
 static PeakWayland peak_wayland;
 
 static int peak_wayland_load(void);
@@ -170,6 +211,12 @@ static void peak_wayland_seat_caps(void *data, struct wl_seat *seat, uint32_t ca
 static void peak_wayland_seat_name(void *data, struct wl_seat *seat, const char *name);
 static PeakKeyCode peak_wayland_key_map(uint32_t key);
 static uint32_t peak_wayland_key_ascii(uint32_t key, PeakKeyMod mod);
+static int peak_wayland_xkb_load(void);
+static void peak_wayland_xkb_drop_state(void);
+static void peak_wayland_xkb_quit(void);
+static PeakKeyMod peak_wayland_xkb_mod(void);
+static uint32_t peak_wayland_key_utf8(uint32_t key, int compose, char *buf, size_t cap, size_t *n_out);
+static void peak_wayland_key_emit(struct peak_wayland_win *w, uint32_t key, int down, int compose);
 static PeakPointerType peak_wayland_ptr_type(void);
 static void peak_wayland_pump(void);
 static void peak_wayland_offer_kill(struct wl_data_offer **slot);
@@ -556,15 +603,191 @@ peak_wayland_pointer_axis(void *data, struct wl_pointer *p, uint32_t time, uint3
 	peak_q_push(&w->q, ev);
 }
 
+static int
+peak_wayland_xkb_load(void)
+{
+	if (peak_xkb.handle)
+		return peak_xkb.xkb_context_new != NULL;
+	peak_xkb.handle = dlopen(PEAK_XKB_SO, RTLD_LOCAL | RTLD_NOW);
+	if (!peak_xkb.handle)
+		return 0;
+#define X(name, ret, args) peak_xkb.name = (ret (*) args)dlsym(peak_xkb.handle, #name);
+	PEAK_XKB_API(X)
+#undef X
+#define X(name, ret, args) || !peak_xkb.name
+	if (0 PEAK_XKB_API(X)) {
+		peak_xkb.xkb_context_new = NULL;
+		return 0;
+	}
+#undef X
+	return 1;
+}
+
+static void
+peak_wayland_xkb_drop_state(void)
+{
+	if (peak_xkb.xkb_state_unref && peak_wayland.xkb_state)
+		peak_xkb.xkb_state_unref(peak_wayland.xkb_state);
+	if (peak_xkb.xkb_keymap_unref && peak_wayland.xkb_keymap)
+		peak_xkb.xkb_keymap_unref(peak_wayland.xkb_keymap);
+	peak_wayland.xkb_state = NULL;
+	peak_wayland.xkb_keymap = NULL;
+}
+
+static void
+peak_wayland_xkb_quit(void)
+{
+	peak_wayland_xkb_drop_state();
+	if (peak_xkb.xkb_compose_state_unref && peak_wayland.xkb_compose)
+		peak_xkb.xkb_compose_state_unref(peak_wayland.xkb_compose);
+	if (peak_xkb.xkb_compose_table_unref && peak_wayland.xkb_compose_table)
+		peak_xkb.xkb_compose_table_unref(peak_wayland.xkb_compose_table);
+	if (peak_xkb.xkb_context_unref && peak_wayland.xkb_ctx)
+		peak_xkb.xkb_context_unref(peak_wayland.xkb_ctx);
+	peak_wayland.xkb_compose = NULL;
+	peak_wayland.xkb_compose_table = NULL;
+	peak_wayland.xkb_ctx = NULL;
+}
+
+static PeakKeyMod
+peak_wayland_xkb_mod(void)
+{
+	PeakKeyMod m;
+
+	m = 0;
+	if (!peak_wayland.xkb_state || !peak_xkb.xkb_state_mod_name_is_active)
+		return peak_wayland.mod;
+	if (peak_xkb.xkb_state_mod_name_is_active(peak_wayland.xkb_state, "Shift", 8) > 0)
+		m |= PEAK_KEYMOD_SHIFT;
+	if (peak_xkb.xkb_state_mod_name_is_active(peak_wayland.xkb_state, "Lock", 8) > 0)
+		m |= PEAK_KEYMOD_CAPS;
+	if (peak_xkb.xkb_state_mod_name_is_active(peak_wayland.xkb_state, "Control", 8) > 0)
+		m |= PEAK_KEYMOD_CTRL;
+	if (peak_xkb.xkb_state_mod_name_is_active(peak_wayland.xkb_state, "Mod1", 8) > 0
+		|| peak_xkb.xkb_state_mod_name_is_active(peak_wayland.xkb_state, "Alt", 8) > 0)
+		m |= PEAK_KEYMOD_ALT;
+	if (peak_xkb.xkb_state_mod_name_is_active(peak_wayland.xkb_state, "Mod4", 8) > 0
+		|| peak_xkb.xkb_state_mod_name_is_active(peak_wayland.xkb_state, "Super", 8) > 0)
+		m |= PEAK_KEYMOD_SUPER;
+	return m;
+}
+
+static uint32_t
+peak_wayland_key_utf8(uint32_t key, int compose, char *buf, size_t cap, size_t *n_out)
+{
+	uint32_t kc;
+	uint32_t sym;
+	uint32_t code;
+	int n;
+	int st;
+
+	*n_out = 0;
+	if (buf && cap)
+		buf[0] = 0;
+	if (!peak_wayland.xkb_state || !peak_xkb.xkb_state_key_get_utf8) {
+		code = peak_wayland_key_ascii(key, peak_wayland.mod);
+		if (code && buf && cap > 1) {
+			buf[0] = (char)code;
+			buf[1] = 0;
+			*n_out = 1;
+		}
+		return code;
+	}
+	kc = key + 8;
+	n = peak_xkb.xkb_state_key_get_utf8(peak_wayland.xkb_state, kc, buf, cap);
+	if (compose && peak_wayland.xkb_compose && peak_xkb.xkb_compose_state_feed) {
+		sym = peak_xkb.xkb_state_key_get_one_sym(peak_wayland.xkb_state, kc);
+		peak_xkb.xkb_compose_state_feed(peak_wayland.xkb_compose, sym);
+		st = peak_xkb.xkb_compose_state_get_status(peak_wayland.xkb_compose);
+		if (st == 1 || st == 3)
+			n = 0;
+		else if (st == 2)
+			n = peak_xkb.xkb_compose_state_get_utf8(peak_wayland.xkb_compose, buf, cap);
+	}
+	if (n < 0)
+		n = 0;
+	if (cap && (size_t)n >= cap)
+		n = (int)cap - 1;
+	*n_out = (size_t)n;
+	if (n <= 0 || !buf)
+		return 0;
+	return (uint32_t)(unsigned char)buf[0];
+}
+
+static void
+peak_wayland_key_emit(struct peak_wayland_win *w, uint32_t key, int down, int compose)
+{
+	PeakEvent ev;
+	char buf[64];
+	size_t n;
+
+	memset(&ev, 0, sizeof ev);
+	ev.type = down ? PEAK_EVENT_KEY_DOWN : PEAK_EVENT_KEY_UP;
+	ev.key.key = peak_wayland_key_map(key);
+	ev.key.mod = peak_wayland.mod;
+	n = 0;
+	ev.key.code = peak_wayland_key_utf8(key, compose && down, buf, sizeof buf, &n);
+	peak_q_push(&w->q, ev);
+	if (!down || !n || (unsigned char)buf[0] < 32)
+		return;
+	peak_text_store(buf, n);
+	memset(&ev, 0, sizeof ev);
+	ev.type = PEAK_EVENT_TEXT;
+	ev.text.n = n;
+	peak_q_push(&w->q, ev);
+}
+
 static void
 peak_wayland_keyboard_keymap(void *data, struct wl_keyboard *k, uint32_t fmt, int fd, uint32_t size)
 {
+	const char *map;
+	const char *locale;
+	struct xkb_keymap *km;
+	struct xkb_state *st;
+
 	(void)data;
 	(void)k;
-	(void)fmt;
-	(void)size;
-	if (fd >= 0)
+	if (fd < 0)
+		return;
+	if (fmt != 1 || !size || !peak_wayland_xkb_load()) {
 		close(fd);
+		return;
+	}
+	if (!peak_wayland.xkb_ctx) {
+		peak_wayland.xkb_ctx = peak_xkb.xkb_context_new(0);
+		if (!peak_wayland.xkb_ctx) {
+			close(fd);
+			return;
+		}
+		locale = getenv("LC_ALL");
+		if (!locale || !locale[0])
+			locale = getenv("LC_CTYPE");
+		if (!locale || !locale[0])
+			locale = getenv("LANG");
+		if (!locale || !locale[0])
+			locale = "C";
+		peak_wayland.xkb_compose_table = peak_xkb.xkb_compose_table_new_from_locale(peak_wayland.xkb_ctx, locale, 0);
+		if (peak_wayland.xkb_compose_table)
+			peak_wayland.xkb_compose = peak_xkb.xkb_compose_state_new(peak_wayland.xkb_compose_table, 0);
+	}
+	map = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
+	close(fd);
+	if (map == MAP_FAILED)
+		return;
+	km = peak_xkb.xkb_keymap_new_from_buffer(peak_wayland.xkb_ctx, map, size, 1, 0);
+	munmap((void *)map, size);
+	if (!km)
+		return;
+	st = peak_xkb.xkb_state_new(km);
+	if (!st) {
+		peak_xkb.xkb_keymap_unref(km);
+		return;
+	}
+	peak_wayland_xkb_drop_state();
+	peak_wayland.xkb_keymap = km;
+	peak_wayland.xkb_state = st;
+	if (peak_wayland.xkb_compose && peak_xkb.xkb_compose_state_reset)
+		peak_xkb.xkb_compose_state_reset(peak_wayland.xkb_compose);
 }
 
 static void
@@ -585,6 +808,8 @@ peak_wayland_keyboard_leave(void *data, struct wl_keyboard *k, uint32_t serial, 
 	(void)serial;
 	(void)s;
 	peak_wayland_repeat_stop();
+	if (peak_wayland.xkb_compose && peak_xkb.xkb_compose_state_reset)
+		peak_xkb.xkb_compose_state_reset(peak_wayland.xkb_compose);
 }
 
 static PeakPointerType
@@ -715,7 +940,6 @@ static void
 peak_wayland_keyboard_key(void *data, struct wl_keyboard *k, uint32_t serial, uint32_t time, uint32_t key, uint32_t state)
 {
 	struct peak_wayland_win *w;
-	PeakEvent ev;
 
 	(void)data;
 	(void)k;
@@ -724,34 +948,32 @@ peak_wayland_keyboard_key(void *data, struct wl_keyboard *k, uint32_t serial, ui
 	if (!w)
 		return;
 	peak_wayland.serial = serial;
-	if (key == KEY_LEFTSHIFT || key == KEY_RIGHTSHIFT) {
-		if (state)
-			peak_wayland.mod |= PEAK_KEYMOD_SHIFT;
-		else
-			peak_wayland.mod &= (PeakKeyMod)~PEAK_KEYMOD_SHIFT;
-	} else if (key == KEY_LEFTCTRL || key == KEY_RIGHTCTRL) {
-		if (state)
-			peak_wayland.mod |= PEAK_KEYMOD_CTRL;
-		else
-			peak_wayland.mod &= (PeakKeyMod)~PEAK_KEYMOD_CTRL;
-	} else if (key == KEY_LEFTALT || key == KEY_RIGHTALT) {
-		if (state)
-			peak_wayland.mod |= PEAK_KEYMOD_ALT;
-		else
-			peak_wayland.mod &= (PeakKeyMod)~PEAK_KEYMOD_ALT;
-	} else if (key == KEY_LEFTMETA || key == KEY_RIGHTMETA) {
-		if (state)
-			peak_wayland.mod |= PEAK_KEYMOD_SUPER;
-		else
-			peak_wayland.mod &= (PeakKeyMod)~PEAK_KEYMOD_SUPER;
-	} else if (key == KEY_CAPSLOCK && state)
-		peak_wayland.mod ^= PEAK_KEYMOD_CAPS;
-	memset(&ev, 0, sizeof ev);
-	ev.type = state ? PEAK_EVENT_KEY_DOWN : PEAK_EVENT_KEY_UP;
-	ev.key.key = peak_wayland_key_map(key);
-	ev.key.mod = peak_wayland.mod;
-	ev.key.code = peak_wayland_key_ascii(key, peak_wayland.mod);
-	peak_q_push(&w->q, ev);
+	if (!peak_wayland.xkb_state) {
+		if (key == KEY_LEFTSHIFT || key == KEY_RIGHTSHIFT) {
+			if (state)
+				peak_wayland.mod |= PEAK_KEYMOD_SHIFT;
+			else
+				peak_wayland.mod &= (PeakKeyMod)~PEAK_KEYMOD_SHIFT;
+		} else if (key == KEY_LEFTCTRL || key == KEY_RIGHTCTRL) {
+			if (state)
+				peak_wayland.mod |= PEAK_KEYMOD_CTRL;
+			else
+				peak_wayland.mod &= (PeakKeyMod)~PEAK_KEYMOD_CTRL;
+		} else if (key == KEY_LEFTALT || key == KEY_RIGHTALT) {
+			if (state)
+				peak_wayland.mod |= PEAK_KEYMOD_ALT;
+			else
+				peak_wayland.mod &= (PeakKeyMod)~PEAK_KEYMOD_ALT;
+		} else if (key == KEY_LEFTMETA || key == KEY_RIGHTMETA) {
+			if (state)
+				peak_wayland.mod |= PEAK_KEYMOD_SUPER;
+			else
+				peak_wayland.mod &= (PeakKeyMod)~PEAK_KEYMOD_SUPER;
+		} else if (key == KEY_CAPSLOCK && state)
+			peak_wayland.mod ^= PEAK_KEYMOD_CAPS;
+	} else
+		peak_wayland.mod = peak_wayland_xkb_mod();
+	peak_wayland_key_emit(w, key, state ? 1 : 0, 1);
 	if (peak_wayland_key_mod(key))
 		return;
 	if (state)
@@ -768,8 +990,12 @@ peak_wayland_keyboard_mod(void *data, struct wl_keyboard *k, uint32_t serial, ui
 
 	(void)data;
 	(void)k;
-	(void)group;
 	peak_wayland.serial = serial;
+	if (peak_wayland.xkb_state && peak_xkb.xkb_state_update_mask) {
+		peak_xkb.xkb_state_update_mask(peak_wayland.xkb_state, depressed, latched, locked, 0, 0, group);
+		peak_wayland.mod = peak_wayland_xkb_mod();
+		return;
+	}
 	bits = depressed | latched | locked;
 	m = 0;
 	if (bits & (1u << 0))
@@ -839,7 +1065,6 @@ static void
 peak_wayland_repeat_tick(void)
 {
 	struct peak_wayland_win *w;
-	PeakEvent ev;
 	uint64_t n;
 	ssize_t r;
 
@@ -853,12 +1078,7 @@ peak_wayland_repeat_tick(void)
 		peak_wayland_repeat_stop();
 		return;
 	}
-	memset(&ev, 0, sizeof ev);
-	ev.type = PEAK_EVENT_KEY_DOWN;
-	ev.key.key = peak_wayland_key_map(peak_wayland.repeat_key);
-	ev.key.mod = peak_wayland.mod;
-	ev.key.code = peak_wayland_key_ascii(peak_wayland.repeat_key, peak_wayland.mod);
-	peak_q_push(&w->q, ev);
+	peak_wayland_key_emit(w, peak_wayland.repeat_key, 1, 0);
 }
 
 static void
@@ -1177,6 +1397,7 @@ static void
 peak_wayland_quit(void)
 {
 	free(peak_wayland.drag);
+	peak_wayland_xkb_quit();
 	if (peak_wayland.timer_fd >= 0)
 		close(peak_wayland.timer_fd);
 	if (peak_wayland.epoll_fd >= 0)

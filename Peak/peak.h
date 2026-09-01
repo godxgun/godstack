@@ -60,7 +60,7 @@
 
 #define PEAK_MAJOR "0"
 #define PEAK_MINOR "10"
-#define PEAK_PATCH "7"
+#define PEAK_PATCH "8"
 
 /* CHANGE LOG
  * 0.0.0 - @vasco - prototyping
@@ -99,6 +99,7 @@
  * 0.10.5 - @vasco - wayland client key repeat (repeat_info + timerfd)
  * 0.10.6 - @vasco - wayland file drop + peak_drop_drag (data_device v3)
  * 0.10.7 - @vasco - wayland dnd: defer offer destroy across drop+leave; finish live copy/move only
+ * 0.10.8 - @vasco - wayland compositor keymap via libxkbcommon (layout, group, compose)
  */
 
 #include <assert.h>
