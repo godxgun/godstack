@@ -33,17 +33,22 @@
  */
 #if 0
 #include "view.cool.c"
-int main(int argc, char **argv) {
+int
+main(int argc, char **argv)
+{
+    FILE *header_file;
+    char *line_buf;
+    size_t len;
 
     if (argc < 2) {
         puts("Usage: doc_generator [FILE]");
         return 1;
     }
 
-    FILE *header_file = fopen(argv[1], "r");
+    header_file = fopen(argv[1], "r");
 
-    char *line_buf = malloc(256);
-    size_t len = 0;
+    line_buf = malloc(256);
+    len = 0;
     while (getline(&line_buf, &len, header_file) > 0) {
         char func_name[256];
         char func_decl[256];
@@ -65,8 +70,8 @@ int main(int argc, char **argv) {
 #define _COOL_H_
 
 #define COOL_MAJOR 0  // breaking API changes
-#define COOL_MINOR 0  // non-breaking features
-#define COOL_PATCH 3  // non-breaking patches and bug fixes
+#define COOL_MINOR 1  // non-breaking features
+#define COOL_PATCH 0  // non-breaking patches and bug fixes
 
 /* CHANGE LOG
  * 0.0.0 - @vasco - server-side HTML from C functions
@@ -74,6 +79,7 @@ int main(int argc, char **argv) {
  *                  drop unused URL table, stub cool_html / cool_htmlf, cool_sv_write
  * 0.0.2 - @vasco - include cool.c
  * 0.0.3 - @vasco - html_txt escape without nested raw
+ * 0.1.0 - @vasco - cool_md subset to HTML
  */
 
 #ifndef COOL_OUTPUT
@@ -81,21 +87,21 @@ int main(int argc, char **argv) {
 #endif
 
 #include <stdarg.h>
-#include <stdio.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 typedef struct {
-    char *cstr; // original cstring 
-    size_t len; // len
+    char *cstr;
+    size_t len;
 } Cool_StrView;
 
-/* Macro to wrap string literal in a string view. Since we will be dealing with a lot of */
-#define COOL_SV(literal) ((Cool_StrView){ .cstr = (literal), .len = sizeof(literal) - 1 })
+#define COOL_SV(literal) ((Cool_StrView){ .cstr = (literal), .len = sizeof literal - 1 })
 void cool_html_raw(Cool_StrView sv); // Writes HTML to buffer without escaping sequences. Vulnerable to XSS. Use with caution.
 void cool_html_raw_cstr(const char *str, size_t len); // Writes unsafe HTML using C strings.
 void cool_html_txt(const char *str, size_t len); // Meant for inner text. Escapes '<', '>' and '&'.
 void cool_htmlf_raw(const char *fmt, ...); // Writes formatting HTML string to buffer without escaping sequences. Vulnerable to XSS. Use with caution.
+void cool_md(const char *str, size_t len); // Markdown subset to HTML. Not CommonMark.
                                                                 
 #endif
 

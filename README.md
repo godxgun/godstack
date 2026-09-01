@@ -26,7 +26,7 @@ Collection of modular and minimal libraries used by our software.
 ## Web Related
 | Name   | Version | Description                                |
 | ------ | ------- | ------------------------------------------ |
-| Cool   | 0.0.3   | HTML templating.                           |
+| Cool   | 0.1.0   | HTML templating.                           |
 | Wire   | 0.1.0   | HTTP server.                               |
 
 ## Installing

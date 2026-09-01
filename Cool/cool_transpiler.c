@@ -48,6 +48,7 @@ static unsigned char cool_arena[1 << 20];
 
 static void usage(void);
 static void cool_die(const char *msg);
+static int cool_fail(CoolState *st, const char *fmt, ...);
 static int cool_is_word(int c);
 static char *cool_file_read(const char *path, size_t *out_len);
 static void cool_buf_push(char **buf, size_t *len, size_t *cap, const char *s, size_t n);
@@ -79,6 +80,19 @@ cool_die(const char *msg)
 {
 	fprintf(stderr, "cool_transpiler: %s\n", msg);
 	exit(1);
+}
+
+int
+cool_fail(CoolState *st, const char *fmt, ...)
+{
+	va_list ap;
+
+	fprintf(stderr, "\n[Transpiler Error] %s:%d: ", st->filename, st->line_num);
+	va_start(ap, fmt);
+	vfprintf(stderr, fmt, ap);
+	va_end(ap);
+	fprintf(stderr, "\n\n");
+	return -1;
 }
 
 int
@@ -497,22 +511,20 @@ cool_header(CoolState *st, char *line, size_t n)
 		i++;
 	if (i + 4 > n || memcmp(line + i, "COOL", 4) != 0)
 		return 0;
-	if (i + 4 >= n || !isspace((unsigned char)line[i + 4]))
+	if (i + 4 < n && cool_is_word((unsigned char)line[i + 4]))
 		return 0;
 
 	cast_memory_clear(&st->mem);
 	nt = 0;
 	toks = cast_tokenize(&st->mem, line, n, &nt);
-	if (!toks || nt < 6)
-		return 0;
-	if (!cool_tok_eq(toks[0], line, "IDENT", "COOL"))
-		return 0;
-	if (!cool_tok_eq(toks[1], line, "KW", "void"))
-		return 0;
-	if (strcmp(cast_token_type(toks[2].type), "IDENT") != 0)
-		return 0;
-	if (!cool_tok_eq(toks[3], line, "PUNCT", "("))
-		return 0;
+	if (!toks || nt < 1 || !cool_tok_eq(toks[0], line, "IDENT", "COOL"))
+		return cool_fail(st, "failed to tokenize COOL header");
+	if (nt < 2 || !cool_tok_eq(toks[1], line, "KW", "void"))
+		return cool_fail(st, "expected 'void' after COOL");
+	if (nt < 3 || strcmp(cast_token_type(toks[2].type), "IDENT") != 0)
+		return cool_fail(st, "expected function name after 'COOL void'");
+	if (nt < 4 || !cool_tok_eq(toks[3], line, "PUNCT", "("))
+		return cool_fail(st, "expected '(' after function name");
 
 	depth = 1;
 	t = 4;
@@ -525,14 +537,14 @@ cool_header(CoolState *st, char *line, size_t n)
 			t++;
 	}
 	if (t >= nt || depth != 0)
-		return 0;
+		return cool_fail(st, "unclosed '(' in COOL header");
 	if (t + 1 >= nt || !cool_tok_eq(toks[t + 1], line, "PUNCT", "{"))
-		return 0;
+		return cool_fail(st, "expected '{' at end of COOL header");
 	end = (size_t)toks[t + 1].arg + (size_t)toks[t + 1].arglen;
 	while (end < n && isspace((unsigned char)line[end]))
 		end++;
 	if (end != n)
-		return 0;
+		return cool_fail(st, "trailing tokens after '{' in COOL header");
 
 	if ((size_t)toks[2].arglen >= sizeof st->func)
 		cool_die("function name too long");
@@ -600,14 +612,19 @@ cool_transpile(CoolState *st)
 			} else if (cool_body_line(st, st->src + start, n) != 0) {
 				return 1;
 			}
-		} else if (!cool_header(st, st->src + start, n)) {
-			cool_out_n(st, st->src + start, n);
+		} else {
+			int h;
+
+			h = cool_header(st, st->src + start, n);
+			if (h < 0)
+				return 1;
+			if (h == 0)
+				cool_out_n(st, st->src + start, n);
 		}
 		st->line_num++;
 	}
 	if (st->in_func) {
-		fprintf(stderr, "\n[Transpiler Error] %s:%d: unclosed COOL function '%s'\n\n",
-		    st->filename, st->line_num, st->func);
+		cool_fail(st, "unclosed COOL function '%s'", st->func);
 		return 1;
 	}
 	return 0;
