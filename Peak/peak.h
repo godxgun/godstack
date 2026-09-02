@@ -60,7 +60,7 @@
 
 #define PEAK_MAJOR "0"
 #define PEAK_MINOR "10"
-#define PEAK_PATCH "9"
+#define PEAK_PATCH "10"
 
 /* CHANGE LOG
  * 0.0.0 - @vasco - prototyping
@@ -101,6 +101,7 @@
  * 0.10.7 - @vasco - wayland dnd: defer offer destroy across drop+leave; finish live copy/move only
  * 0.10.8 - @vasco - wayland compositor keymap via libxkbcommon (layout, group, compose)
  * 0.10.9 - @vasco - peak_env_get; SIGUSR1 wakeup fd
+ * 0.10.10 - @vasco - peak_pipe_capacity / peak_pipe_set_capacity
  */
 
 #include <assert.h>
@@ -415,6 +416,9 @@ PEAK int         peak_pointer_local(PeakWindow *win, int *x, int *y); /* 1 if po
 PEAK int  peak_fd_read(PEAK_HANDLE fd, void *buf, size_t n);
 PEAK int  peak_fd_write(PEAK_HANDLE fd, const void *buf, size_t n);
 PEAK void peak_fd_close(PEAK_HANDLE fd);
+/* Kernel pipe buffer. 0 if not a pipe. set returns the size in force. */
+PEAK size_t peak_pipe_capacity(PEAK_HANDLE fd);
+PEAK size_t peak_pipe_set_capacity(PEAK_HANDLE fd, size_t n);
 
 //     █
 //

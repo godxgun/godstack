@@ -22,6 +22,12 @@
 #ifdef __linux__
 #include <sys/syscall.h>
 long syscall(long number, ...);
+#ifndef F_SETPIPE_SZ
+#define F_SETPIPE_SZ 1031
+#endif
+#ifndef F_GETPIPE_SZ
+#define F_GETPIPE_SZ 1032
+#endif
 #endif
 
 #define PEAK_WAIT_MAX 64
@@ -167,6 +173,7 @@ peak_pty_spawn(const char *file, const char **argv, uint32_t cols, uint32_t rows
 	close(slave);
 	p.fd = peak_internal_nb(master);
 	p.pid = pid;
+	(void)peak_pipe_set_capacity(p.fd, (size_t)1 << 20);
 	return p;
 }
 
@@ -809,6 +816,51 @@ peak_fd_close(PEAK_HANDLE fd)
 		close(fd);
 }
 
+size_t
+peak_pipe_capacity(PEAK_HANDLE fd)
+{
+#ifdef __linux__
+	int r;
+
+	if (fd < 0)
+		return 0;
+	r = fcntl(fd, F_GETPIPE_SZ);
+	if (r > 0)
+		return (size_t)r;
+#else
+	(void)fd;
+#endif
+	return 0;
+}
+
+size_t
+peak_pipe_set_capacity(PEAK_HANDLE fd, size_t n)
+{
+#ifdef __linux__
+	int want[4];
+	int i;
+	int r;
+
+	if (fd < 0)
+		return 0;
+	want[0] = n > (size_t)0x7fffffff ? 0x7fffffff : (int)n;
+	want[1] = 1 << 20;
+	want[2] = 65536;
+	want[3] = 0;
+	for (i = 0; i < 3; i++) {
+		if (want[i] < 4096)
+			continue;
+		r = fcntl(fd, F_SETPIPE_SZ, want[i]);
+		if (r > 0)
+			return (size_t)r;
+	}
+#else
+	(void)fd;
+	(void)n;
+#endif
+	return 0;
+}
+
 PeakProc
 peak_job_run(const char *cmd, const char *cwd)
 {
@@ -846,6 +898,7 @@ peak_job_run(const char *cmd, const char *cwd)
 		_Exit(127);
 	}
 	close(pipefd[1]);
+	(void)peak_pipe_set_capacity(pipefd[0], (size_t)1 << 20);
 	p.fd = peak_internal_nb(pipefd[0]);
 	p.pid = pid;
 	return p;

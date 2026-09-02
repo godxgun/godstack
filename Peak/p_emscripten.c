@@ -730,6 +730,21 @@ peak_fd_close(PEAK_HANDLE fd)
 	(void)fd;
 }
 
+size_t
+peak_pipe_capacity(PEAK_HANDLE fd)
+{
+	(void)fd;
+	return 0;
+}
+
+size_t
+peak_pipe_set_capacity(PEAK_HANDLE fd, size_t n)
+{
+	(void)fd;
+	(void)n;
+	return 0;
+}
+
 PeakProc
 peak_job_run(const char *cmd, const char *cwd)
 {

@@ -237,6 +237,25 @@ build_cool_transpiler(void)
 }
 
 static bool
+build_codeanalizer(void)
+{
+    Poof_CC cc = {0};
+
+    poof_mkdir("tools");
+    poof_cc_init(&cc, POOF_CC_GCC | POOF_CC_CLANG, POOF_TARGET_HOST);
+    cc.debug_mode = true;
+    cc.optimization = POOF_O0;
+    cc.output = "tools/codeanalizer";
+    poof_cmd_append(&cc.inputs, "tools/codeanalizer.c");
+    poof_cmd_append(&cc.includes, ".", "Cast", "Peak", "Rend");
+    poof_cmd_append(&cc.libs, "m");
+    poof_cmd_append(&cc.extra_flags, "-std=c99", "-Wall", "-Werror", "-Wno-deprecated-declarations");
+    add_peak_link(&cc);
+    poof_cc_append_linux(&cc, "-ldl");
+    return poof_cc_run(&cc);
+}
+
+static bool
 build_rend_cpu_test(void)
 {
     Poof_CC cc = {0};
@@ -337,6 +356,10 @@ main(int argc, char **argv)
             test = 1;
         if (strcmp(argv[i], "peak") == 0)
             peak_only = 1;
+        if (strcmp(argv[i], "tools") == 0) {
+            if (!build_codeanalizer()) return 1;
+            return 0;
+        }
     }
 
     if (peak_only) {
