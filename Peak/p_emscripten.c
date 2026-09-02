@@ -595,6 +595,24 @@ peak_env_set(const char *name, const char *value)
 }
 
 int
+peak_env_get(const char *name, char *buf, size_t cap)
+{
+	const char *v;
+	size_t n;
+
+	if (!name || !name[0] || !buf || cap < 2)
+		return 0;
+	v = getenv(name);
+	if (!v || !v[0])
+		return 0;
+	n = strlen(v);
+	if (n >= cap)
+		return 0;
+	memcpy(buf, v, n + 1);
+	return 1;
+}
+
+int
 peak_filesystem_list(const char *path, int (*fn)(const char *name, void *ud), void *ud)
 {
 	(void)path;
@@ -640,6 +658,29 @@ peak_child_fd(void)
 void
 peak_child_ack(void)
 {
+}
+
+int
+peak_usr1_arm(void)
+{
+	return 1;
+}
+
+void
+peak_usr1_disarm(void)
+{
+}
+
+PEAK_HANDLE
+peak_usr1_fd(void)
+{
+	return PEAK_HANDLE_INVALID;
+}
+
+int
+peak_usr1_ack(void)
+{
+	return 0;
 }
 
 int

@@ -60,7 +60,7 @@
 
 #define PEAK_MAJOR "0"
 #define PEAK_MINOR "10"
-#define PEAK_PATCH "8"
+#define PEAK_PATCH "9"
 
 /* CHANGE LOG
  * 0.0.0 - @vasco - prototyping
@@ -100,6 +100,7 @@
  * 0.10.6 - @vasco - wayland file drop + peak_drop_drag (data_device v3)
  * 0.10.7 - @vasco - wayland dnd: defer offer destroy across drop+leave; finish live copy/move only
  * 0.10.8 - @vasco - wayland compositor keymap via libxkbcommon (layout, group, compose)
+ * 0.10.9 - @vasco - peak_env_get; SIGUSR1 wakeup fd
  */
 
 #include <assert.h>
@@ -339,6 +340,7 @@ PEAK void  peak_aligned_free(void *p);
 
 PEAK int peak_pid(void);
 PEAK int peak_env_set(const char *name, const char *value); /* NULL unsets */
+PEAK int peak_env_get(const char *name, char *buf, size_t cap); /* 1 if set and fits */
 
 PEAK int peak_filesystem_mkdir(const char *path); /* one level */
 PEAK int peak_filesystem_rm(const char *path); /* unlink, or rmdir if empty */
@@ -379,6 +381,12 @@ PEAK void        peak_child_disarm(void);
 PEAK PEAK_HANDLE peak_child_fd(void);
 PEAK void        peak_child_ack(void);
 PEAK int         peak_child_reap(int *pid, int *code); /* 1 if one */
+
+/* SIGUSR1 wakeup. fd pollable or INVALID. Missing OS: arm 1, fd INVALID, ack 0. */
+PEAK int         peak_usr1_arm(void);
+PEAK void        peak_usr1_disarm(void);
+PEAK PEAK_HANDLE peak_usr1_fd(void);
+PEAK int         peak_usr1_ack(void); /* 1 if fired */
 
 PEAK int peak_stdout_silence(void); /* stdout -> platform null */
 PEAK int peak_stdout_restore(void);

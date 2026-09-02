@@ -29,7 +29,7 @@
 
 #define TERM_MAJOR 0
 #define TERM_MINOR 7
-#define TERM_PATCH 1
+#define TERM_PATCH 2
 
 /* CHANGE LOG
  * 0.1.0 - @vasco - extract from vt: feed, grid, live CSI
@@ -52,6 +52,7 @@
  * 0.6.1 - @vasco - TermCursor.style; intern on style change
  * 0.7.0 - @vasco - drop term_feed; typed printable / utf8 / escape only
  * 0.7.1 - @vasco - intern scan; full table overwrites last id, not 0
+ * 0.7.2 - @vasco - intern palette index; term_cell_style resolves; term_colors_set
  */
 
 #include <assert.h>
@@ -118,6 +119,10 @@
 #define TERM_ATTR_INVISIBLE (1u << 6)
 #define TERM_ATTR_STRUCK    (1u << 7)
 
+#define TERM_COLOR_DEF 0u
+#define TERM_COLOR_PAL 1u
+#define TERM_COLOR_RGB 2u
+
 #define TERM_ESC_ARG_SIZ 16
 #define TERM_CSI_BUF_SIZ 256
 #define TERM_HIST_MAX    1024
@@ -137,12 +142,21 @@ typedef struct TermCursor {
     uint32_t y;
     uint8_t attr;
     uint8_t state;
+    uint8_t fg_kind;
+    uint8_t bg_kind;
+    uint8_t fg_idx;
+    uint8_t bg_idx;
     uint16_t style;
 } TermCursor;
 
 typedef struct TermStyle {
     uint32_t fg;
     uint32_t bg;
+    uint8_t fg_kind;
+    uint8_t bg_kind;
+    uint8_t fg_idx;
+    uint8_t bg_idx;
+    uint8_t attr;
 } TermStyle;
 
 typedef struct TermCell {
@@ -221,6 +235,8 @@ TermScreen *term_screen(Term *t);
 uint32_t term_hist_count(const Term *t);
 const TermCell *term_hist_line(const Term *t, uint32_t back);
 TermStyle term_cell_style(const Term *t, const TermCell *c);
+TermStyle term_cursor_style(const Term *t);
+void term_colors_set(Term *t, const TermColors *colors);
 
 #endif /* TERM_H */
 

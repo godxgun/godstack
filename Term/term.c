@@ -57,6 +57,10 @@ static void term_colors_default(TermColors *c);
 static int  term_style_init(Term *t);
 static uint16_t term_style_intern(Term *t);
 static void term_cell_put(Term *t, TermCell *c, uint32_t cp);
+static int  term_style_match(const TermStyle *a, const TermStyle *b);
+static TermStyle term_style_from_cursor(const Term *t);
+static uint32_t term_style_rgb(const Term *t, uint8_t kind, uint8_t idx, uint32_t rgb, int fg);
+static TermStyle term_style_resolve(const Term *t, TermStyle s);
 
 static const TermColors term_colors_stock = {
     .fg = {
@@ -90,37 +94,92 @@ term_style_init(Term *t)
     return 1;
 }
 
+static int
+term_style_match(const TermStyle *a, const TermStyle *b)
+{
+    return a->fg == b->fg && a->bg == b->bg
+        && a->fg_kind == b->fg_kind && a->bg_kind == b->bg_kind
+        && a->fg_idx == b->fg_idx && a->bg_idx == b->bg_idx
+        && a->attr == b->attr;
+}
+
+static TermStyle
+term_style_from_cursor(const Term *t)
+{
+    TermStyle s;
+
+    memset(&s, 0, sizeof s);
+    s.fg = t->cursor.fg;
+    s.bg = t->cursor.bg;
+    s.fg_kind = t->cursor.fg_kind;
+    s.bg_kind = t->cursor.bg_kind;
+    s.fg_idx = t->cursor.fg_idx;
+    s.bg_idx = t->cursor.bg_idx;
+    s.attr = t->cursor.attr;
+    return s;
+}
+
+static uint32_t
+term_style_rgb(const Term *t, uint8_t kind, uint8_t idx, uint32_t rgb, int fg)
+{
+    if (kind == TERM_COLOR_RGB)
+        return rgb & 0xffffffu;
+    if (kind == TERM_COLOR_PAL) {
+        if (fg) {
+            if (idx > 15)
+                idx = 15;
+            return t->colors.fg[idx];
+        }
+        if (idx < 8)
+            return t->colors.bg[idx];
+        if (idx > 15)
+            idx = 15;
+        return t->colors.fg[idx];
+    }
+    if (fg)
+        return t->colors.fg[t->colors.fg_default < 16 ? t->colors.fg_default : 7];
+    return t->colors.bg[t->colors.bg_default < 8 ? t->colors.bg_default : 0];
+}
+
+static TermStyle
+term_style_resolve(const Term *t, TermStyle s)
+{
+    uint32_t frgb;
+    uint32_t brgb;
+
+    frgb = term_style_rgb(t, s.fg_kind, s.fg_idx, s.fg, 1);
+    brgb = term_style_rgb(t, s.bg_kind, s.bg_idx, s.bg, 0);
+    s.fg = (frgb << 8) | s.attr;
+    s.bg = brgb << 8;
+    return s;
+}
+
 static uint16_t
 term_style_intern(Term *t)
 {
-    uint32_t fg;
-    uint32_t bg;
+    TermStyle s;
     uint32_t i;
     uint16_t id;
 
     if (!t || !t->styles)
         return 0;
-    fg = (t->cursor.fg << 8) | t->cursor.attr;
-    bg = t->cursor.bg << 8;
+    s = term_style_from_cursor(t);
     id = t->cursor.style;
-    if ((uint32_t)id < t->style_n &&
-        t->styles[id].fg == fg && t->styles[id].bg == bg)
+    if (id != 0 && (uint32_t)id < t->style_n && term_style_match(&t->styles[id], &s))
         return id;
-    for (i = 0; i < t->style_n; i++) {
-        if (t->styles[i].fg == fg && t->styles[i].bg == bg) {
+    for (i = 1; i < t->style_n; i++) {
+        if (term_style_match(&t->styles[i], &s)) {
             t->cursor.style = (uint16_t)i;
             return (uint16_t)i;
         }
     }
     if (t->style_n >= TERM_STYLE_MAX) {
         id = (uint16_t)(TERM_STYLE_MAX - 1);
-        t->styles[id].fg = fg;
-        t->styles[id].bg = bg;
+        t->styles[id] = s;
         t->cursor.style = id;
         return id;
     }
-    t->styles[t->style_n].fg = fg;
-    t->styles[t->style_n].bg = bg;
+    t->styles[t->style_n] = s;
     t->cursor.style = (uint16_t)t->style_n;
     return (uint16_t)t->style_n++;
 }
@@ -248,8 +307,6 @@ term_init_common(Term *t, uint32_t cols, uint32_t rows, const TermColors *colors
     else
         term_colors_default(&t->colors);
 
-    t->cursor.fg = t->colors.fg[t->colors.fg_default < 16 ? t->colors.fg_default : 7];
-    t->cursor.bg = t->colors.bg[t->colors.bg_default < 8 ? t->colors.bg_default : 0];
     t->mode = TERM_MODE_UTF8 | TERM_MODE_WRAP;
     t->top = 0;
     t->bot = rows - 1;
@@ -335,11 +392,29 @@ term_cell_style(const Term *t, const TermCell *c)
 {
     TermStyle z;
 
-    z.fg = 0;
-    z.bg = 0;
-    if (!t || !c || !t->styles || (uint32_t)c->style >= t->style_n)
+    memset(&z, 0, sizeof z);
+    if (!t || !c || !t->styles || c->style == 0 || (uint32_t)c->style >= t->style_n)
         return z;
-    return t->styles[c->style];
+    return term_style_resolve(t, t->styles[c->style]);
+}
+
+TermStyle
+term_cursor_style(const Term *t)
+{
+    TermStyle z;
+
+    memset(&z, 0, sizeof z);
+    if (!t)
+        return z;
+    return term_style_resolve(t, term_style_from_cursor(t));
+}
+
+void
+term_colors_set(Term *t, const TermColors *colors)
+{
+    if (!t || !colors)
+        return;
+    t->colors = *colors;
 }
 
 int
@@ -877,8 +952,12 @@ term_reset(Term *t)
     t->cursor.state = 0;
     t->cursor.x = 0;
     t->cursor.y = 0;
-    t->cursor.fg = t->colors.fg[t->colors.fg_default < 16 ? t->colors.fg_default : 7];
-    t->cursor.bg = t->colors.bg[t->colors.bg_default < 8 ? t->colors.bg_default : 0];
+    t->cursor.fg = 0;
+    t->cursor.bg = 0;
+    t->cursor.fg_kind = TERM_COLOR_DEF;
+    t->cursor.bg_kind = TERM_COLOR_DEF;
+    t->cursor.fg_idx = 0;
+    t->cursor.bg_idx = 0;
     term_style_intern(t);
     t->saved = t->cursor;
     memset(&t->csi, 0, sizeof t->csi);
@@ -1222,18 +1301,17 @@ static void
 term_cursor_sgr(Term *t, const int32_t *attr, int32_t n)
 {
     int32_t i;
-    uint32_t def_fg;
-    uint32_t def_bg;
-
-    def_fg = t->colors.fg[t->colors.fg_default < 16 ? t->colors.fg_default : 7];
-    def_bg = t->colors.bg[t->colors.bg_default < 8 ? t->colors.bg_default : 0];
 
     for (i = 0; i < n; i++) {
         switch (attr[i]) {
         case 0:
             t->cursor.attr = TERM_ATTR_NONE;
-            t->cursor.fg = def_fg;
-            t->cursor.bg = def_bg;
+            t->cursor.fg = 0;
+            t->cursor.bg = 0;
+            t->cursor.fg_kind = TERM_COLOR_DEF;
+            t->cursor.bg_kind = TERM_COLOR_DEF;
+            t->cursor.fg_idx = 0;
+            t->cursor.bg_idx = 0;
             break;
         case 1:
             t->cursor.attr |= TERM_ATTR_BOLD;
@@ -1283,43 +1361,72 @@ term_cursor_sgr(Term *t, const int32_t *attr, int32_t n)
             break;
         case 38:
             if (i + 1 < n && attr[i + 1] == 5 && i + 2 < n) {
-                t->cursor.fg = term_color_256(t, (int)attr[i + 2]);
+                if (attr[i + 2] >= 0 && attr[i + 2] < 16) {
+                    t->cursor.fg_kind = TERM_COLOR_PAL;
+                    t->cursor.fg_idx = (uint8_t)attr[i + 2];
+                    t->cursor.fg = 0;
+                } else {
+                    t->cursor.fg_kind = TERM_COLOR_RGB;
+                    t->cursor.fg = term_color_256(t, (int)attr[i + 2]);
+                }
                 i += 2;
             } else if (i + 1 < n && attr[i + 1] == 2 && i + 4 < n) {
+                t->cursor.fg_kind = TERM_COLOR_RGB;
                 t->cursor.fg =
-                    ((uint32_t)attr[i + 2] << 16) |
-                    ((uint32_t)attr[i + 3] << 8) |
-                    (uint32_t)attr[i + 4];
+                    (((uint32_t)attr[i + 2] & 255u) << 16) |
+                    (((uint32_t)attr[i + 3] & 255u) << 8) |
+                    ((uint32_t)attr[i + 4] & 255u);
                 i += 4;
             }
             break;
         case 39:
-            t->cursor.fg = def_fg;
+            t->cursor.fg = 0;
+            t->cursor.fg_kind = TERM_COLOR_DEF;
+            t->cursor.fg_idx = 0;
             break;
         case 48:
             if (i + 1 < n && attr[i + 1] == 5 && i + 2 < n) {
-                t->cursor.bg = term_color_256(t, (int)attr[i + 2]);
+                if (attr[i + 2] >= 0 && attr[i + 2] < 16) {
+                    t->cursor.bg_kind = TERM_COLOR_PAL;
+                    t->cursor.bg_idx = (uint8_t)attr[i + 2];
+                    t->cursor.bg = 0;
+                } else {
+                    t->cursor.bg_kind = TERM_COLOR_RGB;
+                    t->cursor.bg = term_color_256(t, (int)attr[i + 2]);
+                }
                 i += 2;
             } else if (i + 1 < n && attr[i + 1] == 2 && i + 4 < n) {
+                t->cursor.bg_kind = TERM_COLOR_RGB;
                 t->cursor.bg =
-                    ((uint32_t)attr[i + 2] << 16) |
-                    ((uint32_t)attr[i + 3] << 8) |
-                    (uint32_t)attr[i + 4];
+                    (((uint32_t)attr[i + 2] & 255u) << 16) |
+                    (((uint32_t)attr[i + 3] & 255u) << 8) |
+                    ((uint32_t)attr[i + 4] & 255u);
                 i += 4;
             }
             break;
         case 49:
-            t->cursor.bg = def_bg;
+            t->cursor.bg = 0;
+            t->cursor.bg_kind = TERM_COLOR_DEF;
+            t->cursor.bg_idx = 0;
             break;
         default:
-            if (TERM_BETWEEN(attr[i], 30, 37))
-                t->cursor.fg = t->colors.fg[attr[i] - 30];
-            else if (TERM_BETWEEN(attr[i], 40, 47))
-                t->cursor.bg = t->colors.bg[attr[i] - 40];
-            else if (TERM_BETWEEN(attr[i], 90, 97))
-                t->cursor.fg = t->colors.fg[attr[i] - 90 + 8];
-            else if (TERM_BETWEEN(attr[i], 100, 107))
-                t->cursor.bg = t->colors.bg[attr[i] - 100];
+            if (TERM_BETWEEN(attr[i], 30, 37)) {
+                t->cursor.fg_kind = TERM_COLOR_PAL;
+                t->cursor.fg_idx = (uint8_t)(attr[i] - 30);
+                t->cursor.fg = 0;
+            } else if (TERM_BETWEEN(attr[i], 40, 47)) {
+                t->cursor.bg_kind = TERM_COLOR_PAL;
+                t->cursor.bg_idx = (uint8_t)(attr[i] - 40);
+                t->cursor.bg = 0;
+            } else if (TERM_BETWEEN(attr[i], 90, 97)) {
+                t->cursor.fg_kind = TERM_COLOR_PAL;
+                t->cursor.fg_idx = (uint8_t)(attr[i] - 90 + 8);
+                t->cursor.fg = 0;
+            } else if (TERM_BETWEEN(attr[i], 100, 107)) {
+                t->cursor.bg_kind = TERM_COLOR_PAL;
+                t->cursor.bg_idx = (uint8_t)(attr[i] - 100);
+                t->cursor.bg = 0;
+            }
             break;
         }
     }

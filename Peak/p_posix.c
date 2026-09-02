@@ -32,9 +32,12 @@ static int peak_internal_memfd(void);
 static size_t peak_internal_io_n(size_t n);
 static int peak_internal_status_code(int status);
 static void peak_internal_sigchld(int sig);
+static void peak_internal_sigusr1(int sig);
 
 static int peak_child_r = -1;
 static int peak_child_w = -1;
+static int peak_usr1_r = -1;
+static int peak_usr1_w = -1;
 static int peak_stdout_saved = -1;
 
 static int
@@ -109,6 +112,20 @@ peak_internal_sigchld(int sig)
 	x = 0;
 	if (peak_child_w >= 0)
 		(void)write(peak_child_w, &x, 1);
+	errno = saved;
+}
+
+static void
+peak_internal_sigusr1(int sig)
+{
+	int saved;
+	char x;
+
+	(void)sig;
+	saved = errno;
+	x = 0;
+	if (peak_usr1_w >= 0)
+		(void)write(peak_usr1_w, &x, 1);
 	errno = saved;
 }
 
@@ -500,6 +517,24 @@ peak_env_set(const char *name, const char *value)
 }
 
 int
+peak_env_get(const char *name, char *buf, size_t cap)
+{
+	const char *v;
+	size_t n;
+
+	if (!name || !name[0] || !buf || cap < 2)
+		return 0;
+	v = getenv(name);
+	if (!v || !v[0])
+		return 0;
+	n = strlen(v);
+	if (n >= cap)
+		return 0;
+	memcpy(buf, v, n + 1);
+	return 1;
+}
+
+int
 peak_filesystem_list(const char *path, int (*fn)(const char *name, void *ud), void *ud)
 {
 	DIR *d;
@@ -602,6 +637,72 @@ peak_child_ack(void)
 		return;
 	while (read(peak_child_r, buf, sizeof buf) > 0)
 		;
+}
+
+int
+peak_usr1_arm(void)
+{
+	int p[2];
+	struct sigaction sa;
+
+	if (peak_usr1_r >= 0)
+		return 1;
+	if (pipe(p) < 0)
+		return 0;
+	peak_internal_nb(p[0]);
+	peak_internal_nb(p[1]);
+	memset(&sa, 0, sizeof sa);
+	sa.sa_handler = peak_internal_sigusr1;
+	sa.sa_flags = SA_RESTART;
+	sigemptyset(&sa.sa_mask);
+	if (sigaction(SIGUSR1, &sa, NULL) != 0) {
+		close(p[0]);
+		close(p[1]);
+		return 0;
+	}
+	peak_usr1_r = p[0];
+	peak_usr1_w = p[1];
+	return 1;
+}
+
+void
+peak_usr1_disarm(void)
+{
+	struct sigaction sa;
+
+	memset(&sa, 0, sizeof sa);
+	sa.sa_handler = SIG_DFL;
+	sigemptyset(&sa.sa_mask);
+	sigaction(SIGUSR1, &sa, NULL);
+	if (peak_usr1_r >= 0) {
+		close(peak_usr1_r);
+		peak_usr1_r = -1;
+	}
+	if (peak_usr1_w >= 0) {
+		close(peak_usr1_w);
+		peak_usr1_w = -1;
+	}
+}
+
+PEAK_HANDLE
+peak_usr1_fd(void)
+{
+	return peak_usr1_r >= 0 ? peak_usr1_r : PEAK_HANDLE_INVALID;
+}
+
+int
+peak_usr1_ack(void)
+{
+	char buf[64];
+	int n;
+	int hit;
+
+	if (peak_usr1_r < 0)
+		return 0;
+	hit = 0;
+	while ((n = (int)read(peak_usr1_r, buf, sizeof buf)) > 0)
+		hit = 1;
+	return hit;
 }
 
 int
