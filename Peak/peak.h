@@ -59,8 +59,8 @@
 #endif
 
 #define PEAK_MAJOR "0"
-#define PEAK_MINOR "10"
-#define PEAK_PATCH "10"
+#define PEAK_MINOR "11"
+#define PEAK_PATCH "0"
 
 /* CHANGE LOG
  * 0.0.0 - @vasco - prototyping
@@ -102,6 +102,7 @@
  * 0.10.8 - @vasco - wayland compositor keymap via libxkbcommon (layout, group, compose)
  * 0.10.9 - @vasco - peak_env_get; SIGUSR1 wakeup fd
  * 0.10.10 - @vasco - peak_pipe_capacity / peak_pipe_set_capacity
+ * 0.11.0 - @vasco - peak_pipe_spawn / peak_pipe_resize
  */
 
 #include <assert.h>
@@ -366,6 +367,8 @@ typedef struct PeakProc {
 
 /* Child + PTY. File descriptor is nonblocking. Fails as PEAK_HANDLE_INVALID. */
 PEAK PeakProc peak_pty_spawn(const char *file, const char **argv, uint32_t cols, uint32_t rows, uint32_t xpixel, uint32_t ypixel);
+PEAK PeakProc peak_pipe_spawn(const char *file, const char **argv, uint32_t cols, uint32_t rows);
+PEAK void     peak_pipe_resize(PeakProc *p, uint32_t cols, uint32_t rows);
 PEAK void     peak_pty_resize(PeakProc *pty, uint32_t cols, uint32_t rows, uint32_t xpixel, uint32_t ypixel);
 PEAK int      peak_pty_reap(PeakProc *pty); /* 1 if dead */
 PEAK void     peak_pty_close(PeakProc *pty);

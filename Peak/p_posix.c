@@ -31,11 +31,27 @@ long syscall(long number, ...);
 #endif
 
 #define PEAK_WAIT_MAX 64
+#define PEAK_PROC_MAX 32
+
+typedef struct PeakProcRec {
+	int used;
+	int out;
+	int tty;
+} PeakProcRec;
+
+static PeakProcRec peak_procs[PEAK_PROC_MAX];
 
 static int peak_internal_nb(int fd);
 static PeakProc peak_internal_proc_fail(void);
+static void peak_internal_put_size(uint32_t cols, uint32_t rows);
+static void peak_internal_winch(int pid);
 static int peak_internal_memfd(void);
 static size_t peak_internal_io_n(size_t n);
+static PeakProcRec *peak_internal_proc_find(int fd);
+static PeakProcRec *peak_internal_proc_slot(void);
+static void peak_internal_proc_clear(PeakProcRec *r);
+static void peak_internal_proc_bind(int out, int tty);
+static int peak_internal_read(int fd, void *buf, size_t n);
 static int peak_internal_status_code(int status);
 static void peak_internal_sigchld(int sig);
 static void peak_internal_sigusr1(int sig);
@@ -72,6 +88,31 @@ peak_internal_proc_fail(void)
 	return p;
 }
 
+static void
+peak_internal_put_size(uint32_t cols, uint32_t rows)
+{
+	char col[16];
+	char row[16];
+
+	if (!cols)
+		cols = 80;
+	if (!rows)
+		rows = 24;
+	snprintf(col, sizeof col, "%u", cols);
+	snprintf(row, sizeof row, "%u", rows);
+	setenv("COLUMNS", col, 1);
+	setenv("LINES", row, 1);
+}
+
+static void
+peak_internal_winch(int pid)
+{
+	if (pid <= 0)
+		return;
+	kill(pid, SIGWINCH);
+	kill(-pid, SIGWINCH);
+}
+
 static int
 peak_internal_memfd(void)
 {
@@ -95,6 +136,84 @@ peak_internal_io_n(size_t n)
 	if (n > (size_t)0x40000000)
 		return (size_t)0x40000000;
 	return n;
+}
+
+static PeakProcRec *
+peak_internal_proc_find(int fd)
+{
+	int i;
+
+	if (fd < 0)
+		return NULL;
+	for (i = 0; i < PEAK_PROC_MAX; i++) {
+		if (peak_procs[i].used && peak_procs[i].out == fd)
+			return &peak_procs[i];
+	}
+	return NULL;
+}
+
+static PeakProcRec *
+peak_internal_proc_slot(void)
+{
+	int i;
+
+	for (i = 0; i < PEAK_PROC_MAX; i++) {
+		if (!peak_procs[i].used)
+			return &peak_procs[i];
+	}
+	return NULL;
+}
+
+static void
+peak_internal_proc_clear(PeakProcRec *r)
+{
+	if (!r)
+		return;
+	if (r->out >= 0)
+		close(r->out);
+	if (r->tty >= 0 && r->tty != r->out)
+		close(r->tty);
+	r->out = -1;
+	r->tty = -1;
+	r->used = 0;
+}
+
+static void
+peak_internal_proc_bind(int out, int tty)
+{
+	PeakProcRec *r;
+
+	if (out < 0 || tty < 0)
+		return;
+	r = peak_internal_proc_find(out);
+	if (!r)
+		r = peak_internal_proc_slot();
+	if (!r)
+		return;
+	r->out = out;
+	r->tty = tty;
+	r->used = 1;
+}
+
+static int
+peak_internal_read(int fd, void *buf, size_t n)
+{
+	ssize_t r;
+
+	if (fd < 0 || !buf)
+		return 0;
+	for (;;) {
+		r = read(fd, buf, n);
+		if (r > 0)
+			return (int)r;
+		if (r == 0)
+			return 0;
+		if (errno == EINTR)
+			continue;
+		if (errno == EAGAIN || errno == EWOULDBLOCK)
+			return -1;
+		return 0;
+	}
 }
 
 static int
@@ -177,19 +296,102 @@ peak_pty_spawn(const char *file, const char **argv, uint32_t cols, uint32_t rows
 	return p;
 }
 
+PeakProc
+peak_pipe_spawn(const char *file, const char **argv, uint32_t cols, uint32_t rows)
+{
+	PeakProc p;
+	PeakProcRec *rec;
+	struct winsize ws;
+	int master, slave;
+	int sv[2];
+	int pid;
+	int buf;
+	int i;
+
+	if (!file || !argv)
+		return peak_internal_proc_fail();
+	peak_internal_put_size(cols, rows);
+	rec = peak_internal_proc_slot();
+	if (!rec)
+		return peak_internal_proc_fail();
+	memset(&ws, 0, sizeof ws);
+	ws.ws_row = (unsigned short)rows;
+	ws.ws_col = (unsigned short)cols;
+	if (openpty(&master, &slave, NULL, NULL, &ws) < 0)
+		return peak_internal_proc_fail();
+	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) < 0) {
+		close(master);
+		close(slave);
+		return peak_internal_proc_fail();
+	}
+	buf = 1 << 20;
+	for (i = 0; i < 2; i++) {
+		(void)setsockopt(sv[i], SOL_SOCKET, SO_RCVBUF, &buf, sizeof buf);
+		(void)setsockopt(sv[i], SOL_SOCKET, SO_SNDBUF, &buf, sizeof buf);
+	}
+	pid = fork();
+	if (pid < 0) {
+		close(master);
+		close(slave);
+		close(sv[0]);
+		close(sv[1]);
+		return peak_internal_proc_fail();
+	}
+	if (pid == 0) {
+		close(master);
+		close(sv[0]);
+		setsid();
+		if (ioctl(slave, TIOCSCTTY, NULL) < 0)
+			_Exit(1);
+		dup2(slave, STDIN_FILENO);
+		dup2(sv[1], STDOUT_FILENO);
+		dup2(slave, STDERR_FILENO);
+		if (slave > STDERR_FILENO)
+			close(slave);
+		if (sv[1] > STDERR_FILENO)
+			close(sv[1]);
+		execvp(file, (char *const *)argv);
+		_Exit(127);
+	}
+	close(slave);
+	close(sv[1]);
+	rec->out = peak_internal_nb(sv[0]);
+	rec->tty = peak_internal_nb(master);
+	rec->used = 1;
+	p.fd = rec->out;
+	p.pid = pid;
+	return p;
+}
+
+void
+peak_pipe_resize(PeakProc *p, uint32_t cols, uint32_t rows)
+{
+	if (!p)
+		return;
+	peak_internal_put_size(cols, rows);
+	peak_pty_resize(p, cols, rows, 0, 0);
+	peak_internal_winch(p->pid);
+}
+
 void
 peak_pty_resize(PeakProc *pty, uint32_t cols, uint32_t rows, uint32_t xpixel, uint32_t ypixel)
 {
 	struct winsize ws;
+	PeakProcRec *r;
+	int fd;
 
 	if (!pty || pty->fd < 0)
 		return;
+	fd = pty->fd;
+	r = peak_internal_proc_find(fd);
+	if (r && r->tty >= 0)
+		fd = r->tty;
 	memset(&ws, 0, sizeof ws);
 	ws.ws_row = (unsigned short)rows;
 	ws.ws_col = (unsigned short)cols;
 	ws.ws_xpixel = (unsigned short)xpixel;
 	ws.ws_ypixel = (unsigned short)ypixel;
-	ioctl(pty->fd, TIOCSWINSZ, &ws);
+	ioctl(fd, TIOCSWINSZ, &ws);
 }
 
 int
@@ -209,10 +411,16 @@ peak_pty_reap(PeakProc *pty)
 void
 peak_pty_close(PeakProc *pty)
 {
+	PeakProcRec *r;
+
 	if (!pty)
 		return;
 	if (pty->fd >= 0) {
-		close(pty->fd);
+		r = peak_internal_proc_find(pty->fd);
+		if (r)
+			peak_internal_proc_clear(r);
+		else
+			close(pty->fd);
 		pty->fd = PEAK_HANDLE_INVALID;
 	}
 	if (pty->pid > 0) {
@@ -225,6 +433,7 @@ int
 peak_wait(PeakWindow *win, const PEAK_HANDLE *fds, uint32_t n, int timeout_ms)
 {
 	struct pollfd pfd[PEAK_WAIT_MAX];
+	PeakProcRec *rec;
 	uint32_t i, np;
 	int xfd;
 
@@ -244,9 +453,17 @@ peak_wait(PeakWindow *win, const PEAK_HANDLE *fds, uint32_t n, int timeout_ms)
 	for (i = 0; i < n; i++) {
 		if (!fds || fds[i] < 0)
 			continue;
+		if (np >= PEAK_WAIT_MAX)
+			break;
 		pfd[np].fd = fds[i];
 		pfd[np].events = POLLIN | POLLHUP | POLLERR;
 		np++;
+		rec = peak_internal_proc_find(fds[i]);
+		if (rec && rec->tty >= 0 && rec->tty != fds[i] && np < PEAK_WAIT_MAX) {
+			pfd[np].fd = rec->tty;
+			pfd[np].events = POLLIN | POLLHUP | POLLERR;
+			np++;
+		}
 	}
 	if (!np)
 		return 0;
@@ -354,10 +571,12 @@ peak_sock_send(PEAK_HANDLE sock, const void *buf, size_t n, PEAK_HANDLE pass)
 	struct iovec iov;
 	union {
 		struct cmsghdr c;
-		char b[CMSG_SPACE(sizeof(int))];
+		char b[CMSG_SPACE(sizeof(int) * 2)];
 	} u;
 	struct cmsghdr *c;
-	int pfd;
+	PeakProcRec *rec;
+	int fds[2];
+	int nf;
 	ssize_t r;
 
 	if (sock < 0 || !buf || !n)
@@ -368,17 +587,23 @@ peak_sock_send(PEAK_HANDLE sock, const void *buf, size_t n, PEAK_HANDLE pass)
 	msg.msg_iov = &iov;
 	msg.msg_iovlen = 1;
 	if (pass != PEAK_HANDLE_INVALID) {
+		nf = 1;
+		fds[0] = (int)pass;
+		rec = peak_internal_proc_find(pass);
+		if (rec && rec->tty >= 0) {
+			fds[1] = rec->tty;
+			nf = 2;
+		}
 		memset(&u, 0, sizeof u);
 		msg.msg_control = u.b;
-		msg.msg_controllen = sizeof u.b;
+		msg.msg_controllen = CMSG_SPACE(sizeof(int) * (size_t)nf);
 		c = CMSG_FIRSTHDR(&msg);
 		if (!c)
 			return 0;
 		c->cmsg_level = SOL_SOCKET;
 		c->cmsg_type = SCM_RIGHTS;
-		c->cmsg_len = CMSG_LEN(sizeof(int));
-		pfd = (int)pass;
-		memcpy(CMSG_DATA(c), &pfd, sizeof pfd);
+		c->cmsg_len = CMSG_LEN(sizeof(int) * (size_t)nf);
+		memcpy(CMSG_DATA(c), fds, sizeof(int) * (size_t)nf);
 	}
 	for (;;) {
 		r = sendmsg(sock, &msg, 0);
@@ -399,11 +624,14 @@ peak_sock_recv(PEAK_HANDLE sock, void *buf, size_t n, PEAK_HANDLE *pass)
 	struct iovec iov;
 	union {
 		struct cmsghdr c;
-		char b[CMSG_SPACE(sizeof(int))];
+		char b[CMSG_SPACE(sizeof(int) * 2)];
 	} u;
 	struct cmsghdr *c;
 	ssize_t r;
-	int pfd;
+	int fds[2];
+	int nf;
+	int out;
+	int tty;
 
 	if (pass)
 		*pass = PEAK_HANDLE_INVALID;
@@ -434,13 +662,22 @@ peak_sock_recv(PEAK_HANDLE sock, void *buf, size_t n, PEAK_HANDLE *pass)
 			continue;
 		if (c->cmsg_len < CMSG_LEN(sizeof(int)))
 			continue;
-		memcpy(&pfd, CMSG_DATA(c), sizeof pfd);
-		if (pfd < 0)
+		nf = c->cmsg_len >= CMSG_LEN(sizeof(int) * 2) ? 2 : 1;
+		memcpy(fds, CMSG_DATA(c), sizeof(int) * (size_t)nf);
+		if (fds[0] < 0)
 			continue;
+		out = peak_internal_nb(fds[0]);
 		if (pass && *pass == PEAK_HANDLE_INVALID)
-			*pass = peak_internal_nb(pfd);
+			*pass = out;
 		else
-			close(pfd);
+			close(out);
+		if (nf < 2 || fds[1] < 0)
+			continue;
+		tty = peak_internal_nb(fds[1]);
+		if (pass && *pass == out)
+			peak_internal_proc_bind(out, tty);
+		else
+			close(tty);
 	}
 	return (int)r;
 }
@@ -768,32 +1005,36 @@ peak_stdout_restore(void)
 int
 peak_fd_read(PEAK_HANDLE fd, void *buf, size_t n)
 {
-	ssize_t r;
+	PeakProcRec *r;
+	int got;
+	int tgot;
 
 	if (fd < 0 || !buf)
 		return 0;
 	n = peak_internal_io_n(n);
-	for (;;) {
-		r = read(fd, buf, n);
-		if (r > 0)
-			return (int)r;
-		if (r == 0)
-			return 0;
-		if (errno == EINTR)
-			continue;
-		if (errno == EAGAIN || errno == EWOULDBLOCK)
-			return -1;
+	r = peak_internal_proc_find(fd);
+	got = peak_internal_read(fd, buf, n);
+	if (got > 0 || !r || r->tty < 0)
+		return got;
+	tgot = peak_internal_read(r->tty, buf, n);
+	if (tgot > 0)
+		return tgot;
+	if (got == 0)
 		return 0;
-	}
+	return tgot;
 }
 
 int
 peak_fd_write(PEAK_HANDLE fd, const void *buf, size_t n)
 {
+	PeakProcRec *rec;
 	ssize_t r;
 
 	if (fd < 0 || !buf)
 		return 0;
+	rec = peak_internal_proc_find(fd);
+	if (rec && rec->tty >= 0)
+		fd = rec->tty;
 	n = peak_internal_io_n(n);
 	for (;;) {
 		r = write(fd, buf, n);
@@ -812,8 +1053,16 @@ peak_fd_write(PEAK_HANDLE fd, const void *buf, size_t n)
 void
 peak_fd_close(PEAK_HANDLE fd)
 {
-	if (fd >= 0)
-		close(fd);
+	PeakProcRec *r;
+
+	if (fd < 0)
+		return;
+	r = peak_internal_proc_find(fd);
+	if (r) {
+		peak_internal_proc_clear(r);
+		return;
+	}
+	close(fd);
 }
 
 size_t

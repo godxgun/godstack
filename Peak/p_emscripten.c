@@ -454,6 +454,19 @@ peak_pty_spawn(const char *file, const char **argv, uint32_t cols, uint32_t rows
 	return peak_internal_proc_fail();
 }
 
+PeakProc
+peak_pipe_spawn(const char *file, const char **argv, uint32_t cols, uint32_t rows)
+{
+	(void)file; (void)argv; (void)cols; (void)rows;
+	return peak_internal_proc_fail();
+}
+
+void
+peak_pipe_resize(PeakProc *p, uint32_t cols, uint32_t rows)
+{
+	(void)p; (void)cols; (void)rows;
+}
+
 void
 peak_pty_resize(PeakProc *pty, uint32_t cols, uint32_t rows, uint32_t xpixel, uint32_t ypixel)
 {

@@ -194,6 +194,18 @@ peak_internal_pipe_name(const char *path, char *out, size_t cap)
 }
 
 PeakProc
+peak_pipe_spawn(const char *file, const char **argv, uint32_t cols, uint32_t rows)
+{
+	return peak_pty_spawn(file, argv, cols, rows, 0, 0);
+}
+
+void
+peak_pipe_resize(PeakProc *p, uint32_t cols, uint32_t rows)
+{
+	peak_pty_resize(p, cols, rows, 0, 0);
+}
+
+PeakProc
 peak_pty_spawn(const char *file, const char **argv, uint32_t cols, uint32_t rows, uint32_t xpixel, uint32_t ypixel)
 {
 	PeakProc p;
