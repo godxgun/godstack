@@ -62,7 +62,7 @@
 
 #define REND_MAJOR 1  // breaking API changes
 #define REND_MINOR 6  // non-breaking features
-#define REND_PATCH 5  // non-breaking patches and bug fixes
+#define REND_PATCH 6  // non-breaking patches and bug fixes
 
 #ifndef REND_VK_ARENA_GROW
 #define REND_VK_ARENA_GROW 2
@@ -401,6 +401,7 @@ enum RendBufferType_t {
  * 1.6.3 - @vasco - REND_VK_ARENA_GROW / MIN / SWAPCHAIN_EXTRA
  * 1.6.4 - @vasco - REND_VK_COMPOSITE_PREFER_ALPHA
  * 1.6.5 - @vasco - vulkan host alloc via peak_aligned_alloc
+ * 1.6.6 - @vasco - prefer integrated GPU when surface is set
  */
 
 /*

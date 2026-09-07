@@ -13,8 +13,10 @@
 #include <sys/types.h>
 #include <sys/un.h>
 #include <sys/wait.h>
+#include <termios.h>
 #include <unistd.h>
 #ifdef __APPLE__
+#include <mach-o/dyld.h>
 #include <util.h>
 #else
 #include <pty.h>
@@ -52,6 +54,8 @@ static PeakProcRec *peak_internal_proc_slot(void);
 static void peak_internal_proc_clear(PeakProcRec *r);
 static void peak_internal_proc_bind(int out, int tty);
 static int peak_internal_read(int fd, void *buf, size_t n);
+static void peak_internal_tty_no_opost(int fd);
+static int peak_internal_fast_so(char *dst, size_t cap);
 static int peak_internal_status_code(int status);
 static void peak_internal_sigchld(int sig);
 static void peak_internal_sigusr1(int sig);
@@ -216,6 +220,19 @@ peak_internal_read(int fd, void *buf, size_t n)
 	}
 }
 
+void
+peak_internal_tty_no_opost(int fd)
+{
+	struct termios tio;
+
+	if (fd < 0)
+		return;
+	if (tcgetattr(fd, &tio) < 0)
+		return;
+	tio.c_oflag &= ~OPOST;
+	(void)tcsetattr(fd, TCSANOW, &tio);
+}
+
 static int
 peak_internal_status_code(int status)
 {
@@ -254,6 +271,34 @@ peak_internal_sigusr1(int sig)
 	errno = saved;
 }
 
+static int
+peak_internal_fast_so(char *dst, size_t cap)
+{
+	char exe[4096];
+	char *slash;
+#ifdef __APPLE__
+	uint32_t n;
+
+	n = sizeof exe;
+	if (_NSGetExecutablePath(exe, &n) != 0)
+		return 0;
+#else
+	ssize_t n;
+
+	n = readlink("/proc/self/exe", exe, sizeof exe - 1);
+	if (n <= 0)
+		return 0;
+	exe[n] = 0;
+#endif
+	slash = strrchr(exe, '/');
+	if (!slash)
+		return 0;
+	slash[1] = 0;
+	if (snprintf(dst, cap, "%svt-fast.so", exe) >= (int)cap)
+		return 0;
+	return access(dst, R_OK) == 0;
+}
+
 PeakProc
 peak_pty_spawn(const char *file, const char **argv, uint32_t cols, uint32_t rows, uint32_t xpixel, uint32_t ypixel)
 {
@@ -270,6 +315,7 @@ peak_pty_spawn(const char *file, const char **argv, uint32_t cols, uint32_t rows
 	ws.ws_ypixel = (unsigned short)ypixel;
 	if (openpty(&master, &slave, NULL, NULL, &ws) < 0)
 		return peak_internal_proc_fail();
+	peak_internal_tty_no_opost(slave);
 	pid = fork();
 	if (pid < 0) {
 		close(master);
@@ -303,10 +349,8 @@ peak_pipe_spawn(const char *file, const char **argv, uint32_t cols, uint32_t row
 	PeakProcRec *rec;
 	struct winsize ws;
 	int master, slave;
-	int sv[2];
+	int out[2];
 	int pid;
-	int buf;
-	int i;
 
 	if (!file || !argv)
 		return peak_internal_proc_fail();
@@ -319,43 +363,65 @@ peak_pipe_spawn(const char *file, const char **argv, uint32_t cols, uint32_t row
 	ws.ws_col = (unsigned short)cols;
 	if (openpty(&master, &slave, NULL, NULL, &ws) < 0)
 		return peak_internal_proc_fail();
-	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) < 0) {
+	peak_internal_tty_no_opost(slave);
+	if (pipe(out) < 0) {
 		close(master);
 		close(slave);
 		return peak_internal_proc_fail();
 	}
-	buf = 1 << 20;
-	for (i = 0; i < 2; i++) {
-		(void)setsockopt(sv[i], SOL_SOCKET, SO_RCVBUF, &buf, sizeof buf);
-		(void)setsockopt(sv[i], SOL_SOCKET, SO_SNDBUF, &buf, sizeof buf);
-	}
+	(void)peak_pipe_set_capacity(out[0], (size_t)1 << 20);
+	(void)peak_pipe_set_capacity(out[1], (size_t)1 << 20);
 	pid = fork();
 	if (pid < 0) {
 		close(master);
 		close(slave);
-		close(sv[0]);
-		close(sv[1]);
+		close(out[0]);
+		close(out[1]);
 		return peak_internal_proc_fail();
 	}
 	if (pid == 0) {
+		char so[4096];
+		char num[32];
+
 		close(master);
-		close(sv[0]);
+		close(out[0]);
 		setsid();
 		if (ioctl(slave, TIOCSCTTY, NULL) < 0)
 			_Exit(1);
 		dup2(slave, STDIN_FILENO);
-		dup2(sv[1], STDOUT_FILENO);
+		dup2(out[1], STDOUT_FILENO);
 		dup2(slave, STDERR_FILENO);
-		if (slave > STDERR_FILENO)
-			close(slave);
-		if (sv[1] > STDERR_FILENO)
-			close(sv[1]);
+		fcntl(slave, F_SETFD, 0);
+		fcntl(out[1], F_SETFD, 0);
+		snprintf(num, sizeof num, "%d", slave);
+		setenv("PEAK_FAST_TTY", num, 1);
+		snprintf(num, sizeof num, "%d", out[1]);
+		setenv("PEAK_FAST_PIPE", num, 1);
+		if (peak_internal_fast_so(so, sizeof so)) {
+#ifdef __APPLE__
+			setenv("DYLD_INSERT_LIBRARIES", so, 1);
+			setenv("DYLD_FORCE_FLAT_NAMESPACE", "1", 1);
+#else
+			{
+				const char *old;
+
+				old = getenv("LD_PRELOAD");
+				if (old && old[0]) {
+					char preload[8192];
+
+					snprintf(preload, sizeof preload, "%s:%s", so, old);
+					setenv("LD_PRELOAD", preload, 1);
+				} else
+					setenv("LD_PRELOAD", so, 1);
+			}
+#endif
+		}
 		execvp(file, (char *const *)argv);
 		_Exit(127);
 	}
 	close(slave);
-	close(sv[1]);
-	rec->out = peak_internal_nb(sv[0]);
+	close(out[1]);
+	rec->out = peak_internal_nb(out[0]);
 	rec->tty = peak_internal_nb(master);
 	rec->used = 1;
 	p.fd = rec->out;

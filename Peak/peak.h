@@ -60,7 +60,7 @@
 
 #define PEAK_MAJOR "0"
 #define PEAK_MINOR "11"
-#define PEAK_PATCH "0"
+#define PEAK_PATCH "1"
 
 /* CHANGE LOG
  * 0.0.0 - @vasco - prototyping
@@ -103,6 +103,7 @@
  * 0.10.9 - @vasco - peak_env_get; SIGUSR1 wakeup fd
  * 0.10.10 - @vasco - peak_pipe_capacity / peak_pipe_set_capacity
  * 0.11.0 - @vasco - peak_pipe_spawn / peak_pipe_resize
+ * 0.11.1 - @vasco - pipe spawn: pipe + vt-fast.so; slave no OPOST
  */
 
 #include <assert.h>

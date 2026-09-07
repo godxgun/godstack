@@ -488,9 +488,11 @@ rend_vk_device_score_default(RendVkDevice *device, RendSpecs minimum_specs, cons
 	}
 
 	score = 10;
-	if (device->properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+	if (device->surface) {
+		if (device->properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU)
+			score += 1000;
+	} else if (device->properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
 		score += 1000;
-	}
 
 	return score;
 }
