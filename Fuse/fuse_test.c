@@ -21,6 +21,7 @@ static void test_sidebar(void);
 static void test_insert_does_not_steal(void);
 static void test_unbalanced(void);
 static void test_percent(void);
+static void test_rect_text(void);
 
 void
 expect(int ok, const char *what)
@@ -278,6 +279,57 @@ test_percent(void)
     fuse_div_end(c);
 }
 
+void
+test_rect_text(void)
+{
+    unsigned char buf[1 << 16];
+    FuseCanvas c;
+    size_t n, i;
+    FuseCmd *cmds;
+    int nrect;
+    int clicked;
+    FuseCmd *r;
+
+    printf("rect text\n");
+    c = fuse_canvas_create(buf, sizeof buf);
+    fuse_canvas_resize(c, 200, 100);
+    fuse_canvas_pointer(c, FUSE_POINTER_RELEASED, 0, 0);
+    fuse_canvas_clear(c);
+    fuse_rect(c, 10, 20, 30, 40, 0xAABBCCDD);
+    cmds = fuse_canvas_draw(c, &n);
+    r = find_rect(cmds, n, 0xAABBCCDD);
+    expect(r && nearly(r->rect.x, 10, 0.01f) && nearly(r->rect.y, 20, 0.01f), "rect pos");
+    expect(r && nearly(r->rect.w, 30, 0.01f) && nearly(r->rect.h, 40, 0.01f), "rect size");
+    expect(nearly(fuse_text_width("HI", 2.0f), 22.0f, 0.01f), "text width");
+
+    fuse_canvas_clear(c);
+    fuse_text(c, 0, 0, 1.0f, "H", 0xFF0000FFu);
+    cmds = fuse_canvas_draw(c, &n);
+    nrect = 0;
+    if (cmds) {
+        for (i = 0; i < n; i++) {
+            if (cmds[i].type == FUSE_CMD_RECT && cmds[i].rect.color == 0xFF0000FFu)
+                nrect++;
+        }
+    }
+    expect(nrect > 0, "glyph rects");
+
+    fuse_canvas_pointer(c, FUSE_POINTER_RELEASED, 10, 10);
+    fuse_canvas_clear(c);
+    fuse_id(c, "go");
+    fuse_button_text(c, "GO", 0, 0, 20, 20, 0x11111111, 0x22222222);
+    cmds = fuse_canvas_draw(c, &n);
+    expect(cmds && n > 1, "button_text cmds");
+
+    fuse_canvas_pointer(c, FUSE_POINTER_PRESSED, 10, 10);
+    fuse_canvas_pointer(c, FUSE_POINTER_RELEASED, 10, 10);
+    fuse_canvas_clear(c);
+    fuse_id(c, "go");
+    clicked = fuse_button_text(c, "GO", 0, 0, 20, 20, 0x11111111, 0x22222222);
+    fuse_canvas_draw(c, &n);
+    expect(clicked, "button_text click");
+}
+
 int
 main(void)
 {
@@ -288,6 +340,7 @@ main(void)
     test_insert_does_not_steal();
     test_unbalanced();
     test_percent();
+    test_rect_text();
     if (g_fails) {
         printf("%d failed\n", g_fails);
         return 1;

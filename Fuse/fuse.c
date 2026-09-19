@@ -26,6 +26,11 @@
 #define FUSE_EL_DIV 1
 #define FUSE_EL_BUTTON 2
 #define FUSE_EL_SLIDER 4
+#define FUSE_EL_RECT 8
+#define FUSE_GLYPH(r0, r1, r2, r3, r4, r5, r6) \
+    ((uint64_t)(r0) | ((uint64_t)(r1) << 5) | ((uint64_t)(r2) << 10) | \
+     ((uint64_t)(r3) << 15) | ((uint64_t)(r4) << 20) | ((uint64_t)(r5) << 25) | \
+     ((uint64_t)(r6) << 30))
 
 typedef struct FuseScreen {
     uint32_t element;
@@ -103,6 +108,56 @@ static void fuse_internal_emit_rect(FuseCanvas c, uint32_t id, float x, float y,
 static void fuse_internal_emit_clip(FuseCanvas c, uint8_t type, float x, float y, float w, float h);
 static void fuse_internal_emit_tree(FuseCanvas c, uint32_t index, float ox, float oy);
 static void fuse_internal_emit_children(FuseCanvas c, FuseElement *el, float ox, float oy);
+static uint32_t fuse_internal_open_maybe_anon(FuseCanvas c, float x, float y, float w, float h, uint8_t flags);
+static uint64_t fuse_internal_glyph(int c);
+
+/* 5x7, row bits with MSB = left pixel. */
+static const uint64_t fuse_font[128] = {
+    [' '] = 0,
+    ['-'] = FUSE_GLYPH(0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00),
+    ['.'] = FUSE_GLYPH(0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04),
+    ['/'] = FUSE_GLYPH(0x01, 0x01, 0x02, 0x04, 0x08, 0x10, 0x10),
+    ['0'] = FUSE_GLYPH(0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E),
+    ['1'] = FUSE_GLYPH(0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E),
+    ['2'] = FUSE_GLYPH(0x0E, 0x11, 0x01, 0x06, 0x08, 0x10, 0x1F),
+    ['3'] = FUSE_GLYPH(0x0E, 0x11, 0x01, 0x06, 0x01, 0x11, 0x0E),
+    ['4'] = FUSE_GLYPH(0x02, 0x06, 0x0A, 0x12, 0x1F, 0x02, 0x02),
+    ['5'] = FUSE_GLYPH(0x1F, 0x10, 0x1E, 0x01, 0x01, 0x11, 0x0E),
+    ['6'] = FUSE_GLYPH(0x06, 0x08, 0x10, 0x1E, 0x11, 0x11, 0x0E),
+    ['7'] = FUSE_GLYPH(0x1F, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08),
+    ['8'] = FUSE_GLYPH(0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E),
+    ['9'] = FUSE_GLYPH(0x0E, 0x11, 0x11, 0x0F, 0x01, 0x02, 0x0C),
+    [':'] = FUSE_GLYPH(0x00, 0x04, 0x00, 0x00, 0x00, 0x04, 0x00),
+    ['<'] = FUSE_GLYPH(0x08, 0x04, 0x02, 0x01, 0x02, 0x04, 0x08),
+    ['>'] = FUSE_GLYPH(0x02, 0x04, 0x08, 0x10, 0x08, 0x04, 0x02),
+    ['A'] = FUSE_GLYPH(0x0E, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11),
+    ['B'] = FUSE_GLYPH(0x1E, 0x11, 0x11, 0x1E, 0x11, 0x11, 0x1E),
+    ['C'] = FUSE_GLYPH(0x0E, 0x11, 0x10, 0x10, 0x10, 0x11, 0x0E),
+    ['D'] = FUSE_GLYPH(0x1E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1E),
+    ['E'] = FUSE_GLYPH(0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F),
+    ['F'] = FUSE_GLYPH(0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x10),
+    ['G'] = FUSE_GLYPH(0x0E, 0x11, 0x10, 0x17, 0x11, 0x11, 0x0E),
+    ['H'] = FUSE_GLYPH(0x11, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11),
+    ['I'] = FUSE_GLYPH(0x0E, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0E),
+    ['J'] = FUSE_GLYPH(0x0F, 0x02, 0x02, 0x02, 0x02, 0x12, 0x0C),
+    ['K'] = FUSE_GLYPH(0x11, 0x12, 0x14, 0x18, 0x14, 0x12, 0x11),
+    ['L'] = FUSE_GLYPH(0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x1F),
+    ['M'] = FUSE_GLYPH(0x11, 0x1B, 0x15, 0x15, 0x11, 0x11, 0x11),
+    ['N'] = FUSE_GLYPH(0x11, 0x19, 0x15, 0x13, 0x11, 0x11, 0x11),
+    ['O'] = FUSE_GLYPH(0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E),
+    ['P'] = FUSE_GLYPH(0x1E, 0x11, 0x11, 0x1E, 0x10, 0x10, 0x10),
+    ['Q'] = FUSE_GLYPH(0x0E, 0x11, 0x11, 0x11, 0x15, 0x12, 0x0D),
+    ['R'] = FUSE_GLYPH(0x1E, 0x11, 0x11, 0x1E, 0x14, 0x12, 0x11),
+    ['S'] = FUSE_GLYPH(0x0E, 0x11, 0x10, 0x0E, 0x01, 0x11, 0x0E),
+    ['T'] = FUSE_GLYPH(0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04),
+    ['U'] = FUSE_GLYPH(0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E),
+    ['V'] = FUSE_GLYPH(0x11, 0x11, 0x11, 0x11, 0x11, 0x0A, 0x04),
+    ['W'] = FUSE_GLYPH(0x11, 0x11, 0x11, 0x15, 0x15, 0x1B, 0x11),
+    ['X'] = FUSE_GLYPH(0x11, 0x11, 0x0A, 0x04, 0x0A, 0x11, 0x11),
+    ['Y'] = FUSE_GLYPH(0x11, 0x11, 0x0A, 0x04, 0x04, 0x04, 0x04),
+    ['Z'] = FUSE_GLYPH(0x1F, 0x01, 0x02, 0x04, 0x08, 0x10, 0x1F),
+    ['_'] = FUSE_GLYPH(0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1F),
+};
 
 static size_t
 fuse_internal_align(size_t n)
@@ -602,6 +657,10 @@ fuse_internal_emit_tree(FuseCanvas c, uint32_t index, float ox, float oy)
         fuse_internal_emit_rect(c, el->id, cx, cy, el->w, el->h, el->color);
         return;
     }
+    if (el->flags & FUSE_EL_RECT) {
+        fuse_internal_emit_rect(c, el->id, cx, cy, el->w, el->h, el->color);
+        return;
+    }
     if (el->flags & FUSE_EL_SLIDER) {
         nob_w = el->h;
         if (nob_w > el->w)
@@ -682,7 +741,7 @@ fuse_canvas_resize(FuseCanvas c, float w, float h)
 }
 
 void
-fuse_canvas_pointer(FuseCanvas c, int pointer_state, float x, float y)
+fuse_canvas_pointer(FuseCanvas c, FusePointerState pointer_state, float x, float y)
 {
     int prev;
     FASSERT(c, "null canvas");
@@ -859,4 +918,121 @@ fuse_percent_y(FuseCanvas c, float p)
 {
     FASSERT(c, "null canvas");
     return fuse_internal_percent(c, p, 1);
+}
+
+static uint32_t
+fuse_internal_open_maybe_anon(FuseCanvas c, float x, float y, float w, float h, uint8_t flags)
+{
+    uint32_t parent_el, id, i;
+
+    parent_el = c->screens[c->screen_count - 1].element;
+    id = c->pending_id;
+    c->pending_id = 0;
+    if (id != 0) {
+        for (i = 0; i < c->element_count; i++) {
+            if (c->elements[i].id == id) {
+                fuse_internal_fail(c, FUSE_ERR_DUPLICATE_ID);
+                return 0;
+            }
+        }
+    }
+    return fuse_internal_add_element(c, parent_el, id, x, y, w, h, flags);
+}
+
+static uint64_t
+fuse_internal_glyph(int c)
+{
+    if (c >= 'a' && c <= 'z')
+        c -= 32;
+    if (c < 0 || c > 127)
+        return 0;
+    return fuse_font[c];
+}
+
+void
+fuse_rect(FuseCanvas c, float x, float y, float w, float h, uint32_t color)
+{
+    uint32_t index;
+
+    FASSERT(c, "null canvas");
+    if (!fuse_internal_ok(c))
+        return;
+    index = fuse_internal_open_maybe_anon(c, x, y, w, h, FUSE_EL_RECT);
+    if (!fuse_internal_ok(c))
+        return;
+    c->elements[index].color = color;
+}
+
+float
+fuse_text_width(const char *str, float s)
+{
+    int n;
+
+    if (!str)
+        return 0.0f;
+    n = 0;
+    while (str[n])
+        n++;
+    if (n == 0)
+        return 0.0f;
+    return (float)n * 6.0f * s - s;
+}
+
+void
+fuse_text(FuseCanvas c, float x, float y, float s, const char *str, uint32_t color)
+{
+    float cx;
+
+    FASSERT(c, "null canvas");
+    FASSERT(str, "null text");
+    if (!fuse_internal_ok(c) || !str)
+        return;
+    c->pending_id = 0;
+    cx = x;
+    while (*str) {
+        uint64_t g;
+        int row;
+
+        g = fuse_internal_glyph((unsigned char)*str);
+        for (row = 0; row < 7; row++) {
+            uint32_t bits;
+            int col;
+
+            bits = (uint32_t)((g >> (row * 5)) & 0x1F);
+            col = 0;
+            while (col < 5) {
+                if (bits & (1u << (4 - col))) {
+                    int start;
+
+                    start = col;
+                    while (col < 5 && (bits & (1u << (4 - col))))
+                        col++;
+                    fuse_rect(c, cx + (float)start * s, y + (float)row * s,
+                              (float)(col - start) * s, s, color);
+                } else {
+                    col++;
+                }
+            }
+        }
+        cx += 6.0f * s;
+        str++;
+    }
+}
+
+bool
+fuse_button_text(FuseCanvas c, char *text, float x, float y, float w, float h, uint32_t selected, uint32_t hovered)
+{
+    bool clicked;
+    float s;
+    float tw;
+
+    clicked = fuse_button(c, x, y, w, h, selected, hovered);
+    if (!text || !fuse_internal_ok(c))
+        return clicked;
+    s = h / 12.0f;
+    if (s < 2.0f)
+        s = 2.0f;
+    tw = fuse_text_width(text, s);
+    fuse_text(c, x + (w - tw) * 0.5f, y + (h - 7.0f * s) * 0.5f, s, text, 0xFF000000u);
+    return clicked;
 }

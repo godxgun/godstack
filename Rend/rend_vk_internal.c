@@ -862,12 +862,13 @@ rend_vk_arena_add_page(RendVkArenaAllocator *arena, VkDeviceSize size, uint32_t 
 }
 
 static RendMemory
-rend_vk_arena_alloc(RendVkArenaAllocator *arena, VkDeviceSize size, uint32_t heap_index)
+rend_vk_arena_alloc(RendVkArenaAllocator *arena, VkDeviceSize size, VkDeviceSize alignment, uint32_t heap_index)
 {
 	RendVkPagedArena *mem_arena;
 	VkMemoryPropertyFlags properties;
 	VkDeviceSize align;
 	VkDeviceSize aligned_size;
+	VkDeviceSize aligned_head;
 	int whole_page;
 	uint32_t page_idx;
 	uint32_t u;
@@ -881,24 +882,31 @@ rend_vk_arena_alloc(RendVkArenaAllocator *arena, VkDeviceSize size, uint32_t hea
 	properties = arena->properties.memoryTypes[heap_index].propertyFlags;
 
 	align = arena->gpu_alignment;
+	if (alignment > align)
+		align = alignment;
+	if (align < 1)
+		align = 1;
 	aligned_size = (size + align - 1) & ~(align - 1);
 
 	whole_page = !(properties & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	page_idx = UINT32_MAX;
+	aligned_head = 0;
 	for (u = 0; u < mem_arena->elements; ++u) {
 		page = mem_arena->page_darr[u];
 		valid = (whole_page) ? (page.head == 0) : 1;
-		if ((page.head + aligned_size <= page.memory.size) && valid) {
+		aligned_head = (page.head + align - 1) & ~(align - 1);
+		if ((aligned_head + aligned_size <= page.memory.size) && valid) {
 			page_idx = u;
 			break;
 		}
 	}
 
 	if (page_idx == UINT32_MAX) {
-		page_idx = rend_vk_arena_add_page(arena, aligned_size, heap_index, whole_page);
+		page_idx = rend_vk_arena_add_page(arena, aligned_size + align, heap_index, whole_page);
 		if (page_idx == UINT32_MAX) {
 			REND__CRASH("[REND_VK] Arena page allocation failed!");
 		}
+		aligned_head = (mem_arena->page_darr[page_idx].head + align - 1) & ~(align - 1);
 	}
 
 	mem_arena->page_darr[page_idx].reserved = whole_page;
@@ -906,7 +914,7 @@ rend_vk_arena_alloc(RendVkArenaAllocator *arena, VkDeviceSize size, uint32_t hea
 	memory = (RendMemory){
 		.device_memory = mem_arena->page_darr[page_idx].memory.device_memory,
 		.size = aligned_size,
-		.offset = mem_arena->page_darr[page_idx].head,
+		.offset = aligned_head,
 		.host_mapped_memory = 0,
 		.heap_index = heap_index,
 		.id = page_idx,
@@ -916,7 +924,7 @@ rend_vk_arena_alloc(RendVkArenaAllocator *arena, VkDeviceSize size, uint32_t hea
 		memory.host_mapped_memory = mem_arena->page_darr[page_idx].memory.host_mapped_memory + memory.offset;
 	}
 
-	mem_arena->page_darr[page_idx].head += aligned_size;
+	mem_arena->page_darr[page_idx].head = aligned_head + aligned_size;
 	return memory;
 }
 

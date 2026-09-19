@@ -11,6 +11,9 @@
  * * 1.5.0 - @vasco - in-frame copy_buffer; blit-only present barrier
  * * 1.5.1 - @vasco - no per-frame surface query; SUBOPTIMAL recreates once; host arena stays
  * * 1.5.2 - @vasco - present on graphics family; extra swapchain image; OPAQUE composite first
+ * * 1.6.7 - @vasco - grow-only pass depth; texture pass no longer uses swapchain-sized depth
+ * * 1.6.8 - @vasco - exact-size swap vs texture depth; NEAREST sampler; arena alignment
+ * * 1.6.9 - @vasco - LINEAR mag/min sampler; CLAMP_TO_EDGE
  */
 
 #include <stdbool.h>
@@ -28,6 +31,7 @@
 #define REND_MAX_FRAMES_IN_FLIGHT 4 /* quadruple buffering! */
 
 #define REND_VK_MAX_PIPELINES 100
+#define REND_VK_STALE_DEPTH_MAX 8
 
 typedef struct {
 	VkSwapchainKHR handle;
@@ -39,7 +43,6 @@ typedef struct {
 	VkImageView *views;
 	VkSemaphore *present_semaphores;
 
-	RendVkImage depth_attachment;
 } RendVkSwapchain;
 
 typedef struct {
@@ -87,6 +90,11 @@ typedef struct RendVk14Context {
 	uint32_t window_w;
 	uint32_t window_h;
 
+	RendVkImage swap_depth;
+	RendVkImage tex_depth;
+	RendVkImage stale_depth[REND_VK_STALE_DEPTH_MAX];
+	uint32_t stale_depth_count;
+
 	bool vsync;
 	bool in_frame;
 	bool has_frame_time;
@@ -117,6 +125,10 @@ static void rend_vk14_color_targets_free(RendVk14Context *ctx);
 static bool rend_vk14_color_targets_rebuild(RendVk14Context *ctx);
 static RendTexture *rend_vk14_color_target_at(RendVk14Context *ctx);
 RendTexture *rend_vk14_color_target(RendContextHandle handle);
+static void rend_vk14_depth_barrier_img(RendVkImage *img, VkCommandBuffer cmd);
+static void rend_vk14_depth_flush_stale(RendVk14Context *ctx);
+static bool rend_vk14_depth_ensure_img(RendVk14Context *ctx, RendVkImage *img, uint32_t w, uint32_t h);
+static void rend_vk14_depth_destroy(RendVk14Context *ctx);
 
 RendContextHandle
 rend_vk14_renderer_create(PeakWindow *window, RendBindingInfo *bind_info, bool vsync)
@@ -467,6 +479,7 @@ rend_vk14_renderer_destroy(RendContextHandle handle)
 		vkDeviceWaitIdle(dev);
 
 		PDEBUG("[REND] Destroying renderer...");
+		rend_vk14_depth_destroy(ctx);
 		vkDestroySemaphore(dev, ctx->timeline_semaphore, vk_allocator);
 
 		for (u = 0; u < REND_MAX_FRAMES_IN_FLIGHT; ++u) {
@@ -545,6 +558,11 @@ rend_vk14_renderer_frame_begin(RendContextHandle handle)
 				return false;
 			ctx->require_swapchain_recreation = false;
 		}
+
+		rend_vk14_depth_flush_stale(ctx);
+		if (!rend_vk14_depth_ensure_img(ctx, &ctx->swap_depth,
+					ctx->swapchain.extent.width, ctx->swapchain.extent.height))
+			return false;
 
 		if (ctx->max_frames_in_flight == 0)
 			return false;
@@ -644,7 +662,7 @@ rend_vk14_renderer_frame_begin(RendContextHandle handle)
 		.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 		.newLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
 
-		.image = ctx->swapchain.depth_attachment.handle,
+		.image = ctx->swap_depth.handle,
 
 		.subresourceRange = (VkImageSubresourceRange) {
 			.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
@@ -898,11 +916,13 @@ rend_vk14_renderer_render_pass_begin(RendContextHandle handle, float r, float g,
 	RASSERT(color, "No color target.");
 	if (!color)
 		return;
+	if (!rend_vk14_depth_ensure_img(ctx, &ctx->swap_depth, color->width, color->height))
+		return;
 	rend_vk14__renderer_render_pass_begin_internal(
 			handle,
 			r, g, b, a,
 			color->view,
-			(uint64_t)ctx->swapchain.depth_attachment.view,
+			(uint64_t)ctx->swap_depth.view,
 			0, 0,
 			color->width, color->height,
 			VK_ATTACHMENT_LOAD_OP_CLEAR
@@ -925,11 +945,14 @@ rend_vk14_renderer_render_pass_begin_texture(RendContextHandle handle, RendTextu
 		rend_vk_texture_transition_layout(handle, ctx->frame_resources[ctx->frame_index].command_buffer, texture, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 		width = texture->width;
 		height = texture->height;
+		if (!rend_vk14_depth_ensure_img(ctx, &ctx->tex_depth, width, height))
+			return;
+		rend_vk14_depth_barrier_img(&ctx->tex_depth, ctx->frame_resources[ctx->frame_index].command_buffer);
 		rend_vk14__renderer_render_pass_begin_internal(
 				handle,
 				0, 0, 0, 0,
 				(uint64_t)texture->view,
-				(uint64_t)ctx->swapchain.depth_attachment.view,
+				(uint64_t)ctx->tex_depth.view,
 				0, 0,
 				width, height,
 				load
@@ -1014,7 +1037,7 @@ rend_vk14_buffer_create_lifetime(RendContextHandle handle, size_t size, RendBuff
 	RASSERT((mem_reqs.memoryTypeBits & (1u << index)) && "Buffer incompatible with chosen memory type!");
 
 	RendVkArenaAllocator *arena = (lifetime == REND_LIFETIME_FRAME) ? &ctx->arena_frame : &ctx->arena_persistent;
-	RendMemory vk_memory = rend_vk_arena_alloc(arena, mem_reqs.size, index);
+	RendMemory vk_memory = rend_vk_arena_alloc(arena, mem_reqs.size, mem_reqs.alignment, index);
 
 	if (vkBindBufferMemory(vk_device.logical_device, (VkBuffer)buffer.handle, (VkDeviceMemory)vk_memory.device_memory, vk_memory.offset) != VK_SUCCESS) {
 		REND__CRASH("Failed to bind VkBuffer memory!");
@@ -1154,7 +1177,7 @@ rend_vk14_texture_create(RendContextHandle handle, uint32_t width, uint32_t heig
 	vkGetImageMemoryRequirements(vk_device.logical_device, (VkImage)tex.handle, &mem_requirements);
 
 	uint32_t index = rend_vk_get_heap_index(mem_requirements.memoryTypeBits, vk_device.device_index);
-	tex.memory = rend_vk_arena_alloc(&ctx->arena_persistent, mem_requirements.size, index);
+	tex.memory = rend_vk_arena_alloc(&ctx->arena_persistent, mem_requirements.size, mem_requirements.alignment, index);
 
 	vkBindImageMemory(vk_device.logical_device, (VkImage)tex.handle, (VkDeviceMemory)tex.memory.device_memory, (VkDeviceSize)tex.memory.offset);
 
@@ -1181,11 +1204,11 @@ rend_vk14_texture_create(RendContextHandle handle, uint32_t width, uint32_t heig
 	/* per-texture sampler */
 	VkSamplerCreateInfo sampler_info = {
 		.sType        = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-		.magFilter    = VK_FILTER_LINEAR, /* force sharp upscaling */
-		.minFilter    = VK_FILTER_LINEAR, /* TODO: add filter setting to texture */
-		.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-		.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-		.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		.magFilter    = VK_FILTER_LINEAR,
+		.minFilter    = VK_FILTER_LINEAR,
+		.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+		.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+		.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
 
 		.mipmapMode   = (tex.mip_levels > 1) ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST,
 		.minLod       = 0.0f,
@@ -1558,7 +1581,7 @@ rend_vk14_pipeline_create(RendContextHandle handle, RendPipeline pipeline, Rend_
 
 		VkPipelineDepthStencilStateCreateInfo depth_stencil = { VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
 		depth_stencil.depthTestEnable = config.depth_test_enable;
-		depth_stencil.depthWriteEnable = VK_TRUE;
+		depth_stencil.depthWriteEnable = config.depth_test_enable ? VK_TRUE : VK_FALSE;
 		depth_stencil.depthCompareOp = VK_COMPARE_OP_LESS;
 		depth_stencil.depthBoundsTestEnable = VK_FALSE;
 		depth_stencil.stencilTestEnable = VK_FALSE;
@@ -1782,6 +1805,125 @@ rend_vk14_pipeline_destroy(RendVkPipeline *pipeline)
 	}
 }
 
+static void
+rend_vk14_depth_barrier_img(RendVkImage *img, VkCommandBuffer cmd)
+{
+	VkImageMemoryBarrier2 barrier;
+	VkDependencyInfo dep;
+
+	if (!img || !img->handle || !cmd)
+		return;
+
+	barrier = (VkImageMemoryBarrier2) {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.srcStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+		.srcAccessMask = 0,
+		.dstStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+		.dstAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+		.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		.newLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+		.image = img->handle,
+		.subresourceRange = {
+			.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+			.baseMipLevel = 0,
+			.levelCount = 1,
+			.baseArrayLayer = 0,
+			.layerCount = 1
+		},
+	};
+	dep = (VkDependencyInfo){VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
+	dep.imageMemoryBarrierCount = 1;
+	dep.pImageMemoryBarriers = &barrier;
+	vkCmdPipelineBarrier2(cmd, &dep);
+}
+
+static void
+rend_vk14_depth_flush_stale(RendVk14Context *ctx)
+{
+	uint32_t i;
+
+	if (!ctx || ctx->stale_depth_count == 0)
+		return;
+	if (vk_device.logical_device)
+		vkDeviceWaitIdle(vk_device.logical_device);
+	for (i = 0; i < ctx->stale_depth_count; i++)
+		rend_vk_image_destroy(&ctx->stale_depth[i]);
+	ctx->stale_depth_count = 0;
+}
+
+static bool
+rend_vk14_depth_ensure_img(RendVk14Context *ctx, RendVkImage *slot, uint32_t w, uint32_t h)
+{
+	RendVkImage img;
+	RendMemory mem;
+	uint32_t mem_type;
+	uint32_t heap;
+
+	RASSERT(ctx && slot && "No context provided.");
+	if (w < 1)
+		w = 1;
+	if (h < 1)
+		h = 1;
+	if (slot->handle && slot->width == w && slot->height == h)
+		return true;
+
+	if (!rend_vk_device_detect_depth_format(&vk_device)) {
+		vk_device.depth_format = VK_FORMAT_UNDEFINED;
+		PERROR("Failed to find a supported depth buffer format!");
+		return false;
+	}
+
+	img = rend_vk_image_create(
+			vk_device.logical_device,
+			VK_IMAGE_TYPE_2D,
+			w, h,
+			vk_device.depth_format,
+			VK_IMAGE_TILING_OPTIMAL,
+			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+			1, 1, 1,
+			VK_SAMPLE_COUNT_1_BIT,
+			VK_SHARING_MODE_EXCLUSIVE);
+	if (!img.handle) {
+		PERROR("Failed to create depth image.");
+		return false;
+	}
+
+	mem_type = rend_vk_image_required_memory_type(&img);
+	heap = rend_vk_get_heap_index(mem_type, vk_device.device_index);
+	mem = rend_vk_arena_alloc(&ctx->arena_persistent, img.requirements.size, img.requirements.alignment, heap);
+	rend_vk_image_bind_memory(&img, &mem);
+	rend_vk_image_view_create(&img, VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_DEPTH_BIT);
+	if (!img.view) {
+		PERROR("Failed to create depth view.");
+		rend_vk_image_destroy(&img);
+		return false;
+	}
+
+	if (slot->handle) {
+		if (ctx->stale_depth_count < REND_VK_STALE_DEPTH_MAX) {
+			ctx->stale_depth[ctx->stale_depth_count++] = *slot;
+		} else {
+			PERROR("Depth image grow limit; destroying in-use depth.");
+			rend_vk_image_destroy(slot);
+		}
+	}
+	*slot = img;
+
+	if (ctx->in_frame)
+		rend_vk14_depth_barrier_img(slot, ctx->frame_resources[ctx->frame_index].command_buffer);
+	return true;
+}
+
+static void
+rend_vk14_depth_destroy(RendVk14Context *ctx)
+{
+	if (!ctx)
+		return;
+	rend_vk14_depth_flush_stale(ctx);
+	rend_vk_image_destroy(&ctx->swap_depth);
+	rend_vk_image_destroy(&ctx->tex_depth);
+}
+
 static VkExtent2D
 rend_vk14_surface_extent(RendVk14Context *ctx, const VkSurfaceCapabilitiesKHR *caps)
 {
@@ -1811,7 +1953,6 @@ rend_vk14_offscreen_create(RendVk14Context *ctx, uint32_t width, uint32_t height
 {
 	RendVkImage color;
 	RendMemory color_mem;
-	RendMemory depth_mem;
 	uint32_t mem_type;
 	uint32_t heap;
 	VkFormat vk_format;
@@ -1843,7 +1984,7 @@ rend_vk14_offscreen_create(RendVk14Context *ctx, uint32_t width, uint32_t height
 
 	mem_type = rend_vk_image_required_memory_type(&color);
 	heap = rend_vk_get_heap_index(mem_type, vk_device.device_index);
-	color_mem = rend_vk_arena_alloc(&ctx->arena_persistent, color.requirements.size, heap);
+	color_mem = rend_vk_arena_alloc(&ctx->arena_persistent, color.requirements.size, color.requirements.alignment, heap);
 	rend_vk_image_bind_memory(&color, &color_mem);
 	rend_vk_image_view_create(&color, VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_COLOR_BIT);
 	if (!color.view) {
@@ -1877,39 +2018,7 @@ rend_vk14_offscreen_create(RendVk14Context *ctx, uint32_t width, uint32_t height
 		return false;
 	}
 
-	if (!rend_vk_device_detect_depth_format(&vk_device)) {
-		vk_device.depth_format = VK_FORMAT_UNDEFINED;
-		PERROR("Failed to find a supported depth buffer format!");
-		rend_vk14_offscreen_destroy(ctx);
-		return false;
-	}
-
-	ctx->swapchain.depth_attachment = rend_vk_image_create(
-			vk_device.logical_device,
-			VK_IMAGE_TYPE_2D,
-			width, height,
-			vk_device.depth_format,
-			VK_IMAGE_TILING_OPTIMAL,
-			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-			1, 1, 1,
-			VK_SAMPLE_COUNT_1_BIT,
-			VK_SHARING_MODE_EXCLUSIVE);
-	if (!ctx->swapchain.depth_attachment.handle) {
-		PERROR("Failed to create offscreen depth image.");
-		rend_vk14_offscreen_destroy(ctx);
-		return false;
-	}
-
-	mem_type = rend_vk_image_required_memory_type(&ctx->swapchain.depth_attachment);
-	heap = rend_vk_get_heap_index(mem_type, vk_device.device_index);
-	depth_mem = rend_vk_arena_alloc(&ctx->arena_persistent, ctx->swapchain.depth_attachment.requirements.size, heap);
-	rend_vk_image_bind_memory(&ctx->swapchain.depth_attachment, &depth_mem);
-	rend_vk_image_view_create(
-			&ctx->swapchain.depth_attachment,
-			VK_IMAGE_VIEW_TYPE_2D,
-			VK_IMAGE_ASPECT_DEPTH_BIT);
-	if (!ctx->swapchain.depth_attachment.view) {
-		PERROR("Failed to create offscreen depth view.");
+	if (!rend_vk14_depth_ensure_img(ctx, &ctx->swap_depth, width, height)) {
 		rend_vk14_offscreen_destroy(ctx);
 		return false;
 	}
@@ -1933,7 +2042,6 @@ rend_vk14_offscreen_destroy(RendVk14Context *ctx)
 		ctx->swapchain.images = 0;
 	}
 	ctx->swapchain.image_count = 0;
-	rend_vk_image_destroy(&ctx->swapchain.depth_attachment);
 	rend_vk_image_destroy(&ctx->offscreen_color);
 }
 
@@ -2177,43 +2285,11 @@ rend_vk14_swapchain_create(RendVk14Context *ctx, RendVkSwapchain *swapchain, VkS
 		}
 	}
 
-	/* depth resources */
-	if (!rend_vk_device_detect_depth_format(&vk_device)) {
-		vk_device.depth_format = VK_FORMAT_UNDEFINED;
-		PERROR("Failed to find a supported depth buffer format!");
+	swapchain->extent = swapchain_extent;
+	if (!rend_vk14_depth_ensure_img(ctx, &ctx->swap_depth, swapchain_extent.width, swapchain_extent.height)) {
 		rend_vk14_swapchain_destroy(ctx, swapchain);
 		return false;
 	}
-
-	swapchain->depth_attachment = rend_vk_image_create(
-			vk_device.logical_device,
-			VK_IMAGE_TYPE_2D,
-			swapchain_extent.width, swapchain_extent.height,
-			vk_device.depth_format,
-			VK_IMAGE_TILING_OPTIMAL,
-			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-			1, /* depth */
-			1, /* mip level */
-			1, /* layers */
-			VK_SAMPLE_COUNT_1_BIT,
-			VK_SHARING_MODE_EXCLUSIVE
-			);
-
-	uint32_t mem_type = rend_vk_image_required_memory_type(&swapchain->depth_attachment);
-	uint32_t depth_index = rend_vk_get_heap_index(mem_type, vk_device.device_index);
-
-	RASSERT(ctx);
-	RendMemory depth_mem = rend_vk_arena_alloc(&ctx->arena_persistent, swapchain->depth_attachment.requirements.size, depth_index);
-
-	rend_vk_image_bind_memory(&swapchain->depth_attachment, &depth_mem);
-
-	rend_vk_image_view_create(
-			&swapchain->depth_attachment,
-			VK_IMAGE_VIEW_TYPE_2D,
-			VK_IMAGE_ASPECT_DEPTH_BIT
-			);
-
-	swapchain->extent = swapchain_extent;
 	if (ctx->window) {
 		ctx->window_w = ctx->window->width;
 		ctx->window_h = ctx->window->height;
@@ -2229,8 +2305,6 @@ rend_vk14_swapchain_destroy(RendVk14Context *ctx, RendVkSwapchain *swapchain)
 	(void)ctx;
 	if (!swapchain || swapchain->handle == VK_NULL_HANDLE) return;
 	RASSERT(vk_device.logical_device);
-
-	rend_vk_image_destroy(&swapchain->depth_attachment);
 
 	if (swapchain->present_semaphores) {
 		for (i = 0; i < swapchain->image_count; i++) {

@@ -2,22 +2,6 @@
  * FUSE - Immediate-mode UI command buffer - Copyright (c) 2025-2026 Vasco Alves
  * See LICENSE file for license info.
  *
- * DESCRITION:
- * Mainly a UI layouting library for games. Designed to be used to layout
- * game UI dynamically and easily. There is a fallback bitmap font.
- *
- * Not everything is a flexbox like in Clay but flexboxes do exist.
- * Flexbox takes time to compute. Not that much but still not necessary.
- *
- * FuseClass allows you to package a certain layouting configuration
- * into a struct.
- *
- * Named tags allow you to get the names of specific elements.
- *
- * uint64_t ids allows the user to create custom widgets and plugins,
- * that can be identified by the 
- * 
- *
  * SHOUTOUTS:
  * - https://caseymuratori.com/blog_0001
  *   I've been writting my own UI code ever since I stumbled upon this
@@ -31,14 +15,10 @@
  *   It was that simpler architecture I was looking for in a UI library
  *   without being completely stripped down.
  * - https://github.com/rxi/microui/tree/master
- *   Being only 1100 sloc 
+ *   1100 sloc 
  *
  *   PREFIX: 
  *     FUSE_ (macros)  Fuse (types)  fuse_ (functions)
- *
- * TODO:
- * - Scrollable divs. 
- * - Tabs.
  *
  * =========================================================================== */
 
@@ -171,8 +151,7 @@ typedef struct FuseClass {
 // █   ███ █ █ █ █ ███   █
 // ███ ███ █ █  █  ███ ███
 // 
-// The "Context" of Fuse UI where elements are "drawn" to.
-//
+// The "Context" of Fuse UI 
 size_t     fuse_canvas_memory(size_t max_elements); // Returns amount of memory required.
 FuseCanvas fuse_canvas_create(void *buf, size_t bufsize); // Creates the canvas and places it in the allocated memory region.
 FuseError  fuse_canvas_error(FuseCanvas);
@@ -180,34 +159,18 @@ void       fuse_canvas_clear(FuseCanvas);
 void       fuse_canvas_resize(FuseCanvas, float w, float h);
 void       fuse_canvas_pointer(FuseCanvas, FusePointerState pointer_state, float x, float y);
 FuseCmd   *fuse_canvas_draw(FuseCanvas, size_t *cmd_count);
-// useful
-float fuse_percent_x(FuseCanvas, float p);
-float fuse_percent_y(FuseCanvas, float p);
 
-
-// █                      █
-// █                   █
-// █  ███ █ █ ███ █ █ ███ █ ███ ███
-// █    █ █ █ █ █ █ █  █  █ █ █ █ █
-// █  ███ █ █ █ █ █ █  █  █ █ █ █ █
-// ██ ███ ███ ███ ███  ██ █ █ █ ███
-//          █                     █
-//        ███                   ███
-// 
 void fuse_div_begin(FuseCanvas, float x, float y, float w, float h, const FuseClass *cls);
 void fuse_div_end(FuseCanvas);
 
-//     █
-//     █                     █
-// ███ █  ███ █████ ███ ███ ███ ███
-// ███ █  ███ █ █ █ ███ █ █  █  █
-// █   █  █   █ █ █ █   █ █  █    █
-// ███ ██ ███ █ █ █ ███ █ █  ██ ███
-//
-// id functions stem the next element with a name
-// We can then extract information from that tag.
+/**
+ * Stamp the next element. Consumed by that next call.
+ * fuse_idi is for lists (name, index). Hover queries use the same hash. 
+ */
 void fuse_id(FuseCanvas, const char *name);
 void fuse_idi(FuseCanvas, const char *name, int index);
+
+/* True if the named element's last-frame box contains the pointer. */
 bool fuse_element_is_hovered(FuseCanvas, const char *name);
 
 /* Clicked this frame: last-frame hover + released-this-frame.
@@ -216,30 +179,20 @@ bool fuse_button(FuseCanvas, float x, float y, float w, float h, uint32_t select
 
 /* Button plus centered 5x7 label. Ink is 0xFF000000. */
 bool fuse_button_text(FuseCanvas, char *text, float x, float y, float w, float h, uint32_t selected, uint32_t hovered);
-void fuse_slider(FuseCanvas, float x, float y, float w, float h, uint32_t track, uint32_t nob, float *nob_pos);
 
-//   █
-//   █
-// ███ ███ ███ █ █ █
-// █ █ █     █ █ █ █
-// █ █ █   ███ █ █ █
-// ███ █   ███  █ █
-//
-void    fuse_rect(FuseCanvas, float x, float y, float w, float h, uint32_t color);
 
-//  █           █
-// ███ ███ █ █ ███
-//  █  ███  █   █
-//  █  █    █   █
-//  ██ ███ █ █  ██
-//
-//  Text, font and bitmaps.
-
-// FuseFont
-//
+void    fuse_rect(FuseCanvas, float x, float y, float w, float h, uint32_t color); // Filled rect in the current screen. Pending id is consumed if stamped.
 void    fuse_text(FuseCanvas, float x, float y, float s, const char *str, uint32_t color); // 5x7 bitmap, one RECT per run. Scale s is pixel size of one glyph pixel.
 float   fuse_text_width(const char *str, float s); // Advance is 6*s per character, last gap omitted.
 
+/**
+ * Horizontal slider. nob_pos is 0..1, written while captured.
+ * Capture holds until release even if the pointer leaves the track. 
+ */
+void fuse_slider(FuseCanvas, float x, float y, float w, float h, uint32_t track, uint32_t nob, float *nob_pos);
 
+/* p percent of the *current* screen. Left/top is 0. */
+float fuse_percent_x(FuseCanvas, float p);
+float fuse_percent_y(FuseCanvas, float p);
 
 #endif /* FUSE_H */

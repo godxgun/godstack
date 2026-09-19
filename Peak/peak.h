@@ -111,10 +111,12 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+#if !defined(__cplusplus)
 #if !( \
     (defined(__STDC__) && __STDC__ == 1 && defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L)\
 )
 #error "Peak requires C99."
+#endif
 #endif
 
 //   █
