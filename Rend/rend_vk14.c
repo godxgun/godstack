@@ -1232,7 +1232,10 @@ rend_vk14_texture_destroy(RendContextHandle handle, RendTexture *tex)
 
 	RASSERT(handle && tex);
 	ctx = (RendVk14Context *)handle;
-	RASSERT(!ctx->in_frame, "must not destroy textures during a frame");
+	if (ctx->in_frame) {
+		RASSERT(0 && "must not destroy textures during a frame");
+		return;
+	}
 	if (tex->borrowed) {
 		RASSERT(0 && "do not destroy color_target");
 		return;
