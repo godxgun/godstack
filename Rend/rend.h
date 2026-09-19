@@ -62,7 +62,7 @@
 
 #define REND_MAJOR 1  // breaking API changes
 #define REND_MINOR 6  // non-breaking features
-#define REND_PATCH 10  // non-breaking patches and bug fixes
+#define REND_PATCH 11  // non-breaking patches and bug fixes
 
 #ifndef REND_VK_ARENA_GROW
 #define REND_VK_ARENA_GROW 2
@@ -406,6 +406,7 @@ enum RendBufferType_t {
  * 1.6.8 - @vasco - exact-size swap/texture depths; NEAREST sampler; arena honors image alignment
  * 1.6.9 - @vasco - LINEAR mag/min sampler; CLAMP_TO_EDGE
  * 1.6.10 - @vasco - texture_destroy uses ctx without REND_DEBUG
+ * 1.6.11 - @vasco - device score: vulkan 1.3 floor, implicit transfer queues (AMD)
  */
 
 /*

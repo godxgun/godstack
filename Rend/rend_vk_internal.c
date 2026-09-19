@@ -358,12 +358,19 @@ rend_vk_device_score_default(RendVkDevice *device, RendSpecs minimum_specs, cons
 
 	score = 0;
 
-	if (VK_API_VERSION_MAJOR(device->properties.apiVersion) < 1 ||
-			VK_API_VERSION_MINOR(device->properties.apiVersion) < 4) {
+	/* Backend uses 1.3 core (dynamic rendering, sync2). Instance is 1.4.
+	 * Vega / older RADV still advertise 1.3 on the device. */
+	if (device->properties.apiVersion < VK_API_VERSION_1_3) {
+		PDEBUG("reject %s: vulkan %u.%u (need 1.3)",
+			device->properties.deviceName,
+			VK_API_VERSION_MAJOR(device->properties.apiVersion),
+			VK_API_VERSION_MINOR(device->properties.apiVersion));
 		return 0;
 	}
-	if (!device->features.shaderInt64)
+	if (!device->features.shaderInt64) {
+		PDEBUG("reject %s: no shaderInt64", device->properties.deviceName);
 		return 0;
+	}
 
 	device->graphics_family_index = UINT32_MAX;
 	device->present_family_index = UINT32_MAX;
@@ -400,7 +407,9 @@ rend_vk_device_score_default(RendVkDevice *device, RendSpecs minimum_specs, cons
 				transfer_score++;
 			}
 
-			if (q_family[i].queueFlags & VK_QUEUE_TRANSFER_BIT) {
+			/* TRANSFER_BIT is optional on graphics/compute families (Vulkan spec).
+			 * AMD often omits it; NVIDIA usually sets it. */
+			if (q_family[i].queueFlags & (VK_QUEUE_TRANSFER_BIT | VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT)) {
 				if (transfer_score <= min_transfer_score) {
 					min_transfer_score = transfer_score;
 					device->transfer_family_index = i;
@@ -424,15 +433,26 @@ rend_vk_device_score_default(RendVkDevice *device, RendSpecs minimum_specs, cons
 			(minimum_specs.present && device->present_family_index == UINT32_MAX) ||
 			(minimum_specs.compute && device->compute_family_index == UINT32_MAX) ||
 			(minimum_specs.transfer && device->transfer_family_index == UINT32_MAX)) {
+		PDEBUG("reject %s: missing queue (g=%u p=%u c=%u t=%u)",
+			device->properties.deviceName,
+			device->graphics_family_index,
+			device->present_family_index,
+			device->compute_family_index,
+			device->transfer_family_index);
 		return 0;
 	}
 
 	if (device->surface) {
-		if (!rend_vk_device_query_swapchain_support(device))
+		if (!rend_vk_device_query_swapchain_support(device)) {
+			PDEBUG("reject %s: swapchain query failed", device->properties.deviceName);
 			return 0;
-		if (device->present_family_index == UINT32_MAX)
+		}
+		if (device->present_family_index == UINT32_MAX) {
+			PDEBUG("reject %s: no present queue", device->properties.deviceName);
 			return 0;
+		}
 		if (device->swapchain_support.format_count < 1 || device->swapchain_support.present_mode_count < 1) {
+			PDEBUG("reject %s: no swapchain formats/modes", device->properties.deviceName);
 			return 0;
 		}
 	} else {
@@ -478,12 +498,14 @@ rend_vk_device_score_default(RendVkDevice *device, RendSpecs minimum_specs, cons
 
 			rfree(available_extentions);
 			if (!overall_found) {
+				PDEBUG("reject %s: missing device extension", device->properties.deviceName);
 				return 0;
 			}
 		}
 	}
 
 	if (minimum_specs.sampler_anisotropy && !device->features.samplerAnisotropy) {
+		PDEBUG("reject %s: no samplerAnisotropy", device->properties.deviceName);
 		return 0;
 	}
 
@@ -536,7 +558,7 @@ rend_vk_device_create(VkSurfaceKHR surface, RendSpecs specs, RendVkDevice *out_d
 		best_score = 1;
 		best_device = (RendVkDevice){0};
 
-		PDEBUG("DEVICE                SCORE");
+		PDEBUG("DEVICE                SCORE    API");
 		for (i = 0; i < device_count; i++) {
 			RendVkDevice scoring;
 			uint32_t dev_score;
@@ -549,7 +571,10 @@ rend_vk_device_create(VkSurfaceKHR surface, RendSpecs specs, RendVkDevice *out_d
 			vkGetPhysicalDeviceMemoryProperties(physical_devices[i], &scoring.memory);
 
 			dev_score = rend_vk_device_score_default(&scoring, specs, extension_names, 1);
-			PDEBUG("%-20.20s  %5d", scoring.properties.deviceName, dev_score);
+			PDEBUG("%-20.20s  %5d  %u.%u.%u", scoring.properties.deviceName, dev_score,
+				VK_API_VERSION_MAJOR(scoring.properties.apiVersion),
+				VK_API_VERSION_MINOR(scoring.properties.apiVersion),
+				VK_API_VERSION_PATCH(scoring.properties.apiVersion));
 			if (dev_score >= best_score) {
 				if (best_device.swapchain_support.format) {
 					rfree(best_device.swapchain_support.format);
