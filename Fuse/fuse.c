@@ -20,6 +20,8 @@
 
 #define FUSE_MEM_ALIGN 8
 #define FUSE_CMDS_PER_EL 4
+#define FUSE_CLIP_MAX 16
+#define FUSE_SCREEN_MAX 32
 #define FUSE_EDGE_NONE 0
 #define FUSE_EDGE_PRESSED 1
 #define FUSE_EDGE_RELEASED 2
@@ -27,6 +29,7 @@
 #define FUSE_EL_BUTTON 2
 #define FUSE_EL_SLIDER 4
 #define FUSE_EL_RECT 8
+#define FUSE_EL_SCROLL 16
 #define FUSE_GLYPH(r0, r1, r2, r3, r4, r5, r6) \
     ((uint64_t)(r0) | ((uint64_t)(r1) << 5) | ((uint64_t)(r2) << 10) | \
      ((uint64_t)(r3) << 15) | ((uint64_t)(r4) << 20) | ((uint64_t)(r5) << 25) | \
@@ -37,12 +40,14 @@ typedef struct FuseScreen {
 } FuseScreen;
 
 typedef struct FuseElement {
-    uint32_t id;
+    float *scroll_ptr;
+    const FuseClass *cls;
     float x, y, w, h;
+    float nob_pos;
+    float scroll;
+    uint32_t id;
     uint32_t color;
     uint32_t color_alt;
-    float nob_pos;
-    const FuseClass *cls;
     uint32_t first_child;
     uint32_t last_child;
     uint32_t next_sibling;
@@ -61,13 +66,14 @@ typedef struct FuseMem {
     size_t hash_cap;
     size_t elements_off;
     size_t screens_off;
+    size_t screen_cap;
     size_t cmds_off;
     size_t cmd_cap;
 } FuseMem;
 
 struct fuse_canvas_t {
     size_t max_elements;
-    size_t hash_cap, cmd_cap;
+    size_t hash_cap, cmd_cap, screen_cap;
     FuseElement *elements;
     uint32_t element_count, cmd_count;
     FuseScreen *screens;
@@ -76,6 +82,9 @@ struct fuse_canvas_t {
     FuseHashItem *hash;
     uint32_t generation, capture_id, pending_id;
     float width, height, pointer_x, pointer_y;
+    float wheel_x, wheel_y;
+    float clip[FUSE_CLIP_MAX][4];
+    uint32_t wheel_capture, clip_n;
     int pointer_state, pointer_edge;
     FuseError error;
 };
@@ -109,6 +118,14 @@ static void fuse_internal_emit_clip(FuseCanvas c, uint8_t type, float x, float y
 static void fuse_internal_emit_tree(FuseCanvas c, uint32_t index, float ox, float oy);
 static void fuse_internal_emit_children(FuseCanvas c, FuseElement *el, float ox, float oy);
 static uint32_t fuse_internal_open_maybe_anon(FuseCanvas c, float x, float y, float w, float h, uint8_t flags);
+static uint32_t fuse_internal_div_open(FuseCanvas c, float x, float y, float w, float h, const FuseClass *cls, uint8_t flags);
+static int fuse_internal_scroll_axis(FuseElement *el);
+static float fuse_internal_content_end(FuseCanvas c, FuseElement *el, int main_ax);
+static void fuse_internal_scroll_clamp(FuseCanvas c, FuseElement *el);
+static int fuse_internal_clip_apply(FuseCanvas c, float *x, float *y, float *w, float *h);
+static void fuse_internal_clip_push(FuseCanvas c, float x, float y, float w, float h);
+static void fuse_internal_clip_pop(FuseCanvas c);
+static void fuse_internal_emit_scrollbar(FuseCanvas c, FuseElement *el, float cx, float cy);
 static uint64_t fuse_internal_glyph(int c);
 
 /* 5x7, row bits with MSB = left pixel. */
@@ -184,13 +201,16 @@ fuse_internal_mem(FuseMem *m, size_t n)
     FASSERT(m);
     m->hash_cap = fuse_internal_hash_cap(n);
     m->cmd_cap = n * FUSE_CMDS_PER_EL;
+    m->screen_cap = n;
+    if (m->screen_cap > FUSE_SCREEN_MAX)
+        m->screen_cap = FUSE_SCREEN_MAX;
     off = fuse_internal_align(sizeof (struct fuse_canvas_t));
     m->hash_off = off;
     off = fuse_internal_align(off + m->hash_cap * sizeof (FuseHashItem));
     m->elements_off = off;
     off = fuse_internal_align(off + n * sizeof (FuseElement));
     m->screens_off = off;
-    off = fuse_internal_align(off + n * sizeof (FuseScreen));
+    off = fuse_internal_align(off + m->screen_cap * sizeof (FuseScreen));
     m->cmds_off = off;
     off = fuse_internal_align(off + m->cmd_cap * sizeof (FuseCmd));
     m->total = off;
@@ -540,6 +560,71 @@ fuse_internal_layout_class(FuseCanvas c, FuseElement *el)
     }
 }
 
+static int
+fuse_internal_scroll_axis(FuseElement *el)
+{
+    if (el && el->cls && el->cls->direction != FUSE_DIRECTION_COLUMN)
+        return 0;
+    return 1;
+}
+
+static float
+fuse_internal_content_end(FuseCanvas c, FuseElement *el, int main_ax)
+{
+    uint32_t idx;
+    float end;
+    float pad;
+
+    end = 0.0f;
+    pad = 0.0f;
+    if (el->cls)
+        pad = main_ax == 0 ? el->cls->pad_r : el->cls->pad_b;
+    for (idx = el->first_child; idx != 0; idx = c->elements[idx].next_sibling) {
+        FuseElement *ch;
+        float e;
+
+        ch = &c->elements[idx];
+        e = main_ax == 0 ? ch->x + ch->w : ch->y + ch->h;
+        if (e > end)
+            end = e;
+    }
+    return end + pad;
+}
+
+static void
+fuse_internal_scroll_clamp(FuseCanvas c, FuseElement *el)
+{
+    int main_ax;
+    float content;
+    float view;
+    float max_scroll;
+    float delta;
+
+    main_ax = fuse_internal_scroll_axis(el);
+    content = fuse_internal_content_end(c, el, main_ax);
+    view = main_ax == 0 ? el->w : el->h;
+    max_scroll = content - view;
+    if (max_scroll < 0.0f)
+        max_scroll = 0.0f;
+    if (el->scroll_ptr && el->id == c->wheel_capture) {
+        delta = main_ax == 0 ? c->wheel_x : c->wheel_y;
+        if (main_ax == 0 && delta == 0.0f)
+            delta = c->wheel_y;
+        *el->scroll_ptr -= delta;
+        c->wheel_x = 0.0f;
+        c->wheel_y = 0.0f;
+    }
+    if (el->scroll_ptr) {
+        if (*el->scroll_ptr < 0.0f)
+            *el->scroll_ptr = 0.0f;
+        if (*el->scroll_ptr > max_scroll)
+            *el->scroll_ptr = max_scroll;
+        el->scroll = *el->scroll_ptr;
+    } else {
+        el->scroll = 0.0f;
+    }
+}
+
 static void
 fuse_internal_layout(FuseCanvas c, uint32_t index)
 {
@@ -550,6 +635,8 @@ fuse_internal_layout(FuseCanvas c, uint32_t index)
         fuse_internal_layout_class(c, el);
     for (child = el->first_child; child != 0; child = c->elements[child].next_sibling)
         fuse_internal_layout(c, child);
+    if (el->flags & FUSE_EL_SCROLL)
+        fuse_internal_scroll_clamp(c, el);
 }
 
 static int
@@ -562,6 +649,98 @@ fuse_internal_rect_visible(FuseCanvas c, float x, float y, float w, float h)
     if (x >= c->width || y >= c->height)
         return 0;
     return 1;
+}
+
+static int
+fuse_internal_clip_apply(FuseCanvas c, float *x, float *y, float *w, float *h)
+{
+    float cx, cy, cw, ch, x1, y1, cx1, cy1;
+
+    if (!c || c->clip_n == 0)
+        return 1;
+    cx = c->clip[c->clip_n - 1][0];
+    cy = c->clip[c->clip_n - 1][1];
+    cw = c->clip[c->clip_n - 1][2];
+    ch = c->clip[c->clip_n - 1][3];
+    x1 = *x + *w;
+    y1 = *y + *h;
+    cx1 = cx + cw;
+    cy1 = cy + ch;
+    if (*x < cx) *x = cx;
+    if (*y < cy) *y = cy;
+    if (x1 > cx1) x1 = cx1;
+    if (y1 > cy1) y1 = cy1;
+    *w = x1 - *x;
+    *h = y1 - *y;
+    if (*w <= 0.0f || *h <= 0.0f) {
+        *w = 0.0f;
+        *h = 0.0f;
+        return 0;
+    }
+    return 1;
+}
+
+static void
+fuse_internal_clip_push(FuseCanvas c, float x, float y, float w, float h)
+{
+    if (c->clip_n >= FUSE_CLIP_MAX)
+        return;
+    if (!fuse_internal_clip_apply(c, &x, &y, &w, &h)) {
+        w = 0.0f;
+        h = 0.0f;
+    }
+    c->clip[c->clip_n][0] = x;
+    c->clip[c->clip_n][1] = y;
+    c->clip[c->clip_n][2] = w;
+    c->clip[c->clip_n][3] = h;
+    c->clip_n++;
+}
+
+static void
+fuse_internal_clip_pop(FuseCanvas c)
+{
+    if (c->clip_n > 1)
+        c->clip_n--;
+}
+
+static void
+fuse_internal_emit_scrollbar(FuseCanvas c, FuseElement *el, float cx, float cy)
+{
+    int main_ax;
+    float content;
+    float view;
+    float max_scroll;
+    float t;
+    float nob;
+    float bar;
+
+    main_ax = fuse_internal_scroll_axis(el);
+    content = fuse_internal_content_end(c, el, main_ax);
+    view = main_ax == 0 ? el->w : el->h;
+    if (content <= view)
+        return;
+    max_scroll = content - view;
+    t = el->scroll / max_scroll;
+    if (t < 0.0f) t = 0.0f;
+    if (t > 1.0f) t = 1.0f;
+    bar = 4.0f;
+    if (main_ax == 1) {
+        nob = view * view / content;
+        if (nob < 8.0f)
+            nob = 8.0f;
+        if (nob > view)
+            nob = view;
+        fuse_internal_emit_rect(c, 0, cx + el->w - bar - 1.0f, cy, bar, view, 0xFF222222u);
+        fuse_internal_emit_rect(c, 0, cx + el->w - bar - 1.0f, cy + t * (view - nob), bar, nob, 0xFF888888u);
+    } else {
+        nob = view * view / content;
+        if (nob < 8.0f)
+            nob = 8.0f;
+        if (nob > view)
+            nob = view;
+        fuse_internal_emit_rect(c, 0, cx, cy + el->h - bar - 1.0f, view, bar, 0xFF222222u);
+        fuse_internal_emit_rect(c, 0, cx + t * (view - nob), cy + el->h - bar - 1.0f, nob, bar, 0xFF888888u);
+    }
 }
 
 static FuseCmd *
@@ -624,18 +803,24 @@ fuse_internal_emit_tree(FuseCanvas c, uint32_t index, float ox, float oy)
     FuseElement *el;
     FuseHashItem *item;
     float cx, cy, nob_w, nob_x;
+    float bx, by, bw, bh;
     el = &c->elements[index];
     cx = ox + el->x;
     cy = oy + el->y;
     if (el->id != 0) {
         item = fuse_internal_hash_slot(c, el->id, 1);
         if (item) {
+            bx = cx;
+            by = cy;
+            bw = el->w;
+            bh = el->h;
+            fuse_internal_clip_apply(c, &bx, &by, &bw, &bh);
             item->id = el->id;
             item->generation = c->generation;
-            item->x = cx;
-            item->y = cy;
-            item->w = el->w;
-            item->h = el->h;
+            item->x = bx;
+            item->y = by;
+            item->w = bw;
+            item->h = bh;
         } else {
             fuse_internal_fail(c, FUSE_ERR_OVERFLOW);
             return;
@@ -646,11 +831,25 @@ fuse_internal_emit_tree(FuseCanvas c, uint32_t index, float ox, float oy)
         return;
     }
     if (el->flags & FUSE_EL_DIV) {
+        float cox, coy;
+
         if (el->color != 0)
             fuse_internal_emit_rect(c, el->id, cx, cy, el->w, el->h, el->color);
         fuse_internal_emit_clip(c, FUSE_CMD_CLIP_START, cx, cy, el->w, el->h);
-        fuse_internal_emit_children(c, el, cx, cy);
+        fuse_internal_clip_push(c, cx, cy, el->w, el->h);
+        cox = cx;
+        coy = cy;
+        if (el->flags & FUSE_EL_SCROLL) {
+            if (fuse_internal_scroll_axis(el) == 0)
+                cox -= el->scroll;
+            else
+                coy -= el->scroll;
+        }
+        fuse_internal_emit_children(c, el, cox, coy);
+        if (el->flags & FUSE_EL_SCROLL)
+            fuse_internal_emit_scrollbar(c, el, cx, cy);
         fuse_internal_emit_clip(c, FUSE_CMD_CLIP_END, cx, cy, el->w, el->h);
+        fuse_internal_clip_pop(c);
         return;
     }
     if (el->flags & FUSE_EL_BUTTON) {
@@ -700,6 +899,7 @@ fuse_canvas_create(void *buf, size_t bufsize)
     c->max_elements = n;
     c->hash_cap = m.hash_cap;
     c->cmd_cap = m.cmd_cap;
+    c->screen_cap = m.screen_cap;
     c->hash = (FuseHashItem *)(bytes + m.hash_off);
     c->elements = (FuseElement *)(bytes + m.elements_off);
     c->screens = (FuseScreen *)(bytes + m.screens_off);
@@ -758,6 +958,16 @@ fuse_canvas_pointer(FuseCanvas c, FusePointerState pointer_state, float x, float
     c->pointer_state = pointer_state;
 }
 
+void
+fuse_canvas_wheel(FuseCanvas c, float dx, float dy)
+{
+    FASSERT(c, "null canvas");
+    if (!c)
+        return;
+    c->wheel_x += dx;
+    c->wheel_y += dy;
+}
+
 FuseCmd *
 fuse_canvas_draw(FuseCanvas c, size_t *cmd_count)
 {
@@ -766,42 +976,82 @@ fuse_canvas_draw(FuseCanvas c, size_t *cmd_count)
     if (cmd_count)
         *cmd_count = 0;
     if (!fuse_internal_ok(c))
-        return NULL;
+        goto done;
     if (c->screen_count != 1) {
         fuse_internal_fail(c, FUSE_ERR_UNBALANCED);
-        return NULL;
+        goto done;
     }
     fuse_internal_layout(c, 0);
     c->cmd_count = 0;
+    c->clip_n = 1;
+    c->clip[0][0] = 0.0f;
+    c->clip[0][1] = 0.0f;
+    c->clip[0][2] = c->width;
+    c->clip[0][3] = c->height;
     fuse_internal_emit_tree(c, 0, 0.0f, 0.0f);
     if (!fuse_internal_ok(c))
-        return NULL;
+        goto done;
     if (cmd_count)
         *cmd_count = c->cmd_count;
+done:
+    c->wheel_x = 0.0f;
+    c->wheel_y = 0.0f;
+    c->wheel_capture = 0;
+    if (!fuse_internal_ok(c))
+        return NULL;
     return c->cmds;
+}
+
+static uint32_t
+fuse_internal_div_open(FuseCanvas c, float x, float y, float w, float h, const FuseClass *cls, uint8_t flags)
+{
+    uint32_t index;
+
+    if (!fuse_internal_ok(c))
+        return 0;
+    if (w <= 0.0f || h <= 0.0f)
+        return 0;
+    if (c->screen_count >= c->screen_cap) {
+        fuse_internal_fail(c, FUSE_ERR_OVERFLOW);
+        return 0;
+    }
+    index = fuse_internal_open_el(c, x, y, w, h, flags);
+    if (!fuse_internal_ok(c))
+        return 0;
+    c->elements[index].cls = cls;
+    c->elements[index].color = cls ? cls->color : 0;
+    c->screens[c->screen_count].element = index;
+    c->screen_count++;
+    return index;
 }
 
 void
 fuse_div_begin(FuseCanvas c, float x, float y, float w, float h, const FuseClass *cls)
 {
-    uint32_t index;
     FASSERT(c, "null canvas");
     FASSERT(w > 0.0f && h > 0.0f, "div w,h must be > 0");
-    if (!fuse_internal_ok(c))
+    fuse_internal_div_open(c, x, y, w, h, cls, FUSE_EL_DIV);
+}
+
+void
+fuse_div_begin_scroll(FuseCanvas c, float x, float y, float w, float h, const FuseClass *cls, float *scroll)
+{
+    uint32_t index;
+    uint32_t id;
+
+    FASSERT(c, "null canvas");
+    FASSERT(scroll, "null scroll");
+    FASSERT(w > 0.0f && h > 0.0f, "div w,h must be > 0");
+    if (!scroll)
         return;
-    if (w <= 0.0f || h <= 0.0f)
+    index = fuse_internal_div_open(c, x, y, w, h, cls, (uint8_t)(FUSE_EL_DIV | FUSE_EL_SCROLL));
+    if (!fuse_internal_ok(c) || index == 0)
         return;
-    if (c->screen_count >= c->max_elements) {
-        fuse_internal_fail(c, FUSE_ERR_OVERFLOW);
-        return;
-    }
-    index = fuse_internal_open_el(c, x, y, w, h, FUSE_EL_DIV);
-    if (!fuse_internal_ok(c))
-        return;
-    c->elements[index].cls = cls;
-    c->elements[index].color = cls ? cls->color : 0;
-    c->screens[c->screen_count].element = index;
-    c->screen_count++;
+    c->elements[index].scroll_ptr = scroll;
+    c->elements[index].scroll = *scroll;
+    id = c->elements[index].id;
+    if (fuse_internal_last_hit(c, id))
+        c->wheel_capture = id;
 }
 
 void

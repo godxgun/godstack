@@ -22,6 +22,7 @@ static void test_insert_does_not_steal(void);
 static void test_unbalanced(void);
 static void test_percent(void);
 static void test_rect_text(void);
+static void test_scroll(void);
 
 void
 expect(int ok, const char *what)
@@ -70,6 +71,7 @@ test_memory(void)
     expect(fuse_canvas_error(NULL) == FUSE_ERR_BUF_TOO_SMALL, "error null canvas");
     need = fuse_canvas_memory(64);
     expect(need > 0 && need <= sizeof buf, "memory(64) fits");
+    expect(fuse_canvas_memory(8192) <= (2u << 20), "memory(8192) fits 2MiB");
     c = fuse_canvas_create(buf, need);
     expect(c != NULL, "create exact");
     expect(fuse_canvas_error(c) == FUSE_ERR_OK, "create ok");
@@ -330,6 +332,113 @@ test_rect_text(void)
     expect(clicked, "button_text click");
 }
 
+void
+test_scroll(void)
+{
+    unsigned char buf[1 << 16];
+    FuseCanvas c;
+    size_t n, i;
+    FuseCmd *cmds, *r;
+    float scroll;
+    int saw_clip;
+    int clicked;
+    int nclip;
+
+    printf("scroll\n");
+    c = fuse_canvas_create(buf, sizeof buf);
+    fuse_canvas_resize(c, 200, 200);
+    fuse_canvas_pointer(c, FUSE_POINTER_RELEASED, 0, 0);
+
+    scroll = 20.0f;
+    fuse_canvas_clear(c);
+    fuse_id(c, "list");
+    fuse_div_begin_scroll(c, 50, 50, 100, 50, NULL, &scroll); {
+        fuse_rect(c, 0, 0, 10, 10, 0xAABBCCDDu);
+        fuse_rect(c, 0, 20, 10, 10, 0x11111111u);
+        fuse_rect(c, 0, 40, 10, 10, 0x22222222u);
+        fuse_rect(c, 0, 60, 10, 10, 0x33333333u);
+    } fuse_div_end(c);
+    cmds = fuse_canvas_draw(c, &n);
+    expect(cmds != NULL, "scroll draw");
+    expect(nearly(scroll, 20.0f, 0.01f), "scroll kept");
+    r = find_rect(cmds, n, 0xAABBCCDD);
+    expect(r && nearly(r->rect.x, 50, 0.01f) && nearly(r->rect.y, 30, 0.01f), "child offset by scroll");
+    saw_clip = 0;
+    nclip = 0;
+    if (cmds) {
+        for (i = 0; i < n; i++) {
+            if (cmds[i].type == FUSE_CMD_CLIP_START) {
+                saw_clip = 1;
+                expect(nearly(cmds[i].clip.x, 50, 0.01f) && nearly(cmds[i].clip.h, 50, 0.01f), "clip viewport");
+            }
+            if (cmds[i].type == FUSE_CMD_CLIP_START || cmds[i].type == FUSE_CMD_CLIP_END)
+                nclip++;
+        }
+    }
+    expect(saw_clip && nclip >= 2, "clip pair");
+
+    scroll = 999.0f;
+    fuse_canvas_clear(c);
+    fuse_id(c, "list");
+    fuse_div_begin_scroll(c, 50, 50, 100, 50, NULL, &scroll); {
+        fuse_rect(c, 0, 0, 10, 10, 0xAABBCCDDu);
+        fuse_rect(c, 0, 70, 10, 10, 0x44444444u);
+    } fuse_div_end(c);
+    fuse_canvas_draw(c, &n);
+    expect(nearly(scroll, 30.0f, 0.01f), "scroll clamped to content");
+
+    scroll = 0.0f;
+    fuse_canvas_pointer(c, FUSE_POINTER_RELEASED, 60, 60);
+    fuse_canvas_clear(c);
+    fuse_id(c, "list");
+    fuse_div_begin_scroll(c, 50, 50, 100, 50, NULL, &scroll); {
+        fuse_rect(c, 0, 0, 40, 40, 0x55555555u);
+        fuse_rect(c, 0, 80, 10, 10, 0x66666666u);
+    } fuse_div_end(c);
+    fuse_canvas_draw(c, &n);
+
+    fuse_canvas_wheel(c, 0, 24.0f);
+    fuse_canvas_clear(c);
+    fuse_id(c, "list");
+    fuse_div_begin_scroll(c, 50, 50, 100, 50, NULL, &scroll); {
+        fuse_rect(c, 0, 0, 40, 40, 0x55555555u);
+        fuse_rect(c, 0, 80, 10, 10, 0x66666666u);
+    } fuse_div_end(c);
+    fuse_canvas_draw(c, &n);
+    expect(nearly(scroll, 0.0f, 0.01f), "wheel up clamps at 0");
+
+    fuse_canvas_wheel(c, 0, -24.0f);
+    fuse_canvas_clear(c);
+    fuse_id(c, "list");
+    fuse_div_begin_scroll(c, 50, 50, 100, 50, NULL, &scroll); {
+        fuse_rect(c, 0, 0, 40, 40, 0x55555555u);
+        fuse_rect(c, 0, 80, 10, 10, 0x66666666u);
+    } fuse_div_end(c);
+    fuse_canvas_draw(c, &n);
+    expect(nearly(scroll, 24.0f, 0.01f), "wheel down increases scroll");
+
+    scroll = 80.0f;
+    fuse_canvas_pointer(c, FUSE_POINTER_RELEASED, 60, 60);
+    fuse_canvas_clear(c);
+    fuse_id(c, "btn");
+    fuse_div_begin_scroll(c, 50, 50, 100, 50, NULL, &scroll); {
+        fuse_button(c, 0, 0, 20, 20, 0x1, 0x2);
+        fuse_rect(c, 0, 200, 10, 10, 0x77777777u);
+    } fuse_div_end(c);
+    fuse_canvas_draw(c, &n);
+
+    fuse_canvas_pointer(c, FUSE_POINTER_PRESSED, 60, 60);
+    fuse_canvas_pointer(c, FUSE_POINTER_RELEASED, 60, 60);
+    fuse_canvas_clear(c);
+    fuse_id(c, "btn");
+    fuse_div_begin_scroll(c, 50, 50, 100, 50, NULL, &scroll); {
+        clicked = fuse_button(c, 0, 0, 20, 20, 0x1, 0x2);
+        fuse_rect(c, 0, 200, 10, 10, 0x77777777u);
+    } fuse_div_end(c);
+    fuse_canvas_draw(c, &n);
+    expect(!clicked, "scrolled-out button does not click");
+}
+
 int
 main(void)
 {
@@ -341,6 +450,7 @@ main(void)
     test_unbalanced();
     test_percent();
     test_rect_text();
+    test_scroll();
     if (g_fails) {
         printf("%d failed\n", g_fails);
         return 1;

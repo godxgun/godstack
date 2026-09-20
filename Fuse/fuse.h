@@ -37,7 +37,6 @@
  *     FUSE_ (macros)  Fuse (types)  fuse_ (functions)
  *
  * TODO:
- * - Scrollable divs. 
  * - Tabs.
  *
  * =========================================================================== */
@@ -46,8 +45,8 @@
 #define FUSE_H
 
 #define FUSE_MAJOR 0
-#define FUSE_MINOR 9
-#define FUSE_PATCH 0
+#define FUSE_MINOR 10
+#define FUSE_PATCH 1
 
 /* CHANGE LOG
  * 0.0.1 - @vasco - slider
@@ -60,6 +59,8 @@
  * 0.7.0 - @vasco - FuseClass child layout
  * 0.8.0 - @vasco - nested sidebar screen + button + slider
  * 0.9.0 - @vasco - rect, 5x7 text, button_text
+ * 0.10.0 - @vasco - scrollable divs; wheel
+ * 0.10.1 - @vasco - canvas memory: cap screens, pack elements
  */
 
 #include <stddef.h>
@@ -179,6 +180,7 @@ FuseError  fuse_canvas_error(FuseCanvas);
 void       fuse_canvas_clear(FuseCanvas);
 void       fuse_canvas_resize(FuseCanvas, float w, float h);
 void       fuse_canvas_pointer(FuseCanvas, FusePointerState pointer_state, float x, float y);
+void       fuse_canvas_wheel(FuseCanvas, float dx, float dy); /* accumulate; +dy is wheel up */
 FuseCmd   *fuse_canvas_draw(FuseCanvas, size_t *cmd_count);
 // useful
 float fuse_percent_x(FuseCanvas, float p);
@@ -195,6 +197,7 @@ float fuse_percent_y(FuseCanvas, float p);
 //        ███                   ███
 // 
 void fuse_div_begin(FuseCanvas, float x, float y, float w, float h, const FuseClass *cls);
+void fuse_div_begin_scroll(FuseCanvas, float x, float y, float w, float h, const FuseClass *cls, float *scroll);
 void fuse_div_end(FuseCanvas);
 
 //     █
