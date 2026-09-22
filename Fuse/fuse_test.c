@@ -23,6 +23,11 @@ static void test_unbalanced(void);
 static void test_percent(void);
 static void test_rect_text(void);
 static void test_scroll(void);
+static void test_debug(void);
+static void test_columns(void);
+static void test_sizing(void);
+static int has_rect_at(FuseCmd *cmds, size_t n, float x, float y, float w, float h, uint32_t color);
+static int has_panel(FuseCmd *cmds, size_t n, float width, float height);
 
 void
 expect(int ok, const char *what)
@@ -56,6 +61,50 @@ find_rect(FuseCmd *cmds, size_t n, uint32_t color)
             return &cmds[i];
     }
     return NULL;
+}
+
+int
+has_rect_at(FuseCmd *cmds, size_t n, float x, float y, float w, float h, uint32_t color)
+{
+    size_t i;
+
+    if (!cmds)
+        return 0;
+    for (i = 0; i < n; i++) {
+        if (cmds[i].type != FUSE_CMD_RECT)
+            continue;
+        if (cmds[i].rect.color != color)
+            continue;
+        if (!nearly(cmds[i].rect.x, x, 0.01f) || !nearly(cmds[i].rect.y, y, 0.01f))
+            continue;
+        if (!nearly(cmds[i].rect.w, w, 0.01f) || !nearly(cmds[i].rect.h, h, 0.01f))
+            continue;
+        return 1;
+    }
+    return 0;
+}
+
+int
+has_panel(FuseCmd *cmds, size_t n, float width, float height)
+{
+    size_t i;
+
+    if (!cmds)
+        return 0;
+    for (i = 0; i < n; i++) {
+        float x, y, w, h;
+
+        if (cmds[i].type != FUSE_CMD_RECT)
+            continue;
+        x = cmds[i].rect.x;
+        y = cmds[i].rect.y;
+        w = cmds[i].rect.w;
+        h = cmds[i].rect.h;
+        if (nearly(y, 0.0f, 0.01f) && nearly(h, height, 0.01f) &&
+            nearly(x + w, width, 0.01f) && w > 40.0f && w < width)
+            return 1;
+    }
+    return 0;
 }
 
 void
@@ -439,6 +488,238 @@ test_scroll(void)
     expect(!clicked, "scrolled-out button does not click");
 }
 
+void
+test_debug(void)
+{
+    unsigned char buf[1 << 16];
+    unsigned char buf_b[1 << 16];
+    FuseCanvas c;
+    FuseCanvas other;
+    FuseCmd *cmds;
+    size_t n;
+    int clicked;
+    float scroll;
+    printf("debug\n");
+    c = fuse_canvas_create(buf, sizeof buf);
+    other = fuse_canvas_create(buf_b, sizeof buf_b);
+    fuse_canvas_resize(c, 200, 100);
+    fuse_canvas_resize(other, 200, 100);
+    fuse_canvas_pointer(c, FUSE_POINTER_RELEASED, 20, 20);
+    fuse_canvas_clear(c);
+    fuse_id(c, "ok");
+    fuse_button(c, 10, 10, 40, 20, 0xFF111111u, 0xFF222222u);
+    cmds = fuse_canvas_draw(c, &n);
+    expect(cmds && !has_panel(cmds, n, 200, 100), "debug off has no panel");
+
+    fuse_canvas_debug(c, true);
+    fuse_canvas_debug(other, false);
+    fuse_canvas_clear(c);
+    fuse_id(c, "ok");
+    fuse_button(c, 10, 10, 40, 20, 0xFF111111u, 0xFF222222u);
+    cmds = fuse_canvas_draw(c, &n);
+    expect(cmds && fuse_canvas_error(c) == FUSE_ERR_OK, "debug draw");
+    expect(has_panel(cmds, n, 200, 100), "panel on the right");
+    expect(has_rect_at(cmds, n, 10, 10, 40, 1, 0xFFFF9900u), "hover box");
+
+    fuse_canvas_clear(other);
+    fuse_button(other, 10, 10, 40, 20, 0xFF111111u, 0xFF222222u);
+    cmds = fuse_canvas_draw(other, &n);
+    expect(cmds && !has_panel(cmds, n, 200, 100), "other canvas stays off");
+
+    fuse_canvas_pointer(c, FUSE_POINTER_PRESSED, 20, 20);
+    fuse_canvas_pointer(c, FUSE_POINTER_RELEASED, 20, 20);
+    fuse_canvas_clear(c);
+    fuse_id(c, "ok");
+    clicked = fuse_button(c, 10, 10, 40, 20, 0xFF111111u, 0xFF222222u);
+    cmds = fuse_canvas_draw(c, &n);
+    expect(!clicked, "inspect does not click");
+    expect(fuse_canvas_error(c) == FUSE_ERR_OK, "inspect click ok");
+
+    fuse_canvas_pointer(c, FUSE_POINTER_RELEASED, 0, 0);
+    fuse_canvas_clear(c);
+    fuse_id(c, "ok");
+    fuse_button(c, 10, 10, 40, 20, 0xFF111111u, 0xFF222222u);
+    cmds = fuse_canvas_draw(c, &n);
+    expect(has_rect_at(cmds, n, 10, 10, 40, 1, 0xFFFFFFFFu), "selected box stays");
+    expect(!has_rect_at(cmds, n, 10, 10, 40, 1, 0xFFFF9900u), "hover box follows the pointer");
+
+    scroll = 0.0f;
+    fuse_canvas_pointer(c, FUSE_POINTER_RELEASED, 190, 40);
+    fuse_canvas_wheel(c, 0.0f, -24.0f);
+    fuse_canvas_clear(c);
+    fuse_id(c, "list");
+    fuse_div_begin_scroll(c, 0, 0, 80, 40, NULL, &scroll); {
+        fuse_rect(c, 0, 0, 10, 80, 0xFFABCDEFu);
+    } fuse_div_end(c);
+    fuse_canvas_draw(c, &n);
+    expect(nearly(scroll, 0.0f, 0.01f), "wheel over the panel does not scroll the list");
+    expect(fuse_canvas_error(c) == FUSE_ERR_OK, "panel wheel ok");
+
+    scroll = 0.0f;
+    fuse_canvas_pointer(c, FUSE_POINTER_RELEASED, 20, 20);
+    fuse_canvas_clear(c);
+    fuse_id(c, "list");
+    fuse_div_begin_scroll(c, 0, 0, 80, 40, NULL, &scroll); {
+        fuse_rect(c, 0, 0, 10, 80, 0xFFABCDEFu);
+    } fuse_div_end(c);
+    fuse_canvas_draw(c, &n);
+
+    fuse_canvas_wheel(c, 0.0f, -24.0f);
+    fuse_canvas_clear(c);
+    fuse_id(c, "list");
+    fuse_div_begin_scroll(c, 0, 0, 80, 40, NULL, &scroll); {
+        fuse_rect(c, 0, 0, 10, 80, 0xFFABCDEFu);
+    } fuse_div_end(c);
+    fuse_canvas_draw(c, &n);
+    expect(nearly(scroll, 24.0f, 0.01f), "wheel over a list still scrolls");
+}
+
+void
+test_columns(void)
+{
+    unsigned char buf[1 << 16];
+    FuseCanvas c;
+    FuseClass cls;
+    FuseCmd *cmds;
+    size_t n;
+    size_t i;
+    float ratio[2];
+    int saw_glyph;
+    printf("columns\n");
+    c = fuse_canvas_create(buf, sizeof buf);
+    fuse_canvas_resize(c, 200, 200);
+    fuse_canvas_pointer(c, FUSE_POINTER_RELEASED, 0, 0);
+    ratio[0] = 1.0f;
+    ratio[1] = 3.0f;
+    fuse_canvas_clear(c);
+    fuse_col_begin(c, 10.0f, 20.0f, 80.0f, NULL, ratio, 2); {
+        fuse_rect(c, 0.0f, 0.0f, 8.0f, 8.0f, 0xFF010101u);
+        fuse_text(c, 0.0f, 0.0f, 1.0f, "A", 0xFF00AA00u);
+        fuse_col_switch(c);
+        fuse_rect(c, 2.0f, 4.0f, 6.0f, 6.0f, 0xFF020202u);
+    } fuse_col_end(c);
+    cmds = fuse_canvas_draw(c, &n);
+    expect(cmds && fuse_canvas_error(c) == FUSE_ERR_OK, "ratio draw");
+    expect(has_rect_at(cmds, n, 10.0f, 20.0f, 8.0f, 8.0f, 0xFF010101u), "left column origin");
+    expect(has_rect_at(cmds, n, 32.0f, 24.0f, 6.0f, 6.0f, 0xFF020202u), "right column is 3/4");
+    saw_glyph = 0;
+    if (cmds) {
+        for (i = 0; i < n; i++) {
+            if (cmds[i].type == FUSE_CMD_RECT && cmds[i].rect.color == 0xFF00AA00u &&
+                cmds[i].rect.y >= 20.0f && cmds[i].rect.y < 27.0f &&
+                cmds[i].rect.x >= 10.0f && cmds[i].rect.x < 16.0f)
+                saw_glyph = 1;
+        }
+    }
+    expect(saw_glyph, "bitmap text is inside the column");
+
+    memset(&cls, 0, sizeof cls);
+    cls.gap = 4.0f;
+    cls.height_sizing = FUSE_SIZING_GROW;
+    ratio[0] = 1.0f;
+    ratio[1] = 1.0f;
+    fuse_canvas_clear(c);
+    fuse_col_begin(c, 0.0f, 0.0f, 100.0f, &cls, ratio, 2); {
+        fuse_rect(c, 0.0f, 0.0f, 10.0f, 10.0f, 0xFF0A0A0Au);
+        fuse_rect(c, 0.0f, 0.0f, 10.0f, 10.0f, 0xFF0B0B0Bu);
+        fuse_col_switch(c);
+        fuse_rect(c, 0.0f, 0.0f, 10.0f, 10.0f, 0xFF0C0C0Cu);
+    } fuse_col_end(c);
+    cmds = fuse_canvas_draw(c, &n);
+    expect(cmds && fuse_canvas_error(c) == FUSE_ERR_OK, "stack draw");
+    expect(has_rect_at(cmds, n, 0.0f, 0.0f, 10.0f, 10.0f, 0xFF0A0A0Au), "first stacked child");
+    expect(has_rect_at(cmds, n, 0.0f, 14.0f, 10.0f, 10.0f, 0xFF0B0B0Bu), "second stacked child");
+    expect(has_rect_at(cmds, n, 52.0f, 0.0f, 10.0f, 24.0f, 0xFF0C0C0Cu), "short column grows to the tall one");
+
+    fuse_canvas_clear(c);
+    fuse_col_end(c);
+    expect(fuse_canvas_error(c) == FUSE_ERR_UNBALANCED, "end without begin");
+    fuse_canvas_clear(c);
+    fuse_col_begin(c, 0.0f, 0.0f, 40.0f, NULL, ratio, 2);
+    fuse_col_switch(c);
+    fuse_col_switch(c);
+    expect(fuse_canvas_error(c) == FUSE_ERR_UNBALANCED, "switch past the last column");
+}
+
+static int
+has_ink_in(FuseCmd *cmds, size_t n, float x, float y, float w, float h, uint32_t color)
+{
+    size_t i;
+
+    if (!cmds)
+        return 0;
+    for (i = 0; i < n; i++) {
+        if (cmds[i].type != FUSE_CMD_RECT)
+            continue;
+        if (cmds[i].rect.color != color)
+            continue;
+        if (cmds[i].rect.x < x || cmds[i].rect.y < y)
+            continue;
+        if (cmds[i].rect.x >= x + w || cmds[i].rect.y >= y + h)
+            continue;
+        return 1;
+    }
+    return 0;
+}
+
+void
+test_sizing(void)
+{
+    unsigned char buf[1 << 16];
+    FuseCanvas c;
+    FuseClass row;
+    FuseClass col;
+    FuseCmd *cmds;
+    size_t n;
+
+    printf("sizing\n");
+    c = fuse_canvas_create(buf, sizeof buf);
+    fuse_canvas_resize(c, 200, 120);
+    fuse_canvas_pointer(c, FUSE_POINTER_RELEASED, 0, 0);
+    memset(&row, 0, sizeof row);
+    row.direction = FUSE_DIRECTION_ROW;
+    row.width_sizing = FUSE_SIZING_FIT;
+    row.height_sizing = FUSE_SIZING_FIT;
+    fuse_canvas_clear(c);
+    fuse_div_begin(c, 0, 0, 200, 20, &row); {
+        fuse_rect(c, 0, 0, 20, 10, 0xFF111111u);
+        fuse_space(c);
+        fuse_rect(c, 0, 0, 30, 10, 0xFF222222u);
+    } fuse_div_end(c);
+    cmds = fuse_canvas_draw(c, &n);
+    expect(cmds && fuse_canvas_error(c) == FUSE_ERR_OK, "space draw");
+    expect(has_rect_at(cmds, n, 0, 0, 20, 10, 0xFF111111u), "space keeps the left child");
+    expect(has_rect_at(cmds, n, 170, 0, 30, 10, 0xFF222222u), "space pushes the right child");
+
+    memset(&col, 0, sizeof col);
+    col.direction = FUSE_DIRECTION_COLUMN;
+    col.width_sizing = FUSE_SIZING_FIT;
+    col.height_sizing = FUSE_SIZING_FIT;
+    fuse_canvas_clear(c);
+    fuse_div_begin(c, 0, 0, 40, 100, &col); {
+        fuse_rect(c, 0, 0, 10, 10, 0xFF333333u);
+        fuse_sizing(c, FUSE_SIZING_GROW, FUSE_SIZING_GROW);
+        fuse_rect(c, 0, 0, 8, 8, 0xFF444444u);
+    } fuse_div_end(c);
+    cmds = fuse_canvas_draw(c, &n);
+    expect(has_rect_at(cmds, n, 0, 0, 10, 10, 0xFF333333u), "column fit child stays");
+    expect(has_rect_at(cmds, n, 0, 10, 40, 90, 0xFF444444u), "stemmed child takes leftover");
+
+    memset(&row, 0, sizeof row);
+    row.direction = FUSE_DIRECTION_ROW;
+    row.width_sizing = FUSE_SIZING_FIT;
+    row.height_sizing = FUSE_SIZING_FIT;
+    fuse_canvas_clear(c);
+    fuse_div_begin(c, 10, 10, 80, 20, &row); {
+        fuse_sizing(c, FUSE_SIZING_GROW, FUSE_SIZING_FIT);
+        fuse_button_text(c, "I", 0, 0, 20, 20, 0xFFAAAAAAu, 0xFFBBBBBBu);
+    } fuse_div_end(c);
+    cmds = fuse_canvas_draw(c, &n);
+    expect(has_rect_at(cmds, n, 10, 10, 80, 20, 0xFFAAAAAAu), "button grows with the row");
+    expect(has_ink_in(cmds, n, 45, 13, 10, 14, 0xFF000000u), "label recenters in the grown button");
+    expect(!has_ink_in(cmds, n, 0, 0, 10, 10, 0xFF000000u), "label is not a sibling outside the button");
+}
+
 int
 main(void)
 {
@@ -451,6 +732,9 @@ main(void)
     test_percent();
     test_rect_text();
     test_scroll();
+    test_debug();
+    test_columns();
+    test_sizing();
     if (g_fails) {
         printf("%d failed\n", g_fails);
         return 1;

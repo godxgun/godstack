@@ -46,7 +46,7 @@
 
 #define FUSE_MAJOR 0
 #define FUSE_MINOR 10
-#define FUSE_PATCH 1
+#define FUSE_PATCH 6
 
 /* CHANGE LOG
  * 0.0.1 - @vasco - slider
@@ -61,6 +61,11 @@
  * 0.9.0 - @vasco - rect, 5x7 text, button_text
  * 0.10.0 - @vasco - scrollable divs; wheel
  * 0.10.1 - @vasco - canvas memory: cap screens, pack elements
+ * 0.10.2 - @vasco - integer pixel grid: boxes, commands, 5x7 scale
+ * 0.10.3 - @vasco - debug inspector: element boxes and a tree panel
+ * 0.10.4 - @vasco - columns; 5x7 text is one layout element
+ * 0.10.5 - @vasco - image element: a box plus a caller handle
+ * 0.10.6 - @vasco - per-child sizing; space; button label is a child
  */
 
 #include <stddef.h>
@@ -107,10 +112,11 @@ typedef enum {
     FUSE_CMD_LINE,
     FUSE_CMD_CLIP_START,
     FUSE_CMD_CLIP_END,
+    FUSE_CMD_IMAGE,
     FUSE_CMD_COUNT,
 } FuseCmdType;
 
-/* Axis-aligned filled rectangle in canvas pixels. */
+/* Axis-aligned filled rectangle in integer canvas pixels. */
 typedef struct {
     float x, y, w, h;
     uint32_t color;
@@ -128,6 +134,14 @@ typedef struct {
     float x, y, w, h;
 } FuseCmdClip;
 
+/* Laid-out image box, like an img with a width and height. x,y,w,h are
+ * canvas pixels and are not snapped. handle is the caller's; Fuse does
+ * not store pixels. */
+typedef struct {
+    float x, y, w, h;
+    uint32_t handle;
+} FuseCmdImage;
+
 /*
  * One draw record. draw() returns these packed, already in canvas space,
  * z-stable in emit order (z is reserved, currently 0). id is the widget
@@ -138,6 +152,7 @@ typedef struct {
         FuseCmdRect rect;
         FuseCmdLine line;
         FuseCmdClip clip;
+        FuseCmdImage image;
     };
     uint32_t id;
     int16_t  z;
@@ -182,6 +197,13 @@ void       fuse_canvas_resize(FuseCanvas, float w, float h);
 void       fuse_canvas_pointer(FuseCanvas, FusePointerState pointer_state, float x, float y);
 void       fuse_canvas_wheel(FuseCanvas, float dx, float dy); /* accumulate; +dy is wheel up */
 FuseCmd   *fuse_canvas_draw(FuseCanvas, size_t *cmd_count);
+/* Inspector, off by default. draw() then appends 1px boxes around divs,
+ * buttons, sliders, and named rects, plus a right-hand tree (kind, name,
+ * size). Glyph runs stay out of the tree. While on, buttons and sliders
+ * do not take the pointer: release selects the element under the cursor
+ * or a tree row. The wheel over the panel scrolls the tree; elsewhere it
+ * still scrolls a scrollable div. Off by default. */
+void       fuse_canvas_debug(FuseCanvas, bool enabled);
 // useful
 float fuse_percent_x(FuseCanvas, float p);
 float fuse_percent_y(FuseCanvas, float p);
@@ -200,6 +222,16 @@ void fuse_div_begin(FuseCanvas, float x, float y, float w, float h, const FuseCl
 void fuse_div_begin_scroll(FuseCanvas, float x, float y, float w, float h, const FuseClass *cls, float *scroll);
 void fuse_div_end(FuseCanvas);
 
+/* Horizontal columns. ratios are relative widths (1,1 is equal; 1,3 is 25/75).
+ * There is no height argument: every column is as tall as the tallest, and
+ * that height fits the children. x,y,w place the row. cls pads and gaps the
+ * columns; inside each column, children stack top to bottom using cls gap,
+ * sizing, and align. NULL cls keeps the coordinates you pass, local to the
+ * column. fuse_col_switch moves to the next column. n is at most 8. */
+void fuse_col_begin(FuseCanvas, float x, float y, float w, const FuseClass *cls, const float *ratios, uint32_t n);
+void fuse_col_switch(FuseCanvas);
+void fuse_col_end(FuseCanvas);
+
 //     █
 //     █                     █
 // ███ █  ███ █████ ███ ███ ███ ███
@@ -213,11 +245,19 @@ void fuse_id(FuseCanvas, const char *name);
 void fuse_idi(FuseCanvas, const char *name, int index);
 bool fuse_element_is_hovered(FuseCanvas, const char *name);
 
+/* Stems the next element. Replaces the parent class on that axis.
+ * FIT keeps the size passed in. GROW takes leftover. FIXED and PERCENT
+ * use the size passed in (pixels, or 0..1). Omit the call to inherit. */
+void fuse_sizing(FuseCanvas, uint8_t width_sizing, uint8_t height_sizing);
+/* Empty child. Grows on the parent main axis. Needs a classed parent. */
+void fuse_space(FuseCanvas);
+
 /* Clicked this frame: last-frame hover + released-this-frame.
  * selected is the idle fill, hovered the hover/press fill. Local space. */
 bool fuse_button(FuseCanvas, float x, float y, float w, float h, uint32_t selected, uint32_t hovered);
 
-/* Button plus centered 5x7 label. Ink is 0xFF000000. */
+/* Button plus centered 5x7 label. The label is a child, recentered from
+ * the final box. Ink is 0xFF000000. */
 bool fuse_button_text(FuseCanvas, char *text, float x, float y, float w, float h, uint32_t selected, uint32_t hovered);
 void fuse_slider(FuseCanvas, float x, float y, float w, float h, uint32_t track, uint32_t nob, float *nob_pos);
 
@@ -230,6 +270,10 @@ void fuse_slider(FuseCanvas, float x, float y, float w, float h, uint32_t track,
 //
 void    fuse_rect(FuseCanvas, float x, float y, float w, float h, uint32_t color);
 
+/* Image in the layout, same coordinates as fuse_rect. w and h are the
+ * displayed size (intrinsic pixels times the caller's scale). */
+void    fuse_image(FuseCanvas, float x, float y, float w, float h, uint32_t handle);
+
 //  █           █
 // ███ ███ █ █ ███
 //  █  ███  █   █
@@ -238,10 +282,10 @@ void    fuse_rect(FuseCanvas, float x, float y, float w, float h, uint32_t color
 //
 //  Text, font and bitmaps.
 
-// FuseFont
-//
-void    fuse_text(FuseCanvas, float x, float y, float s, const char *str, uint32_t color); // 5x7 bitmap, one RECT per run. Scale s is pixel size of one glyph pixel.
-float   fuse_text_width(const char *str, float s); // Advance is 6*s per character, last gap omitted.
+/* Built-in 5x7 bitmap, the fallback face. One layout element per string;
+ * glyph runs are its children, each glyph pixel s by s. s snaps to an integer. */
+void    fuse_text(FuseCanvas, float x, float y, float s, const char *str, uint32_t color);
+float   fuse_text_width(const char *str, float s); // Advance is 6*s per character, last gap omitted. s snaps the same way as fuse_text.
 
 
 
