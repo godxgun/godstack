@@ -277,6 +277,22 @@ peak_window_set_title(PeakWindow *win, const char *name)
 }
 
 void
+peak_window_set_class(PeakWindow *win, const char *name)
+{
+    if (!win || !name || !name[0])
+        return;
+    peak_platform_window_set_class(&win->internal, name);
+}
+
+void
+peak_window_set_opacity(PeakWindow *win, uint8_t alpha)
+{
+    if (!win)
+        return;
+    peak_platform_window_set_opacity(&win->internal, alpha);
+}
+
+void
 peak_window_set_size(PeakWindow *win, uint32_t width, uint32_t height)
 {
     if (!win || !width || !height)
@@ -299,6 +315,14 @@ peak_window_cursor(PeakWindow *win, int on)
     if (!win)
         return;
     peak_platform_window_cursor(&win->internal, on);
+}
+
+void
+peak_window_cursor_shape(PeakWindow *win, int shape)
+{
+    if (!win)
+        return;
+    peak_platform_window_cursor_shape(&win->internal, shape);
 }
 
 void

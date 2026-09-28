@@ -100,13 +100,29 @@ struct wl_interface wl_callback_interface;
 
 #include "xdg-shell-protocol.c"
 
+const struct wl_interface zwp_tablet_tool_v2_interface = { "zwp_tablet_tool_v2", 1, 0, NULL, 0, NULL };
+#include "fractional-scale-protocol.c"
+#include "viewporter-protocol.c"
+#include "cursor-shape-protocol.c"
+#include "primary-selection-protocol.c"
+#include "alpha-modifier-protocol.c"
+
 struct peak_wayland_win {
 	struct wl_surface *surface;
 	struct xdg_surface *xdg_surface;
 	struct xdg_toplevel *xdg_toplevel;
+	struct wp_fractional_scale_v1 *frac;
+	struct wp_viewport *viewport;
+	struct wp_alpha_modifier_surface_v1 *alpha;
+	struct wl_output *output;
 	uint32_t *buffer;
 	uint32_t width;
 	uint32_t height;
+	uint32_t logical_w;
+	uint32_t logical_h;
+	uint32_t frac_120;
+	int have_frac;
+	int int_scale;
 	int shm_fd;
 	void *shm;
 	size_t shm_n;
@@ -114,11 +130,20 @@ struct peak_wayland_win {
 	int configured;
 	int flags;
 	int cursor_on;
+	int cursor_shape;
+	uint8_t opacity;
 	int relative;
 	int touch_n;
 	int pointer_in;
 	float last_x, last_y;
 	PeakQ q;
+};
+
+struct peak_wl_output {
+	struct wl_output *obj;
+	uint32_t name;
+	int scale;
+	int pending;
 };
 
 typedef struct {
@@ -135,6 +160,31 @@ typedef struct {
 	struct wl_data_device *dd;
 	struct wl_data_source *ds;
 	struct wl_data_source *drag_ds;
+	struct wp_fractional_scale_manager_v1 *frac_mgr;
+	struct wp_viewporter *viewporter;
+	struct wp_cursor_shape_manager_v1 *cursor_mgr;
+	struct wp_cursor_shape_device_v1 *cursor_dev;
+	struct wp_alpha_modifier_v1 *alpha_mgr;
+	struct zwp_primary_selection_device_manager_v1 *ps_mgr;
+	struct zwp_primary_selection_device_v1 *ps_dev;
+	struct zwp_primary_selection_source_v1 *ps_src;
+	struct zwp_primary_selection_offer_v1 *ps_offer;
+	struct zwp_primary_selection_offer_v1 *ps_fresh;
+	struct peak_wl_output outputs[8];
+	struct peak_wayland_win *wins[8];
+	int out_scale;
+	int ps_utf8;
+	int ps_fresh_utf8;
+	int frame_v120;
+	int frame_h120;
+	int frame_vdisc;
+	int frame_hdisc;
+	double frame_v;
+	double frame_h;
+	int frame_saw_120;
+	int frame_saw_disc;
+	int acc_v120;
+	double acc_v;
 	struct wl_data_offer *offer;
 	struct wl_data_offer *dnd;
 	struct wl_data_offer *fresh;
@@ -241,7 +291,7 @@ static const char *peak_wayland_mime_lit(const char *mime);
 static int peak_wayland_mime_rank(const char *m);
 static void peak_wayland_ds_kill(struct wl_data_source **slot);
 static void peak_wayland_dnd_accept(void);
-static int peak_wayland_offer_recv(struct wl_data_offer *o, const char *mime, char **out, size_t *out_n);
+static int peak_wayland_offer_recv(struct wl_proxy *o, uint32_t opcode, const char *mime, char **out, size_t *out_n);
 static int peak_wayland_drop_drag(PeakWindowInternal *intern, const char *utf8, size_t n);
 static int peak_wayland_shm_resize(struct peak_wayland_win *w, uint32_t width, uint32_t height);
 static int peak_wayland_init(void);
@@ -251,9 +301,11 @@ static void peak_wayland_window_close(PeakWindowInternal *intern);
 static uint32_t *peak_wayland_window_buffer(PeakWindowInternal *intern, size_t *width, size_t *height);
 static void peak_wayland_window_present(PeakWindowInternal *intern);
 static void peak_wayland_window_set_title(PeakWindowInternal *intern, const char *name);
+static void peak_wayland_window_set_class(PeakWindowInternal *intern, const char *name);
 static void peak_wayland_window_set_size(PeakWindowInternal *intern, uint32_t width, uint32_t height);
 static void peak_wayland_window_fullscreen(PeakWindowInternal *intern, int on);
 static void peak_wayland_window_cursor(PeakWindowInternal *intern, int on);
+static void peak_wayland_window_cursor_shape(PeakWindowInternal *intern, int shape);
 static void peak_wayland_window_pointer_relative(PeakWindowInternal *intern, int on);
 static float peak_wayland_window_scale(PeakWindowInternal *intern);
 static int peak_wayland_clip_set(PeakWindowInternal *intern, PeakClip which, const char *utf8, size_t n);
@@ -337,38 +389,371 @@ peak_wayland_marshal(struct wl_proxy *p, uint32_t op, const struct wl_interface 
 	return peak_wl.wl_proxy_marshal_array_flags(p, op, iface, ver, 0, args);
 }
 
+static struct wl_proxy *
+peak_wayland_bind(struct wl_registry *reg, uint32_t name, const char *iface_name, const struct wl_interface *iface, uint32_t ver)
+{
+	union wl_argument args[4];
+
+	if (!reg || !iface || !iface_name || !ver)
+		return NULL;
+	memset(args, 0, sizeof args);
+	args[0].u = name;
+	args[1].s = iface_name;
+	args[2].u = ver;
+	return peak_wl.wl_proxy_marshal_array_flags((struct wl_proxy *)reg, 0, iface, ver, 0, args);
+}
+
+static uint32_t
+peak_wayland_ver(uint32_t adv, uint32_t cap)
+{
+	if (adv < 1)
+		return 1;
+	return adv > cap ? cap : adv;
+}
+
+static uint32_t
+peak_wayland_scale_120(struct peak_wayland_win *w)
+{
+	if (w && w->have_frac && w->frac_120 >= 120)
+		return w->frac_120;
+	/* wl_output.scale is an integer (1.6 becomes 2). Wait for fractional. */
+	if (w && w->frac && !w->have_frac)
+		return 120;
+	if (w && w->int_scale > 0)
+		return (uint32_t)w->int_scale * 120u;
+	if (peak_wayland.out_scale > 0)
+		return (uint32_t)peak_wayland.out_scale * 120u;
+	return 120;
+}
+
+static void
+peak_wayland_to_buf(struct peak_wayland_win *w, float lx, float ly, float *ox, float *oy)
+{
+	float sx, sy;
+
+	sx = 1.f;
+	sy = 1.f;
+	if (w && w->logical_w && w->width)
+		sx = (float)w->width / (float)w->logical_w;
+	if (w && w->logical_h && w->height)
+		sy = (float)w->height / (float)w->logical_h;
+	if (ox)
+		*ox = lx * sx;
+	if (oy)
+		*oy = ly * sy;
+}
+
+static void
+peak_wayland_note_resize(struct peak_wayland_win *w)
+{
+	PeakEvent ev;
+
+	if (!w)
+		return;
+	memset(&ev, 0, sizeof ev);
+	ev.type = PEAK_EVENT_WINDOW_RESIZE;
+	ev.resize.width = w->width;
+	ev.resize.height = w->height;
+	peak_q_push(&w->q, ev);
+}
+
+static void
+peak_wayland_viewport_dest(struct peak_wayland_win *w)
+{
+	union wl_argument args[2];
+
+	if (!w || !w->viewport || !w->logical_w || !w->logical_h)
+		return;
+	memset(args, 0, sizeof args);
+	args[0].i = (int32_t)w->logical_w;
+	args[1].i = (int32_t)w->logical_h;
+	peak_wayland_marshal((struct wl_proxy *)w->viewport, 2, NULL, args);
+}
+
+static void
+peak_wayland_set_buffer_scale(struct peak_wayland_win *w, int scale)
+{
+	union wl_argument args[1];
+
+	if (!w || !w->surface || w->viewport || scale < 1)
+		return;
+	memset(args, 0, sizeof args);
+	args[0].i = scale;
+	peak_wayland_marshal((struct wl_proxy *)w->surface, 8, NULL, args);
+}
+
+static int
+peak_wayland_apply_scale(struct peak_wayland_win *w)
+{
+	uint32_t s, bw, bh;
+	int scale_i;
+
+	if (!w || !w->logical_w || !w->logical_h)
+		return 0;
+	s = peak_wayland_scale_120(w);
+	bw = (uint32_t)(((uint64_t)w->logical_w * s + 60) / 120);
+	bh = (uint32_t)(((uint64_t)w->logical_h * s + 60) / 120);
+	if (!bw)
+		bw = 1;
+	if (!bh)
+		bh = 1;
+	scale_i = (int)((s + 60) / 120);
+	if (scale_i < 1)
+		scale_i = 1;
+	if (w->viewport)
+		peak_wayland_viewport_dest(w);
+	else
+		peak_wayland_set_buffer_scale(w, scale_i);
+	if (bw == w->width && bh == w->height)
+		return 0;
+	if (!peak_wayland_shm_resize(w, bw, bh))
+		return 0;
+	if (w->viewport)
+		peak_wayland_viewport_dest(w);
+	peak_wayland_note_resize(w);
+	return 1;
+}
+
+static void
+peak_wayland_output_geometry(void *data, struct wl_output *output, int32_t x, int32_t y, int32_t pw, int32_t ph, int32_t sub, const char *make, const char *model, int32_t transform)
+{
+	(void)data;
+	(void)output;
+	(void)x;
+	(void)y;
+	(void)pw;
+	(void)ph;
+	(void)sub;
+	(void)make;
+	(void)model;
+	(void)transform;
+}
+
+static void
+peak_wayland_output_mode(void *data, struct wl_output *output, uint32_t flags, int32_t w, int32_t h, int32_t refresh)
+{
+	(void)data;
+	(void)output;
+	(void)flags;
+	(void)w;
+	(void)h;
+	(void)refresh;
+}
+
+static void
+peak_wayland_output_done(void *data, struct wl_output *output)
+{
+	struct peak_wl_output *o;
+	int i;
+
+	(void)output;
+	o = data;
+	if (!o || o->pending < 1 || o->scale == o->pending)
+		return;
+	o->scale = o->pending;
+	if (peak_wayland.out_scale < o->scale)
+		peak_wayland.out_scale = o->scale;
+	for (i = 0; i < 8; i++) {
+		struct peak_wayland_win *w;
+
+		w = peak_wayland.wins[i];
+		if (!w || w->have_frac || w->output != o->obj)
+			continue;
+		w->int_scale = o->scale;
+		peak_wayland_apply_scale(w);
+	}
+}
+
+static void
+peak_wayland_output_scale(void *data, struct wl_output *output, int32_t scale)
+{
+	struct peak_wl_output *o;
+
+	(void)output;
+	o = data;
+	if (!o || scale < 1)
+		return;
+	o->pending = scale;
+	if (peak_wl.wl_proxy_get_version((struct wl_proxy *)o->obj) < 2)
+		peak_wayland_output_done(o, o->obj);
+}
+
+static void
+peak_wayland_output_name(void *data, struct wl_output *output, const char *name)
+{
+	(void)data;
+	(void)output;
+	(void)name;
+}
+
+static void
+peak_wayland_output_description(void *data, struct wl_output *output, const char *text)
+{
+	(void)data;
+	(void)output;
+	(void)text;
+}
+
+static void
+peak_wayland_surface_enter(void *data, struct wl_surface *surface, struct wl_output *output)
+{
+	struct peak_wayland_win *w;
+	int i;
+
+	(void)surface;
+	w = data;
+	if (!w)
+		return;
+	w->output = output;
+	for (i = 0; i < 8; i++) {
+		if (peak_wayland.outputs[i].obj != output)
+			continue;
+		if (peak_wayland.outputs[i].scale > 0)
+			w->int_scale = peak_wayland.outputs[i].scale;
+		else if (peak_wayland.outputs[i].pending > 0)
+			w->int_scale = peak_wayland.outputs[i].pending;
+		break;
+	}
+	if (!w->have_frac)
+		peak_wayland_apply_scale(w);
+}
+
+static void
+peak_wayland_surface_leave(void *data, struct wl_surface *surface, struct wl_output *output)
+{
+	struct peak_wayland_win *w;
+
+	(void)surface;
+	w = data;
+	if (w && w->output == output)
+		w->output = NULL;
+}
+
+static void
+peak_wayland_surface_preferred_scale(void *data, struct wl_surface *surface, int32_t scale)
+{
+	struct peak_wayland_win *w;
+
+	(void)surface;
+	w = data;
+	if (!w || w->have_frac || scale < 1)
+		return;
+	w->int_scale = scale;
+	peak_wayland_apply_scale(w);
+}
+
+static void
+peak_wayland_surface_preferred_transform(void *data, struct wl_surface *surface, uint32_t transform)
+{
+	(void)data;
+	(void)surface;
+	(void)transform;
+}
+
+static void
+peak_wayland_frac_scale(void *data, struct wp_fractional_scale_v1 *frac, uint32_t scale)
+{
+	struct peak_wayland_win *w;
+
+	(void)frac;
+	w = data;
+	if (!w)
+		return;
+	if (scale < 120)
+		scale = 120;
+	w->frac_120 = scale;
+	w->have_frac = 1;
+	peak_wayland_apply_scale(w);
+}
+
+static uint32_t
+peak_wayland_shape_enum(int shape)
+{
+	switch (shape) {
+	case 1: return 9;  /* text */
+	case 2: return 4;  /* pointer */
+	case 3: return 6;  /* wait */
+	case 4: return 8;  /* crosshair */
+	case 5: return 15; /* not-allowed */
+	case 6: return 3;  /* help */
+	default: return 1; /* default */
+	}
+}
+
+static void
+peak_wayland_cursor_apply(struct peak_wayland_win *w)
+{
+	union wl_argument args[4];
+
+	if (!w || !peak_wayland.pointer)
+		return;
+	if (!w->cursor_on) {
+		memset(args, 0, sizeof args);
+		args[0].u = peak_wayland.serial;
+		peak_wayland_marshal((struct wl_proxy *)peak_wayland.pointer, 0, NULL, args);
+		return;
+	}
+	if (!peak_wayland.cursor_dev)
+		return;
+	memset(args, 0, sizeof args);
+	args[0].u = peak_wayland.serial;
+	args[1].u = peak_wayland_shape_enum(w->cursor_shape);
+	peak_wayland_marshal((struct wl_proxy *)peak_wayland.cursor_dev, 1, NULL, args);
+}
+
 static void
 peak_wayland_registry_global(void *data, struct wl_registry *reg, uint32_t name, const char *iface, uint32_t ver)
 {
-	union wl_argument args[4];
+	static const struct {
+		void (*geometry)(void *, struct wl_output *, int32_t, int32_t, int32_t, int32_t, int32_t, const char *, const char *, int32_t);
+		void (*mode)(void *, struct wl_output *, uint32_t, int32_t, int32_t, int32_t);
+		void (*done)(void *, struct wl_output *);
+		void (*scale)(void *, struct wl_output *, int32_t);
+		void (*name)(void *, struct wl_output *, const char *);
+		void (*description)(void *, struct wl_output *, const char *);
+	} ol = {
+		peak_wayland_output_geometry, peak_wayland_output_mode, peak_wayland_output_done,
+		peak_wayland_output_scale, peak_wayland_output_name, peak_wayland_output_description
+	};
+	uint32_t use;
+	int i;
 
 	(void)data;
 	if (!iface)
 		return;
-	memset(args, 0, sizeof args);
-	args[0].u = name;
-	args[2].u = ver;
 	if (!strcmp(iface, "wl_compositor") && !peak_wayland.compositor) {
-		args[1].s = "wl_compositor";
-		peak_wayland.compositor = (struct wl_compositor *)peak_wayland_marshal((struct wl_proxy *)reg, 0, &wl_compositor_interface, args);
+		use = peak_wayland_ver(ver, 6);
+		peak_wayland.compositor = (struct wl_compositor *)peak_wayland_bind(reg, name, iface, &wl_compositor_interface, use);
 	} else if (!strcmp(iface, "wl_shm") && !peak_wayland.shm) {
-		args[1].s = "wl_shm";
-		peak_wayland.shm = (struct wl_shm *)peak_wayland_marshal((struct wl_proxy *)reg, 0, &wl_shm_interface, args);
+		peak_wayland.shm = (struct wl_shm *)peak_wayland_bind(reg, name, iface, &wl_shm_interface, peak_wayland_ver(ver, 1));
 	} else if (!strcmp(iface, "wl_seat") && !peak_wayland.seat) {
-		args[1].s = "wl_seat";
-		if (ver > 4)
-			args[2].u = 4;
-		peak_wayland.seat = (struct wl_seat *)peak_wayland_marshal((struct wl_proxy *)reg, 0, &wl_seat_interface, args);
+		peak_wayland.seat = (struct wl_seat *)peak_wayland_bind(reg, name, iface, &wl_seat_interface, peak_wayland_ver(ver, 9));
 	} else if (!strcmp(iface, "xdg_wm_base") && !peak_wayland.wm) {
-		args[1].s = "xdg_wm_base";
-		if (ver > 6)
-			args[2].u = 6;
-		peak_wayland.wm = (struct xdg_wm_base *)peak_wayland_marshal((struct wl_proxy *)reg, 0, &xdg_wm_base_interface, args);
+		peak_wayland.wm = (struct xdg_wm_base *)peak_wayland_bind(reg, name, iface, &xdg_wm_base_interface, peak_wayland_ver(ver, 6));
 	} else if (!strcmp(iface, "wl_data_device_manager") && !peak_wayland.ddm && wl_data_device_manager_interface.name) {
-		args[1].s = "wl_data_device_manager";
-		if (ver > 3)
-			args[2].u = 3;
-		peak_wayland.ddm = (struct wl_data_device_manager *)peak_wayland_marshal((struct wl_proxy *)reg, 0, &wl_data_device_manager_interface, args);
+		peak_wayland.ddm = (struct wl_data_device_manager *)peak_wayland_bind(reg, name, iface, &wl_data_device_manager_interface, peak_wayland_ver(ver, 3));
+	} else if (!strcmp(iface, "wl_output") && wl_output_interface.name) {
+		for (i = 0; i < 8; i++) {
+			if (peak_wayland.outputs[i].obj)
+				continue;
+			peak_wayland.outputs[i].obj = (struct wl_output *)peak_wayland_bind(reg, name, iface, &wl_output_interface, peak_wayland_ver(ver, 4));
+			peak_wayland.outputs[i].name = name;
+			peak_wayland.outputs[i].scale = 0;
+			peak_wayland.outputs[i].pending = 1;
+			if (peak_wayland.outputs[i].obj)
+				peak_wl.wl_proxy_add_listener((struct wl_proxy *)peak_wayland.outputs[i].obj, (void (**)(void))(void *)&ol, &peak_wayland.outputs[i]);
+			break;
+		}
+	} else if (!strcmp(iface, "wp_fractional_scale_manager_v1") && !peak_wayland.frac_mgr) {
+		peak_wayland.frac_mgr = (struct wp_fractional_scale_manager_v1 *)peak_wayland_bind(reg, name, iface, &wp_fractional_scale_manager_v1_interface, 1);
+	} else if (!strcmp(iface, "wp_viewporter") && !peak_wayland.viewporter) {
+		peak_wayland.viewporter = (struct wp_viewporter *)peak_wayland_bind(reg, name, iface, &wp_viewporter_interface, 1);
+	} else if (!strcmp(iface, "wp_cursor_shape_manager_v1") && !peak_wayland.cursor_mgr) {
+		peak_wayland.cursor_mgr = (struct wp_cursor_shape_manager_v1 *)peak_wayland_bind(reg, name, iface, &wp_cursor_shape_manager_v1_interface, 1);
+	} else if (!strcmp(iface, "wp_alpha_modifier_v1") && !peak_wayland.alpha_mgr) {
+		peak_wayland.alpha_mgr = (struct wp_alpha_modifier_v1 *)peak_wayland_bind(reg, name, iface, &wp_alpha_modifier_v1_interface, 1);
+	} else if (!strcmp(iface, "zwp_primary_selection_device_manager_v1") && !peak_wayland.ps_mgr) {
+		peak_wayland.ps_mgr = (struct zwp_primary_selection_device_manager_v1 *)peak_wayland_bind(reg, name, iface, &zwp_primary_selection_device_manager_v1_interface, 1);
 	}
 }
 
@@ -406,24 +791,15 @@ static void
 peak_wayland_toplevel_configure(void *data, struct xdg_toplevel *top, int32_t w, int32_t h, struct wl_array *states)
 {
 	struct peak_wayland_win *win;
-	PeakEvent ev;
 
 	(void)top;
 	(void)states;
 	win = data;
 	if (w <= 0 || h <= 0)
 		return;
-	if ((uint32_t)w == win->width && (uint32_t)h == win->height)
-		return;
-	if (!peak_wayland_shm_resize(win, (uint32_t)w, (uint32_t)h)) {
-		win->width = (uint32_t)w;
-		win->height = (uint32_t)h;
-	}
-	memset(&ev, 0, sizeof ev);
-	ev.type = PEAK_EVENT_WINDOW_RESIZE;
-	ev.resize.width = win->width;
-	ev.resize.height = win->height;
-	peak_q_push(&win->q, ev);
+	win->logical_w = (uint32_t)w;
+	win->logical_h = (uint32_t)h;
+	peak_wayland_apply_scale(win);
 }
 
 static void
@@ -465,8 +841,8 @@ peak_wayland_pointer_enter(void *data, struct wl_pointer *p, uint32_t serial, st
 	peak_wayland.serial = serial;
 	if (peak_wayland.focus) {
 		peak_wayland.focus->pointer_in = 1;
-		peak_wayland.focus->last_x = (float)wl_fixed_to_double(x);
-		peak_wayland.focus->last_y = (float)wl_fixed_to_double(y);
+		peak_wayland_to_buf(peak_wayland.focus, (float)wl_fixed_to_double(x), (float)wl_fixed_to_double(y), &peak_wayland.focus->last_x, &peak_wayland.focus->last_y);
+		peak_wayland_cursor_apply(peak_wayland.focus);
 	}
 }
 
@@ -507,8 +883,7 @@ peak_wayland_pointer_motion(void *data, struct wl_pointer *p, uint32_t time, wl_
 	w = peak_wayland.focus;
 	if (!w)
 		return;
-	px = (float)wl_fixed_to_double(x);
-	py = (float)wl_fixed_to_double(y);
+	peak_wayland_to_buf(w, (float)wl_fixed_to_double(x), (float)wl_fixed_to_double(y), &px, &py);
 	memset(&ev, 0, sizeof ev);
 	ev.type = PEAK_EVENT_POINTER;
 	ev.pointer.state = PEAK_POINTER_MOVED;
@@ -581,26 +956,157 @@ peak_wayland_pointer_button(void *data, struct wl_pointer *p, uint32_t serial, u
 }
 
 static void
+peak_wayland_wheel(struct peak_wayland_win *w, int down, int n)
+{
+	PeakEvent ev;
+	int i;
+
+	if (!w || n <= 0)
+		return;
+	if (n > 16)
+		n = 16;
+	for (i = 0; i < n; i++) {
+		memset(&ev, 0, sizeof ev);
+		ev.type = PEAK_EVENT_POINTER;
+		ev.pointer.state = PEAK_POINTER_PRESSED;
+		ev.pointer.type = down ? PEAK_POINTER_WHEEL_DOWN : PEAK_POINTER_WHEEL_UP;
+		ev.pointer.x = w->last_x;
+		ev.pointer.y = w->last_y;
+		ev.pointer.mod = peak_wayland.mod;
+		peak_q_push(&w->q, ev);
+	}
+}
+
+static void
+peak_wayland_axis_flush(struct peak_wayland_win *w)
+{
+	int steps;
+
+	if (!w)
+		w = peak_wayland.focus;
+	if (peak_wayland.frame_saw_120)
+		peak_wayland.acc_v120 += peak_wayland.frame_v120;
+	else if (peak_wayland.frame_saw_disc)
+		peak_wayland.acc_v120 += peak_wayland.frame_vdisc * 120;
+	else {
+		steps = 0;
+		peak_wayland.acc_v += peak_wayland.frame_v;
+		while (peak_wayland.acc_v >= 10.0) {
+			peak_wayland.acc_v -= 10.0;
+			steps++;
+		}
+		if (steps)
+			peak_wayland_wheel(w, 1, steps);
+		steps = 0;
+		while (peak_wayland.acc_v <= -10.0) {
+			peak_wayland.acc_v += 10.0;
+			steps++;
+		}
+		if (steps)
+			peak_wayland_wheel(w, 0, steps);
+	}
+	(void)peak_wayland.frame_h120;
+	(void)peak_wayland.frame_hdisc;
+	(void)peak_wayland.frame_h;
+	if (peak_wayland.frame_saw_120 || peak_wayland.frame_saw_disc) {
+		while (peak_wayland.acc_v120 >= 120) {
+			peak_wayland.acc_v120 -= 120;
+			peak_wayland_wheel(w, 1, 1);
+		}
+		while (peak_wayland.acc_v120 <= -120) {
+			peak_wayland.acc_v120 += 120;
+			peak_wayland_wheel(w, 0, 1);
+		}
+	}
+	peak_wayland.frame_v120 = 0;
+	peak_wayland.frame_h120 = 0;
+	peak_wayland.frame_vdisc = 0;
+	peak_wayland.frame_hdisc = 0;
+	peak_wayland.frame_v = 0;
+	peak_wayland.frame_h = 0;
+	peak_wayland.frame_saw_120 = 0;
+	peak_wayland.frame_saw_disc = 0;
+}
+
+static void
 peak_wayland_pointer_axis(void *data, struct wl_pointer *p, uint32_t time, uint32_t axis, wl_fixed_t value)
 {
-	struct peak_wayland_win *w;
-	PeakEvent ev;
+	double v;
 
+	(void)data;
+	(void)time;
+	v = wl_fixed_to_double(value);
+	if (axis == 0)
+		peak_wayland.frame_v += v;
+	else
+		peak_wayland.frame_h += v;
+	if (!p || peak_wl.wl_proxy_get_version((struct wl_proxy *)p) >= 5)
+		return;
+	if (axis == 0 && v != 0.0)
+		peak_wayland_wheel(peak_wayland.focus, v > 0.0, 1);
+	peak_wayland.frame_v = 0;
+	peak_wayland.frame_h = 0;
+}
+
+static void
+peak_wayland_pointer_frame(void *data, struct wl_pointer *p)
+{
+	(void)data;
+	(void)p;
+	peak_wayland_axis_flush(peak_wayland.focus);
+}
+
+static void
+peak_wayland_pointer_axis_source(void *data, struct wl_pointer *p, uint32_t source)
+{
+	(void)data;
+	(void)p;
+	(void)source;
+}
+
+static void
+peak_wayland_pointer_axis_stop(void *data, struct wl_pointer *p, uint32_t time, uint32_t axis)
+{
 	(void)data;
 	(void)p;
 	(void)time;
+	if (axis == 0) {
+		peak_wayland.acc_v120 = 0;
+		peak_wayland.acc_v = 0;
+	}
+}
+
+static void
+peak_wayland_pointer_axis_discrete(void *data, struct wl_pointer *p, uint32_t axis, int32_t discrete)
+{
+	(void)data;
+	(void)p;
+	peak_wayland.frame_saw_disc = 1;
+	if (axis == 0)
+		peak_wayland.frame_vdisc += discrete;
+	else
+		peak_wayland.frame_hdisc += discrete;
+}
+
+static void
+peak_wayland_pointer_axis_value120(void *data, struct wl_pointer *p, uint32_t axis, int32_t value120)
+{
+	(void)data;
+	(void)p;
+	peak_wayland.frame_saw_120 = 1;
+	if (axis == 0)
+		peak_wayland.frame_v120 += value120;
+	else
+		peak_wayland.frame_h120 += value120;
+}
+
+static void
+peak_wayland_pointer_axis_rel(void *data, struct wl_pointer *p, uint32_t axis, uint32_t direction)
+{
+	(void)data;
+	(void)p;
 	(void)axis;
-	w = peak_wayland.focus;
-	if (!w)
-		return;
-	memset(&ev, 0, sizeof ev);
-	ev.type = PEAK_EVENT_POINTER;
-	ev.pointer.state = PEAK_POINTER_PRESSED;
-	ev.pointer.type = (wl_fixed_to_double(value) > 0) ? PEAK_POINTER_WHEEL_DOWN : PEAK_POINTER_WHEEL_UP;
-	ev.pointer.x = w->last_x;
-	ev.pointer.y = w->last_y;
-	ev.pointer.mod = peak_wayland.mod;
-	peak_q_push(&w->q, ev);
+	(void)direction;
 }
 
 static int
@@ -727,8 +1233,14 @@ peak_wayland_key_emit(struct peak_wayland_win *w, uint32_t key, int down, int co
 	ev.key.mod = peak_wayland.mod;
 	n = 0;
 	ev.key.code = peak_wayland_key_utf8(key, compose && down, buf, sizeof buf, &n);
+	/* xkb reports Delete as U+007F. That byte is tty VERASE (backspace),
+	 * not forward delete. Keep it as a key; do not also emit text. */
+	if (ev.key.key == PEAK_KEY_UNKNOWN && n == 1 && (unsigned char)buf[0] == 0x7f)
+		ev.key.key = PEAK_KEY_DELETE;
 	peak_q_push(&w->q, ev);
-	if (!down || !n || (unsigned char)buf[0] < 32)
+	if (!down || !n || (unsigned char)buf[0] < 32 || (unsigned char)buf[0] == 0x7f)
+		return;
+	if (ev.key.key == PEAK_KEY_DELETE || ev.key.key == PEAK_KEY_BACKSPACE)
 		return;
 	peak_text_store(buf, n);
 	memset(&ev, 0, sizeof ev);
@@ -798,6 +1310,14 @@ peak_wayland_keyboard_enter(void *data, struct wl_keyboard *k, uint32_t serial, 
 	(void)s;
 	(void)keys;
 	peak_wayland.serial = serial;
+	if (peak_wayland.focus) {
+		PeakEvent ev;
+
+		memset(&ev, 0, sizeof ev);
+		ev.type = PEAK_EVENT_FOCUS;
+		ev.focus.on = 1;
+		peak_q_push(&peak_wayland.focus->q, ev);
+	}
 }
 
 static void
@@ -810,6 +1330,14 @@ peak_wayland_keyboard_leave(void *data, struct wl_keyboard *k, uint32_t serial, 
 	peak_wayland_repeat_stop();
 	if (peak_wayland.xkb_compose && peak_xkb.xkb_compose_state_reset)
 		peak_xkb.xkb_compose_state_reset(peak_wayland.xkb_compose);
+	if (peak_wayland.focus) {
+		PeakEvent ev;
+
+		memset(&ev, 0, sizeof ev);
+		ev.type = PEAK_EVENT_FOCUS;
+		ev.focus.on = 0;
+		peak_q_push(&peak_wayland.focus->q, ev);
+	}
 }
 
 static PeakPointerType
@@ -1117,8 +1645,7 @@ peak_wayland_touch_down(void *data, struct wl_touch *t, uint32_t serial, uint32_
 	ev.type = PEAK_EVENT_POINTER;
 	ev.pointer.state = PEAK_POINTER_PRESSED;
 	ev.pointer.type = PEAK_POINTER_TOUCH;
-	ev.pointer.x = (float)wl_fixed_to_double(x);
-	ev.pointer.y = (float)wl_fixed_to_double(y);
+	peak_wayland_to_buf(w, (float)wl_fixed_to_double(x), (float)wl_fixed_to_double(y), &ev.pointer.x, &ev.pointer.y);
 	peak_q_push(&w->q, ev);
 }
 
@@ -1167,9 +1694,26 @@ peak_wayland_touch_motion(void *data, struct wl_touch *t, uint32_t time, int32_t
 	ev.type = PEAK_EVENT_POINTER;
 	ev.pointer.state = PEAK_POINTER_MOVED;
 	ev.pointer.type = PEAK_POINTER_TOUCH;
-	ev.pointer.x = (float)wl_fixed_to_double(x);
-	ev.pointer.y = (float)wl_fixed_to_double(y);
+	peak_wayland_to_buf(w, (float)wl_fixed_to_double(x), (float)wl_fixed_to_double(y), &ev.pointer.x, &ev.pointer.y);
 	peak_q_push(&w->q, ev);
+}
+
+static void
+peak_wayland_touch_shape(void *data, struct wl_touch *t, int32_t id, uint32_t shape)
+{
+	(void)data;
+	(void)t;
+	(void)id;
+	(void)shape;
+}
+
+static void
+peak_wayland_touch_orientation(void *data, struct wl_touch *t, int32_t id, uint32_t orientation)
+{
+	(void)data;
+	(void)t;
+	(void)id;
+	(void)orientation;
 }
 
 static void
@@ -1195,9 +1739,18 @@ peak_wayland_seat_caps(void *data, struct wl_seat *seat, uint32_t caps)
 		void (*motion)(void *, struct wl_pointer *, uint32_t, wl_fixed_t, wl_fixed_t);
 		void (*button)(void *, struct wl_pointer *, uint32_t, uint32_t, uint32_t, uint32_t);
 		void (*axis)(void *, struct wl_pointer *, uint32_t, uint32_t, wl_fixed_t);
+		void (*frame)(void *, struct wl_pointer *);
+		void (*axis_source)(void *, struct wl_pointer *, uint32_t);
+		void (*axis_stop)(void *, struct wl_pointer *, uint32_t, uint32_t);
+		void (*axis_discrete)(void *, struct wl_pointer *, uint32_t, int32_t);
+		void (*axis_value120)(void *, struct wl_pointer *, uint32_t, int32_t);
+		void (*axis_relative_direction)(void *, struct wl_pointer *, uint32_t, uint32_t);
 	} pl = {
 		peak_wayland_pointer_enter, peak_wayland_pointer_leave, peak_wayland_pointer_motion,
-		peak_wayland_pointer_button, peak_wayland_pointer_axis
+		peak_wayland_pointer_button, peak_wayland_pointer_axis, peak_wayland_pointer_frame,
+		peak_wayland_pointer_axis_source, peak_wayland_pointer_axis_stop,
+		peak_wayland_pointer_axis_discrete, peak_wayland_pointer_axis_value120,
+		peak_wayland_pointer_axis_rel
 	};
 	static const struct {
 		void (*keymap)(void *, struct wl_keyboard *, uint32_t, int, uint32_t);
@@ -1216,16 +1769,26 @@ peak_wayland_seat_caps(void *data, struct wl_seat *seat, uint32_t caps)
 		void (*motion)(void *, struct wl_touch *, uint32_t, int32_t, wl_fixed_t, wl_fixed_t);
 		void (*frame)(void *, struct wl_touch *);
 		void (*cancel)(void *, struct wl_touch *);
+		void (*shape)(void *, struct wl_touch *, int32_t, uint32_t);
+		void (*orientation)(void *, struct wl_touch *, int32_t, uint32_t);
 	} tl = {
 		peak_wayland_touch_down, peak_wayland_touch_up, peak_wayland_touch_motion,
-		peak_wayland_touch_frame, peak_wayland_touch_cancel
+		peak_wayland_touch_frame, peak_wayland_touch_cancel,
+		peak_wayland_touch_shape, peak_wayland_touch_orientation
 	};
 
 	(void)data;
 	if ((caps & 1) && !peak_wayland.pointer) {
+		union wl_argument cargs[2];
+
 		peak_wayland.pointer = (struct wl_pointer *)peak_wayland_marshal((struct wl_proxy *)seat, 0, &wl_pointer_interface, NULL);
 		if (peak_wayland.pointer)
 			peak_wl.wl_proxy_add_listener((struct wl_proxy *)peak_wayland.pointer, (void (**)(void))(void *)&pl, NULL);
+		if (peak_wayland.pointer && peak_wayland.cursor_mgr && !peak_wayland.cursor_dev) {
+			memset(cargs, 0, sizeof cargs);
+			cargs[1].o = (struct wl_object *)peak_wayland.pointer;
+			peak_wayland.cursor_dev = (struct wp_cursor_shape_device_v1 *)peak_wayland_marshal((struct wl_proxy *)peak_wayland.cursor_mgr, 1, &wp_cursor_shape_device_v1_interface, cargs);
+		}
 	}
 	if ((caps & 2) && !peak_wayland.keyboard) {
 		peak_wayland.keyboard = (struct wl_keyboard *)peak_wayland_marshal((struct wl_proxy *)seat, 1, &wl_keyboard_interface, NULL);
@@ -1305,6 +1868,8 @@ peak_wayland_shm_resize(struct peak_wayland_win *w, uint32_t width, uint32_t hei
 	w->height = height;
 	return 1;
 }
+
+static void peak_wayland_ps_setup(void);
 
 static int
 peak_wayland_init(void)
@@ -1386,6 +1951,7 @@ peak_wayland_init(void)
 		if (peak_wayland.dd)
 			peak_wl.wl_proxy_add_listener((struct wl_proxy *)peak_wayland.dd, (void (**)(void))(void *)&ddl, NULL);
 	}
+	peak_wayland_ps_setup();
 	peak_wl.wl_display_roundtrip(peak_wayland.display);
 	return 1;
 fail:
@@ -1433,10 +1999,47 @@ peak_wayland_window_open(const char *name, uint32_t width, uint32_t height, uint
 		return intern;
 	w->shm_fd = -1;
 	w->cursor_on = 1;
+	w->opacity = 255;
+	w->logical_w = width ? width : 1;
+	w->logical_h = height ? height : 1;
 	w->flags = (int)flags;
+	intern.w = w;
 	w->surface = (struct wl_surface *)peak_wayland_marshal((struct wl_proxy *)peak_wayland.compositor, 0, &wl_surface_interface, NULL);
 	if (!w->surface)
 		goto fail;
+	{
+		static const struct {
+			void (*enter)(void *, struct wl_surface *, struct wl_output *);
+			void (*leave)(void *, struct wl_surface *, struct wl_output *);
+			void (*preferred_buffer_scale)(void *, struct wl_surface *, int32_t);
+			void (*preferred_buffer_transform)(void *, struct wl_surface *, uint32_t);
+		} surf_l = {
+			peak_wayland_surface_enter, peak_wayland_surface_leave,
+			peak_wayland_surface_preferred_scale, peak_wayland_surface_preferred_transform
+		};
+		static const struct {
+			void (*preferred_scale)(void *, struct wp_fractional_scale_v1 *, uint32_t);
+		} frac_l = { peak_wayland_frac_scale };
+
+		peak_wl.wl_proxy_add_listener((struct wl_proxy *)w->surface, (void (**)(void))(void *)&surf_l, w);
+		if (peak_wayland.frac_mgr) {
+			memset(args, 0, sizeof args);
+			args[1].o = (struct wl_object *)w->surface;
+			w->frac = (struct wp_fractional_scale_v1 *)peak_wayland_marshal((struct wl_proxy *)peak_wayland.frac_mgr, 1, &wp_fractional_scale_v1_interface, args);
+			if (w->frac)
+				peak_wl.wl_proxy_add_listener((struct wl_proxy *)w->frac, (void (**)(void))(void *)&frac_l, w);
+		}
+		if (peak_wayland.viewporter) {
+			memset(args, 0, sizeof args);
+			args[1].o = (struct wl_object *)w->surface;
+			w->viewport = (struct wp_viewport *)peak_wayland_marshal((struct wl_proxy *)peak_wayland.viewporter, 1, &wp_viewport_interface, args);
+		}
+		if (peak_wayland.alpha_mgr) {
+			memset(args, 0, sizeof args);
+			args[1].o = (struct wl_object *)w->surface;
+			w->alpha = (struct wp_alpha_modifier_surface_v1 *)peak_wayland_marshal((struct wl_proxy *)peak_wayland.alpha_mgr, 1, &wp_alpha_modifier_surface_v1_interface, args);
+		}
+	}
 	memset(args, 0, sizeof args);
 	args[1].o = (struct wl_object *)w->surface;
 	w->xdg_surface = (struct xdg_surface *)peak_wayland_marshal((struct wl_proxy *)peak_wayland.wm, 2, &xdg_surface_interface, args);
@@ -1463,12 +2066,35 @@ peak_wayland_window_open(const char *name, uint32_t width, uint32_t height, uint
 		peak_wayland_marshal((struct wl_proxy *)w->surface, 6, NULL, NULL);
 		peak_wl.wl_display_roundtrip(peak_wayland.display);
 	}
+	/* Preferred fractional scale arrives once a buffer is committed after ack. */
+	if (w->frac && !w->have_frac && w->wl_buf && w->surface) {
+		union wl_argument pargs[4];
+
+		memset(pargs, 0, sizeof pargs);
+		pargs[0].o = (struct wl_object *)w->wl_buf;
+		peak_wayland_marshal((struct wl_proxy *)w->surface, 1, NULL, pargs);
+		pargs[0].i = 0;
+		pargs[1].i = 0;
+		pargs[2].i = (int32_t)(w->logical_w ? w->logical_w : w->width);
+		pargs[3].i = (int32_t)(w->logical_h ? w->logical_h : w->height);
+		peak_wayland_marshal((struct wl_proxy *)w->surface, 2, NULL, pargs);
+		peak_wayland_marshal((struct wl_proxy *)w->surface, 6, NULL, NULL);
+		peak_wl.wl_display_roundtrip(peak_wayland.display);
+	}
 	peak_wayland.focus = w;
-	intern.w = w;
+	{
+		int i;
+
+		for (i = 0; i < 8; i++) {
+			if (!peak_wayland.wins[i]) {
+				peak_wayland.wins[i] = w;
+				break;
+			}
+		}
+	}
 	return intern;
 fail:
 	peak_wayland_window_close(&intern);
-	free(w);
 	return intern;
 }
 
@@ -1484,6 +2110,20 @@ peak_wayland_window_close(PeakWindowInternal *intern)
 		peak_wayland.focus = NULL;
 		peak_wayland_repeat_stop();
 	}
+	{
+		int i;
+
+		for (i = 0; i < 8; i++) {
+			if (peak_wayland.wins[i] == w)
+				peak_wayland.wins[i] = NULL;
+		}
+	}
+	if (w->alpha)
+		peak_wl.wl_proxy_destroy((struct wl_proxy *)w->alpha);
+	if (w->frac)
+		peak_wl.wl_proxy_destroy((struct wl_proxy *)w->frac);
+	if (w->viewport)
+		peak_wl.wl_proxy_destroy((struct wl_proxy *)w->viewport);
 	if (w->xdg_toplevel)
 		peak_wl.wl_proxy_destroy((struct wl_proxy *)w->xdg_toplevel);
 	if (w->xdg_surface)
@@ -1528,14 +2168,30 @@ peak_wayland_window_present(PeakWindowInternal *intern)
 	if (!w || !w->surface || !w->wl_buf || !w->buffer || !w->shm)
 		return;
 	memcpy(w->shm, w->buffer, w->shm_n);
+	if (!w->alpha && w->opacity < 255) {
+		uint32_t *px;
+		size_t i, n;
+		uint32_t a;
+
+		px = w->shm;
+		n = w->shm_n / 4;
+		a = w->opacity;
+		for (i = 0; i < n; i++) {
+			uint32_t c, pa;
+
+			c = px[i];
+			pa = ((c >> 24) & 255u) * a / 255u;
+			px[i] = (c & 0x00ffffffu) | (pa << 24);
+		}
+	}
 	args[0].o = (struct wl_object *)w->wl_buf;
 	args[1].i = 0;
 	args[2].i = 0;
 	peak_wayland_marshal((struct wl_proxy *)w->surface, 1, NULL, args);
 	args[0].i = 0;
 	args[1].i = 0;
-	args[2].i = (int32_t)w->width;
-	args[3].i = (int32_t)w->height;
+	args[2].i = (int32_t)(w->logical_w ? w->logical_w : w->width);
+	args[3].i = (int32_t)(w->logical_h ? w->logical_h : w->height);
 	peak_wayland_marshal((struct wl_proxy *)w->surface, 2, NULL, args);
 	peak_wayland_marshal((struct wl_proxy *)w->surface, 6, NULL, NULL);
 	peak_wl.wl_display_flush(peak_wayland.display);
@@ -1556,14 +2212,30 @@ peak_wayland_window_set_title(PeakWindowInternal *intern, const char *name)
 }
 
 static void
+peak_wayland_window_set_class(PeakWindowInternal *intern, const char *name)
+{
+	struct peak_wayland_win *w;
+	union wl_argument args[1];
+
+	w = intern ? intern->w : NULL;
+	if (!w || !w->xdg_toplevel || !name || !name[0])
+		return;
+	args[0].s = name;
+	peak_wayland_marshal((struct wl_proxy *)w->xdg_toplevel, 3, NULL, args);
+	peak_wl.wl_display_flush(peak_wayland.display);
+}
+
+static void
 peak_wayland_window_set_size(PeakWindowInternal *intern, uint32_t width, uint32_t height)
 {
 	struct peak_wayland_win *w;
 
 	w = intern ? intern->w : NULL;
-	if (!w)
+	if (!w || !width || !height)
 		return;
-	peak_wayland_shm_resize(w, width, height);
+	w->logical_w = width;
+	w->logical_h = height;
+	peak_wayland_apply_scale(w);
 }
 
 static void
@@ -1589,6 +2261,39 @@ peak_wayland_window_cursor(PeakWindowInternal *intern, int on)
 	if (!w)
 		return;
 	w->cursor_on = on;
+	peak_wayland_cursor_apply(w);
+}
+
+static void
+peak_wayland_window_cursor_shape(PeakWindowInternal *intern, int shape)
+{
+	struct peak_wayland_win *w;
+
+	w = intern ? intern->w : NULL;
+	if (!w)
+		return;
+	w->cursor_shape = shape;
+	if (w->cursor_on)
+		peak_wayland_cursor_apply(w);
+}
+
+static void
+peak_wayland_window_set_opacity(PeakWindowInternal *intern, uint8_t alpha)
+{
+	struct peak_wayland_win *w;
+	union wl_argument args[1];
+
+	w = intern ? intern->w : NULL;
+	if (!w)
+		return;
+	w->opacity = alpha;
+	if (!w->alpha || !w->surface)
+		return;
+	memset(args, 0, sizeof args);
+	args[0].u = (uint32_t)alpha * 0x01010101u;
+	peak_wayland_marshal((struct wl_proxy *)w->alpha, 1, NULL, args);
+	peak_wayland_marshal((struct wl_proxy *)w->surface, 6, NULL, NULL);
+	peak_wl.wl_display_flush(peak_wayland.display);
 }
 
 static void
@@ -1605,8 +2310,10 @@ peak_wayland_window_pointer_relative(PeakWindowInternal *intern, int on)
 static float
 peak_wayland_window_scale(PeakWindowInternal *intern)
 {
-	(void)intern;
-	return peak_wayland.scale > 0 ? (float)peak_wayland.scale : 1.f;
+	struct peak_wayland_win *w;
+
+	w = intern ? intern->w : NULL;
+	return (float)peak_wayland_scale_120(w) / 120.f;
 }
 
 static void
@@ -1882,7 +2589,7 @@ peak_wayland_dd_drop(void *data, struct wl_data_device *dd)
 		mime = peak_wayland.dnd_uri ? "text/uri-list" :
 			peak_wayland.dnd_utf8 ? "text/plain;charset=utf-8" : NULL;
 	if (mime)
-		peak_wayland_offer_recv(o, mime, &acc, &n);
+		peak_wayland_offer_recv((struct wl_proxy *)o, 1, mime, &acc, &n);
 	if (peak_wayland.dnd == o && !peak_wayland.dnd_left && ver >= 3 && (action == 1 || action == 2) && n)
 		peak_wayland_marshal((struct wl_proxy *)o, 3, NULL, NULL);
 	if (peak_wayland.dnd == o)
@@ -2069,6 +2776,158 @@ peak_wayland_ds_action(void *data, struct wl_data_source *ds, uint32_t action)
 	(void)action;
 }
 
+static void
+peak_wayland_ps_offer_kill(struct zwp_primary_selection_offer_v1 **slot)
+{
+	struct zwp_primary_selection_offer_v1 *o;
+
+	o = slot ? *slot : NULL;
+	if (!o)
+		return;
+	peak_wayland_marshal((struct wl_proxy *)o, 1, NULL, NULL);
+	peak_wl.wl_proxy_destroy((struct wl_proxy *)o);
+	if (peak_wayland.ps_offer == o)
+		peak_wayland.ps_offer = NULL;
+	if (peak_wayland.ps_fresh == o)
+		peak_wayland.ps_fresh = NULL;
+	*slot = NULL;
+}
+
+static void
+peak_wayland_ps_src_kill(void)
+{
+	if (!peak_wayland.ps_src)
+		return;
+	peak_wayland_marshal((struct wl_proxy *)peak_wayland.ps_src, 1, NULL, NULL);
+	peak_wl.wl_proxy_destroy((struct wl_proxy *)peak_wayland.ps_src);
+	peak_wayland.ps_src = NULL;
+}
+
+static void
+peak_wayland_ps_offer_mime(void *data, struct zwp_primary_selection_offer_v1 *o, const char *mime)
+{
+	(void)data;
+	if (!peak_wayland_mime_utf8(mime))
+		return;
+	if (o == peak_wayland.ps_fresh)
+		peak_wayland.ps_fresh_utf8 = 1;
+	if (o == peak_wayland.ps_offer)
+		peak_wayland.ps_utf8 = 1;
+}
+
+static void
+peak_wayland_ps_data_offer(void *data, struct zwp_primary_selection_device_v1 *dev, struct zwp_primary_selection_offer_v1 *id)
+{
+	static const struct {
+		void (*offer)(void *, struct zwp_primary_selection_offer_v1 *, const char *);
+	} ol = { peak_wayland_ps_offer_mime };
+
+	(void)data;
+	(void)dev;
+	if (peak_wayland.ps_fresh && peak_wayland.ps_fresh != peak_wayland.ps_offer)
+		peak_wayland_ps_offer_kill(&peak_wayland.ps_fresh);
+	peak_wayland.ps_fresh = id;
+	peak_wayland.ps_fresh_utf8 = 0;
+	if (id)
+		peak_wl.wl_proxy_add_listener((struct wl_proxy *)id, (void (**)(void))(void *)&ol, NULL);
+}
+
+static void
+peak_wayland_ps_selection(void *data, struct zwp_primary_selection_device_v1 *dev, struct zwp_primary_selection_offer_v1 *id)
+{
+	(void)data;
+	(void)dev;
+	if (peak_wayland.ps_offer && peak_wayland.ps_offer != id)
+		peak_wayland_ps_offer_kill(&peak_wayland.ps_offer);
+	peak_wayland.ps_offer = id;
+	peak_wayland.ps_utf8 = 0;
+	if (id && id == peak_wayland.ps_fresh) {
+		peak_wayland.ps_utf8 = peak_wayland.ps_fresh_utf8;
+		peak_wayland.ps_fresh = NULL;
+	}
+}
+
+static void
+peak_wayland_ps_send(void *data, struct zwp_primary_selection_source_v1 *src, const char *mime, int32_t fd)
+{
+	const char *p;
+	size_t n;
+
+	(void)data;
+	(void)src;
+	(void)mime;
+	if (fd < 0)
+		return;
+	if (!peak_clip_own_get(PEAK_CLIP_PRIMARY, &p, &n))
+		n = 0;
+	peak_wayland_ds_write(fd, p ? p : "", n);
+	close(fd);
+}
+
+static void
+peak_wayland_ps_cancelled(void *data, struct zwp_primary_selection_source_v1 *src)
+{
+	(void)data;
+	if (src && src == peak_wayland.ps_src)
+		peak_wayland_ps_src_kill();
+}
+
+static void
+peak_wayland_ps_setup(void)
+{
+	union wl_argument args[2];
+	static const struct {
+		void (*data_offer)(void *, struct zwp_primary_selection_device_v1 *, struct zwp_primary_selection_offer_v1 *);
+		void (*selection)(void *, struct zwp_primary_selection_device_v1 *, struct zwp_primary_selection_offer_v1 *);
+	} dl = { peak_wayland_ps_data_offer, peak_wayland_ps_selection };
+
+	if (!peak_wayland.ps_mgr || !peak_wayland.seat || peak_wayland.ps_dev)
+		return;
+	memset(args, 0, sizeof args);
+	args[1].o = (struct wl_object *)peak_wayland.seat;
+	peak_wayland.ps_dev = (struct zwp_primary_selection_device_v1 *)peak_wayland_marshal((struct wl_proxy *)peak_wayland.ps_mgr, 1, &zwp_primary_selection_device_v1_interface, args);
+	if (peak_wayland.ps_dev)
+		peak_wl.wl_proxy_add_listener((struct wl_proxy *)peak_wayland.ps_dev, (void (**)(void))(void *)&dl, NULL);
+}
+
+static int
+peak_wayland_ps_set(const char *utf8, size_t n)
+{
+	union wl_argument args[2];
+	static const struct {
+		void (*send)(void *, struct zwp_primary_selection_source_v1 *, const char *, int32_t);
+		void (*cancelled)(void *, struct zwp_primary_selection_source_v1 *);
+	} sl = { peak_wayland_ps_send, peak_wayland_ps_cancelled };
+
+	if (!peak_wayland.ps_dev)
+		return 1;
+	peak_wayland_ps_src_kill();
+	if (!utf8 || !n) {
+		memset(args, 0, sizeof args);
+		args[1].u = peak_wayland.serial;
+		peak_wayland_marshal((struct wl_proxy *)peak_wayland.ps_dev, 0, NULL, args);
+		peak_wl.wl_display_flush(peak_wayland.display);
+		return 1;
+	}
+	peak_wayland.ps_src = (struct zwp_primary_selection_source_v1 *)peak_wayland_marshal((struct wl_proxy *)peak_wayland.ps_mgr, 0, &zwp_primary_selection_source_v1_interface, NULL);
+	if (!peak_wayland.ps_src)
+		return 0;
+	peak_wl.wl_proxy_add_listener((struct wl_proxy *)peak_wayland.ps_src, (void (**)(void))(void *)&sl, NULL);
+	memset(args, 0, sizeof args);
+	args[0].s = "text/plain;charset=utf-8";
+	peak_wayland_marshal((struct wl_proxy *)peak_wayland.ps_src, 0, NULL, args);
+	args[0].s = "text/plain";
+	peak_wayland_marshal((struct wl_proxy *)peak_wayland.ps_src, 0, NULL, args);
+	args[0].s = "UTF8_STRING";
+	peak_wayland_marshal((struct wl_proxy *)peak_wayland.ps_src, 0, NULL, args);
+	memset(args, 0, sizeof args);
+	args[0].o = (struct wl_object *)peak_wayland.ps_src;
+	args[1].u = peak_wayland.serial;
+	peak_wayland_marshal((struct wl_proxy *)peak_wayland.ps_dev, 0, NULL, args);
+	peak_wl.wl_display_flush(peak_wayland.display);
+	return 1;
+}
+
 static int
 peak_wayland_clip_set(PeakWindowInternal *intern, PeakClip which, const char *utf8, size_t n)
 {
@@ -2086,6 +2945,8 @@ peak_wayland_clip_set(PeakWindowInternal *intern, PeakClip which, const char *ut
 	};
 
 	(void)intern;
+	if (which == PEAK_CLIP_PRIMARY)
+		return peak_wayland_ps_set(utf8, n);
 	(void)utf8;
 	(void)n;
 	if (which != PEAK_CLIP_CLIPBOARD)
@@ -2112,7 +2973,7 @@ peak_wayland_clip_set(PeakWindowInternal *intern, PeakClip which, const char *ut
 }
 
 static int
-peak_wayland_offer_recv(struct wl_data_offer *o, const char *mime, char **out, size_t *out_n)
+peak_wayland_offer_recv(struct wl_proxy *o, uint32_t opcode, const char *mime, char **out, size_t *out_n)
 {
 	int pfd[2], rfd, flags, got, empty;
 	union wl_argument args[2];
@@ -2131,7 +2992,7 @@ peak_wayland_offer_recv(struct wl_data_offer *o, const char *mime, char **out, s
 	memset(args, 0, sizeof args);
 	args[0].s = mime;
 	args[1].h = pfd[1];
-	peak_wayland_marshal((struct wl_proxy *)o, 1, NULL, args);
+	peak_wayland_marshal(o, opcode, NULL, args);
 	close(pfd[1]);
 	peak_wl.wl_display_flush(peak_wayland.display);
 	rfd = pfd[0];
@@ -2203,7 +3064,7 @@ peak_wayland_clip_take_offer(PeakClip which, struct peak_wayland_win *w)
 		return 0;
 	acc = NULL;
 	n = 0;
-	if (!peak_wayland_offer_recv(peak_wayland.offer, "text/plain;charset=utf-8", &acc, &n))
+	if (!peak_wayland_offer_recv((struct wl_proxy *)peak_wayland.offer, 1, "text/plain;charset=utf-8", &acc, &n))
 		return 0;
 	peak_clip_paste_store(which, acc ? acc : "", n);
 	free(acc);
@@ -2289,6 +3150,24 @@ peak_wayland_clip_request(PeakWindowInternal *intern, PeakClip which)
 	w = intern ? intern->w : NULL;
 	if (!w)
 		return 0;
+	if (which == PEAK_CLIP_PRIMARY && peak_wayland.ps_offer && peak_wayland.ps_utf8) {
+		char *acc;
+		size_t pn;
+
+		acc = NULL;
+		pn = 0;
+		if (peak_wayland_offer_recv((struct wl_proxy *)peak_wayland.ps_offer, 0, "text/plain;charset=utf-8", &acc, &pn)) {
+			peak_clip_paste_store(which, acc ? acc : "", pn);
+			free(acc);
+			memset(&ev, 0, sizeof ev);
+			ev.type = PEAK_EVENT_CLIP;
+			ev.clip.which = which;
+			ev.clip.n = pn;
+			peak_q_push(&w->q, ev);
+			return 1;
+		}
+		free(acc);
+	}
 	if (which == PEAK_CLIP_PRIMARY && peak_clip_own_get(which, &p, &n) && n) {
 		peak_clip_paste_store(which, p, n);
 		memset(&ev, 0, sizeof ev);

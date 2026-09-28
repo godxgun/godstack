@@ -55,6 +55,7 @@ static void peak_internal_proc_clear(PeakProcRec *r);
 static void peak_internal_proc_bind(int out, int tty);
 static int peak_internal_read(int fd, void *buf, size_t n);
 static void peak_internal_tty_no_opost(int fd);
+static void peak_internal_tty_unix(int fd);
 static int peak_internal_fast_so(char *dst, size_t cap);
 static int peak_internal_status_code(int status);
 static void peak_internal_sigchld(int sig);
@@ -233,6 +234,21 @@ peak_internal_tty_no_opost(int fd)
 	(void)tcsetattr(fd, TCSANOW, &tio);
 }
 
+/* Cooked Unix tty: kernel turns NL into CR NL (ONLCR). Raw apps (nvim) clear
+ * OPOST themselves and send LF as terminfo cud1 (index, same column). */
+static void
+peak_internal_tty_unix(int fd)
+{
+	struct termios tio;
+
+	if (fd < 0)
+		return;
+	if (tcgetattr(fd, &tio) < 0)
+		return;
+	tio.c_oflag |= OPOST | ONLCR;
+	(void)tcsetattr(fd, TCSANOW, &tio);
+}
+
 static int
 peak_internal_status_code(int status)
 {
@@ -315,7 +331,7 @@ peak_pty_spawn(const char *file, const char **argv, uint32_t cols, uint32_t rows
 	ws.ws_ypixel = (unsigned short)ypixel;
 	if (openpty(&master, &slave, NULL, NULL, &ws) < 0)
 		return peak_internal_proc_fail();
-	peak_internal_tty_no_opost(slave);
+	peak_internal_tty_unix(slave);
 	pid = fork();
 	if (pid < 0) {
 		close(master);
@@ -332,6 +348,7 @@ peak_pty_spawn(const char *file, const char **argv, uint32_t cols, uint32_t rows
 		dup2(slave, STDERR_FILENO);
 		if (slave > STDERR_FILENO)
 			close(slave);
+		peak_internal_put_size(cols, rows);
 		execvp(file, (char *const *)argv);
 		_Exit(127);
 	}

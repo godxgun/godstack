@@ -60,7 +60,7 @@
 
 #define PEAK_MAJOR "0"
 #define PEAK_MINOR "11"
-#define PEAK_PATCH "1"
+#define PEAK_PATCH "5"
 
 /* CHANGE LOG
  * 0.0.0 - @vasco - prototyping
@@ -104,6 +104,10 @@
  * 0.10.10 - @vasco - peak_pipe_capacity / peak_pipe_set_capacity
  * 0.11.0 - @vasco - peak_pipe_spawn / peak_pipe_resize
  * 0.11.1 - @vasco - pipe spawn: pipe + vt-fast.so; slave no OPOST
+ * 0.11.2 - @vasco - focus/expose events; set_class; set_opacity
+ * 0.11.3 - @vasco - wayland fractional scale, cursor shape, primary, alpha, wheel
+ * 0.11.4 - @vasco - pty spawn keeps OPOST|ONLCR; child COLUMNS and LINES
+ * 0.11.5 - @vasco - Delete is a key, not text DEL (tty erase)
  */
 
 #include <assert.h>
@@ -234,6 +238,8 @@ typedef enum {
     PEAK_EVENT_CLIP,
     PEAK_EVENT_TEXT,
     PEAK_EVENT_DROP,
+    PEAK_EVENT_FOCUS,
+    PEAK_EVENT_EXPOSE,
     PEAK_EVENT_LAST
 } PeakEventType;
 
@@ -261,6 +267,7 @@ typedef struct {
         struct { PeakClip which; size_t n; } clip;
         struct { size_t n; } text;
         struct { size_t n; } drop;
+        struct { int on; } focus; /* 1 gained, 0 lost */
     };
 } PeakEvent;
 
@@ -302,9 +309,13 @@ PEAK uint32_t  *peak_window_backbuffer(PeakWindow *win, size_t *width, size_t *h
 PEAK void       peak_window_clear(PeakWindow *win, float r, float g, float b, float a);
 PEAK void       peak_window_present(PeakWindow *win);
 PEAK void       peak_window_set_title(PeakWindow *win, const char *name);
+PEAK void       peak_window_set_class(PeakWindow *win, const char *name); /* WM_CLASS / app_id */
+PEAK void       peak_window_set_opacity(PeakWindow *win, uint8_t alpha); /* 0..255; no-op if the OS has none */
 PEAK void       peak_window_set_size(PeakWindow *win, uint32_t width, uint32_t height);
 PEAK void       peak_window_fullscreen(PeakWindow *win, int on);
 PEAK void       peak_window_cursor(PeakWindow *win, int on); /* 1 show, 0 hide */
+/* 0 default, 1 text, 2 hand, 3 wait, 4 crosshair, 5 not-allowed, 6 help */
+PEAK void       peak_window_cursor_shape(PeakWindow *win, int shape);
 PEAK void       peak_window_pointer_relative(PeakWindow *win, int on); /* 1 deltas, 0 absolute */
 PEAK float      peak_window_scale(PeakWindow *win); /* framebuffer / window; 1.0 if unknown */
 

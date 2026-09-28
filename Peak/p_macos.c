@@ -81,6 +81,7 @@ static void peak_platform_window_set_title(PeakWindowInternal *intern, const cha
 static void peak_platform_window_set_size(PeakWindowInternal *intern, uint32_t width, uint32_t height);
 static void peak_platform_window_fullscreen(PeakWindowInternal *intern, int on);
 static void peak_platform_window_cursor(PeakWindowInternal *intern, int on);
+static void peak_platform_window_cursor_shape(PeakWindowInternal *intern, int shape);
 static void peak_platform_window_pointer_relative(PeakWindowInternal *intern, int on);
 static float peak_platform_window_scale(PeakWindowInternal *intern);
 
@@ -748,6 +749,20 @@ peak_platform_vulkan_create_surface(PeakWindowInternal *intern, void *instance, 
 }
 
 static void
+peak_platform_window_set_class(PeakWindowInternal *intern, const char *name)
+{
+	(void)intern;
+	(void)name;
+}
+
+static void
+peak_platform_window_set_opacity(PeakWindowInternal *intern, uint8_t alpha)
+{
+	(void)intern;
+	(void)alpha;
+}
+
+static void
 peak_platform_window_set_title(PeakWindowInternal *intern, const char *name)
 {
 	struct peak_macos_win *w;
@@ -800,6 +815,13 @@ peak_platform_window_cursor(PeakWindowInternal *intern, int on)
 		[NSCursor unhide];
 	else
 		[NSCursor hide];
+}
+
+static void
+peak_platform_window_cursor_shape(PeakWindowInternal *intern, int shape)
+{
+	(void)intern;
+	(void)shape;
 }
 
 static void

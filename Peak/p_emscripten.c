@@ -265,6 +265,20 @@ peak_platform_pending(PeakWindowInternal *intern)
 }
 
 static void
+peak_platform_window_set_class(PeakWindowInternal *intern, const char *name)
+{
+	(void)intern;
+	(void)name;
+}
+
+static void
+peak_platform_window_set_opacity(PeakWindowInternal *intern, uint8_t alpha)
+{
+	(void)intern;
+	(void)alpha;
+}
+
+static void
 peak_platform_window_set_title(PeakWindowInternal *intern, const char *name)
 {
 	(void)intern;
@@ -303,6 +317,13 @@ peak_platform_window_cursor(PeakWindowInternal *intern, int on)
 	(void)intern;
 	emscripten_hide_mouse();
 	(void)on;
+}
+
+static void
+peak_platform_window_cursor_shape(PeakWindowInternal *intern, int shape)
+{
+	(void)intern;
+	(void)shape;
 }
 
 static void

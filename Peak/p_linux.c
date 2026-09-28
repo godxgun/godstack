@@ -64,6 +64,7 @@
 	X(XSendEvent,          Status, (Display *, Window, Bool, long, XEvent *)) \
 	X(XResizeWindow,       int, (Display *, Window, unsigned int, unsigned int)) \
 	X(XDefineCursor,       int, (Display *, Window, Cursor)) \
+	X(XCreateFontCursor,  Cursor, (Display *, unsigned int)) \
 	X(XUndefineCursor,     int, (Display *, Window)) \
 	X(XCreatePixmap,       Pixmap, (Display *, Drawable, unsigned int, unsigned int, unsigned int)) \
 	X(XFreePixmap,         int, (Display *, Pixmap)) \
@@ -152,6 +153,7 @@ struct peak_linux_win {
 	int touch_n;
 	float last_x, last_y;
 	Cursor blank;
+	Cursor glyph;
 	Window xdnd_source;
 	Time xdnd_time;
 	PeakEvent extra;
@@ -183,6 +185,7 @@ static void peak_platform_window_set_title(PeakWindowInternal *intern, const cha
 static void peak_platform_window_set_size(PeakWindowInternal *intern, uint32_t width, uint32_t height);
 static void peak_platform_window_fullscreen(PeakWindowInternal *intern, int on);
 static void peak_platform_window_cursor(PeakWindowInternal *intern, int on);
+static void peak_platform_window_cursor_shape(PeakWindowInternal *intern, int shape);
 static void peak_platform_window_pointer_relative(PeakWindowInternal *intern, int on);
 static float peak_platform_window_scale(PeakWindowInternal *intern);
 
@@ -219,7 +222,8 @@ peak_internal_x11_key_map(KeySym sym)
 	case XK_BackSpace: return PEAK_KEY_BACKSPACE;
 	case XK_Tab:
 	case XK_ISO_Left_Tab: return PEAK_KEY_TAB;
-	case XK_Delete: return PEAK_KEY_DELETE;
+	case XK_Delete:
+	case XK_KP_Delete: return PEAK_KEY_DELETE;
 	case XK_Insert:
 	case XK_KP_Insert: return PEAK_KEY_INSERT;
 	case XK_Home:
@@ -491,7 +495,8 @@ peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uin
 
 	screen = DefaultScreen(peak_linux.display);
 	evmask = KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask |
-		PointerMotionMask | StructureNotifyMask | PropertyChangeMask;
+		PointerMotionMask | StructureNotifyMask | PropertyChangeMask |
+		FocusChangeMask | ExposureMask;
 	w->visual = DefaultVisual(peak_linux.display, screen);
 	w->depth = DefaultDepth(peak_linux.display, screen);
 	if ((flags & PEAK_WINDOW_TRANSPARENT) && peak_linux_visual32(screen, &vi)) {
@@ -564,6 +569,8 @@ peak_platform_window_close(PeakWindowInternal *intern)
 		return;
 	if (w->blank && peak_x11.XFreeCursor)
 		peak_x11.XFreeCursor(peak_linux.display, w->blank);
+	if (w->glyph && peak_x11.XFreeCursor)
+		peak_x11.XFreeCursor(peak_linux.display, w->glyph);
 	if (w->ximage) {
 		w->ximage->data = NULL;
 		XDestroyImage(w->ximage);
@@ -844,6 +851,55 @@ peak_linux_clip_property(struct peak_linux_win *w, XPropertyEvent *pe, PeakEvent
 }
 
 static void
+peak_platform_window_set_class(PeakWindowInternal *intern, const char *name)
+{
+	struct peak_linux_win *w;
+	char buf[512];
+	size_t n;
+	Atom atom;
+
+	if (peak_linux_kind == PEAK_LINUX_WAYLAND) {
+		peak_wayland_window_set_class(intern, name);
+		return;
+	}
+	w = intern ? intern->w : NULL;
+	if (!w || !w->window || !peak_linux.display || !name || !name[0])
+		return;
+	n = strlen(name);
+	if (n > 200)
+		n = 200;
+	memcpy(buf, name, n);
+	buf[n] = 0;
+	memcpy(buf + n + 1, name, n);
+	buf[n + 1 + n] = 0;
+	atom = peak_x11.XInternAtom(peak_linux.display, "WM_CLASS", False);
+	peak_x11.XChangeProperty(peak_linux.display, w->window, atom, XA_STRING, 8,
+		PropModeReplace, (const unsigned char *)buf, (int)(n + n + 2));
+	peak_x11.XFlush(peak_linux.display);
+}
+
+static void
+peak_platform_window_set_opacity(PeakWindowInternal *intern, uint8_t alpha)
+{
+	struct peak_linux_win *w;
+	unsigned long val;
+	Atom atom;
+
+	if (peak_linux_kind == PEAK_LINUX_WAYLAND) {
+		peak_wayland_window_set_opacity(intern, alpha);
+		return;
+	}
+	w = intern ? intern->w : NULL;
+	if (!w || !w->window || !peak_linux.display)
+		return;
+	val = (unsigned long)alpha * 0x01010101ul;
+	atom = peak_x11.XInternAtom(peak_linux.display, "_NET_WM_WINDOW_OPACITY", False);
+	peak_x11.XChangeProperty(peak_linux.display, w->window, atom, XA_CARDINAL, 32,
+		PropModeReplace, (const unsigned char *)&val, 1);
+	peak_x11.XFlush(peak_linux.display);
+}
+
+static void
 peak_platform_window_set_title(PeakWindowInternal *intern, const char *name)
 {
 	struct peak_linux_win *w;
@@ -918,8 +974,11 @@ peak_platform_window_cursor(PeakWindowInternal *intern, int on)
 		return;
 	w->cursor_on = on;
 	if (on) {
-		if (peak_x11.XUndefineCursor)
+		if (w->glyph && peak_x11.XDefineCursor)
+			peak_x11.XDefineCursor(peak_linux.display, w->window, w->glyph);
+		else if (peak_x11.XUndefineCursor)
 			peak_x11.XUndefineCursor(peak_linux.display, w->window);
+		peak_x11.XFlush(peak_linux.display);
 		return;
 	}
 	if (!w->blank && peak_x11.XCreatePixmap && peak_x11.XCreatePixmapCursor) {
@@ -930,6 +989,46 @@ peak_platform_window_cursor(PeakWindowInternal *intern, int on)
 	}
 	if (w->blank)
 		peak_x11.XDefineCursor(peak_linux.display, w->window, w->blank);
+	peak_x11.XFlush(peak_linux.display);
+}
+
+static unsigned
+peak_x11_cursor_glyph(int shape)
+{
+	switch (shape) {
+	case 1: return 152; /* XC_xterm */
+	case 2: return 60;  /* XC_hand2 */
+	case 3: return 150; /* XC_watch */
+	case 4: return 34;  /* XC_crosshair */
+	case 5: return 0;   /* XC_X_cursor */
+	case 6: return 92;  /* XC_question_arrow */
+	default: return 68; /* XC_left_ptr */
+	}
+}
+
+static void
+peak_platform_window_cursor_shape(PeakWindowInternal *intern, int shape)
+{
+	struct peak_linux_win *w;
+	Cursor cur;
+
+	if (peak_linux_kind == PEAK_LINUX_WAYLAND) {
+		peak_wayland_window_cursor_shape(intern, shape);
+		return;
+	}
+	w = intern ? intern->w : NULL;
+	if (!w || !w->window || !peak_linux.display || !peak_x11.XCreateFontCursor)
+		return;
+	cur = peak_x11.XCreateFontCursor(peak_linux.display, peak_x11_cursor_glyph(shape));
+	if (!cur)
+		return;
+	if (w->glyph && peak_x11.XFreeCursor)
+		peak_x11.XFreeCursor(peak_linux.display, w->glyph);
+	w->glyph = cur;
+	if (w->cursor_on && peak_x11.XDefineCursor) {
+		peak_x11.XDefineCursor(peak_linux.display, w->window, w->glyph);
+		peak_x11.XFlush(peak_linux.display);
+	}
 }
 
 static void
@@ -1107,7 +1206,12 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 			ev->key.key = peak_internal_x11_key_map(ks ? ks : peak_x11.XLookupKeysym(&xev.xkey, 0));
 			ev->key.mod = peak_internal_x11_mod_map(xev.xkey.state);
 			ev->key.code = (n > 0) ? (uint32_t)(unsigned char)buf[0] : 0;
-			if (xev.type == KeyPress && n > 0 && (unsigned char)buf[0] >= 32) {
+			if (ev->key.key == PEAK_KEY_UNKNOWN && n == 1 && (unsigned char)buf[0] == 0x7f)
+				ev->key.key = PEAK_KEY_DELETE;
+			/* DEL is tty erase, not forward delete. Do not emit it as text. */
+			if (xev.type == KeyPress && n > 0 && (unsigned char)buf[0] >= 32
+				&& (unsigned char)buf[0] != 0x7f
+				&& ev->key.key != PEAK_KEY_DELETE && ev->key.key != PEAK_KEY_BACKSPACE) {
 				peak_text_store(buf, (size_t)n);
 				w->extra_on = 1;
 				memset(&w->extra, 0, sizeof w->extra);
@@ -1152,6 +1256,19 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 			if (w->relative && peak_x11.XWarpPointer)
 				peak_x11.XWarpPointer(peak_linux.display, None, w->window, 0, 0, 0, 0,
 					(int)w->width / 2, (int)w->height / 2);
+			return 1;
+		case FocusIn:
+			ev->type = PEAK_EVENT_FOCUS;
+			ev->focus.on = 1;
+			return 1;
+		case FocusOut:
+			ev->type = PEAK_EVENT_FOCUS;
+			ev->focus.on = 0;
+			return 1;
+		case Expose:
+			if (xev.xexpose.count != 0)
+				continue;
+			ev->type = PEAK_EVENT_EXPOSE;
 			return 1;
 		case ConfigureNotify: {
 			uint32_t width = (uint32_t)xev.xconfigure.width;
