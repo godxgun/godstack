@@ -75,7 +75,7 @@
 #if defined(REND_DEBUG) && !defined(P_LOG_DEBUG_ENABLED)
 #define P_LOG_DEBUG_ENABLED 1
 #endif
-#include "peak.h"
+#include "../Peak/peak.h"
 
 typedef struct rend_renderer_t* RendRenderer; // renderer target handle
 typedef struct rend_pipeline_t* RendPipeline; // represents a baked shader + gpu pipeline state (blend mode, depth, vertex format)

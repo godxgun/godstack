@@ -130,6 +130,7 @@ static VkAllocationCallbacks rend_vk_allocator = {
 	.pfnInternalFree = rend_vk_allocator_free_notification,
 };
 
+#if P_LOG_DEBUG_ENABLED == 1
 static const char *rend_vk_allocator_scope_name[] = {
 	[VK_SYSTEM_ALLOCATION_SCOPE_CACHE] = "Cache",
 	[VK_SYSTEM_ALLOCATION_SCOPE_COMMAND] = "Command",
@@ -137,6 +138,7 @@ static const char *rend_vk_allocator_scope_name[] = {
 	[VK_SYSTEM_ALLOCATION_SCOPE_INSTANCE] = "Instance",
 	[VK_SYSTEM_ALLOCATION_SCOPE_OBJECT] = "Object",
 };
+#endif
 
 static VkInstance vk_instance = 0;
 static VkDebugUtilsMessengerEXT vk_debug_messenger = 0;

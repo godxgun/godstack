@@ -9,7 +9,7 @@
 #define FUSE_REND_H
 
 #include "fuse.h"
-#include "rend.h"
+#include "../Rend/rend.h"
 
 #define FUSE_REND_CLIP_MAX 16
 
