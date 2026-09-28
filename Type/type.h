@@ -201,20 +201,6 @@ typedef struct TypeRect {
 	uint32_t x, y, w, h;
 } TypeRect;
 
-/* ---------------------------------------------------------------------------
- * Context. First added face becomes primary. A bold+italic face is remembered
- * as bold-italic; a bold face as bold; an italic face as italic. Later adds
- * of the same kind replace that slot. Fallback order is the set_fallbacks list.
- *
- * Resolve: color emoji prefers a color fallback, then the style face
- * (bold-italic, else italic, else bold), then primary, then fallbacks.
- * A miss draws the primary .notdef (glyph id 0).
- *
- * Printable ASCII (32..126) and U+FFFD at the current pixel size bypass the
- * LRU. Styled lookups always use the LRU. Changing size drops those slots
- * and warms ASCII again.
- * ------------------------------------------------------------------------- */
-
 
 void type_params_default(TypeParams *params);           /* 1024^2 atlas, 2048 cache, 8 faces, ligatures, color emoji, box AA. */
 void type_face_params_default(TypeFaceParams *face);    /* weight unset, roman. */
@@ -288,6 +274,18 @@ void type_atlas_rgba_clear(TypeAtlasRgba *atlas);
 /*
  * Context reserves memory for all our needs,
  * based on the parameters we pass to it.
+ *
+ * NOTE(vasco): First added face becomes primary. A bold+italic face is remembered
+ * as bold-italic; a bold face as bold; an italic face as italic. Later adds
+ * of the same kind replace that slot. Fallback order is the set_fallbacks list.
+ *
+ * Resolve: color emoji prefers a color fallback, then the style face
+ * (bold-italic, else italic, else bold), then primary, then fallbacks.
+ * A miss draws the primary .notdef (glyph id 0).
+ *
+ * Printable ASCII (32..126) and U+FFFD at the current pixel size bypass the
+ * LRU. Styled lookups always use the LRU. Changing size drops those slots
+ * and warms ASCII again.
  */
 size_t type_memory(const TypeParams *params); /* 0 when params are unusable. */
 TypeCtx *type_place(void *buf, size_t bufsize, const TypeParams *params);
