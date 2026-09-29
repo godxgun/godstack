@@ -1,13 +1,19 @@
 #include "poof.h"
 
+#include <unistd.h>
+
 #if defined(_MSC_VER)
-#include <intrin.h>
+#   include <intrin.h>
 #endif
 
 #if defined(_WIN32)
-#define POOF_DEV_NULL "nul 2>&1"
+#   include <io.h>
+#   define ISATTY(fd) (_isatty(fd))
+#   define POOF_DEV_NULL "nul 2>&1"
 #else
-#define POOF_DEV_NULL "/dev/null 2>&1"
+#   include <unistd.h>
+#   define POOF_DEV_NULL "/dev/null 2>&1"
+#   define ISATTY(fd) (isatty(fd))
 #endif
 
 static bool
@@ -695,14 +701,19 @@ poof_print(uint32_t col, const char *text, ...)
     uint8_t g = (col >> 8) & 0xFF;
     uint8_t b = col & 0xFF;
 
-    printf("\033[38;2;%d;%d;%dm", r, g, b);
+    int color = ISATTY(1);
+
+    if (color)
+        printf("\033[38;2;%u;%u;%um", r, g, b);
 
     va_list args;
     va_start(args, text);
     int res = vprintf(text, args);
     va_end(args);
 
-    printf("\033[0m");
+    if (color)
+        printf("\033[0m");
+
     fflush(stdout);
     return res;
 }
