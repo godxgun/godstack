@@ -22,6 +22,7 @@
  * MACRO FLAGS (you define):
  * - PEAK_VULKAN         Vulkan WSI. Sets VK_USE_PLATFORM_*.
  * - PEAK_NO_AUDIO       audio off. start returns 0. no pthread / pulse.
+ * - PEAK_NO_GAMEPAD     Linux joystick polling off; window pointer input only.
  * - P_LOG_WARN_ENABLED  default 1. PWARN.
  * - P_LOG_INFO_ENABLED  default 1. PINFO.
  * - P_LOG_DEBUG_ENABLED default 0. PDEBUG.

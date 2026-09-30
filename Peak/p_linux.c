@@ -306,6 +306,7 @@ peak_linux_buffer(struct peak_linux_win *w, uint32_t width, uint32_t height)
 	return 1;
 }
 
+#ifndef PEAK_NO_GAMEPAD
 static int peak_linux_gp_fd[4];
 static int peak_linux_gp_on[4];
 
@@ -378,16 +379,26 @@ peak_linux_gamepad_poll(PeakEvent *ev)
 	return 0;
 }
 
+#else
+static int
+peak_linux_gamepad_poll(PeakEvent *ev)
+{
+	(void)ev;
+	return 0;
+}
+#endif
+
 static int
 peak_platform_init(void)
 {
 	void *handle;
-	int i;
 
 	if (peak_linux_kind == PEAK_LINUX_WAYLAND || peak_linux_kind == PEAK_LINUX_X11)
 		return 1;
-	for (i = 0; i < 4; i++)
+#ifndef PEAK_NO_GAMEPAD
+	for (int i = 0; i < 4; i++)
 		peak_linux_gp_fd[i] = -1;
+#endif
 	if (peak_wayland_init()) {
 		peak_linux_kind = PEAK_LINUX_WAYLAND;
 		return 1;
@@ -431,20 +442,21 @@ peak_platform_init(void)
 static void
 peak_platform_quit(void)
 {
-	int i;
 
 	if (peak_linux_kind == PEAK_LINUX_WAYLAND) {
 		peak_wayland_quit();
 		peak_linux_kind = PEAK_LINUX_NONE;
 		return;
 	}
-	for (i = 0; i < 4; i++) {
+#ifndef PEAK_NO_GAMEPAD
+	for (int i = 0; i < 4; i++) {
 		if (peak_linux_gp_fd[i] >= 0) {
 			close(peak_linux_gp_fd[i]);
 			peak_linux_gp_fd[i] = -1;
 		}
 		peak_linux_gp_on[i] = 0;
 	}
+#endif
 	/* NOTE: NVIDIA's Vulkan ICD registers an XCloseDisplay hook, then
 	 * vkDestroyInstance unloads the ICD. Closing afterwards is a SIGSEGV
 	 * into unmapped memory. The connection is dropped on process exit. */

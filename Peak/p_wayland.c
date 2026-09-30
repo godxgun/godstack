@@ -138,6 +138,7 @@ struct peak_wayland_win {
 	int pointer_in;
 	uint32_t attached_w, attached_h;
 	float last_x, last_y;
+	float pointer_x, pointer_y; /* Surface coordinates, independent of resize/scale. */
 	PeakQ q;
 };
 
@@ -509,6 +510,8 @@ peak_wayland_clip_input(struct peak_wayland_win *w)
 	memset(args, 0, sizeof args);
 	args[0].o = (struct wl_object *)reg;
 	peak_wayland_marshal((struct wl_proxy *)w->surface, 5, NULL, args);
+	/* Destroy the server-side region too; proxy_destroy alone leaks it. */
+	peak_wayland_marshal((struct wl_proxy *)reg, 0, NULL, NULL);
 	peak_wl.wl_proxy_destroy((struct wl_proxy *)reg);
 }
 
@@ -976,13 +979,8 @@ peak_wayland_ptr_inside(struct peak_wayland_win *w, float x, float y)
 {
 	if (!w)
 		return 0;
-	if (x < -1.f || y < -1.f)
-		return 0;
-	if (w->logical_w && x > (float)w->logical_w + 1.f)
-		return 0;
-	if (w->logical_h && y > (float)w->logical_h + 1.f)
-		return 0;
-	return 1;
+	return x >= 0.f && y >= 0.f &&
+		x < (float)w->logical_w && y < (float)w->logical_h;
 }
 
 static void
@@ -1004,7 +1002,9 @@ peak_wayland_pointer_enter(void *data, struct wl_pointer *p, uint32_t serial, st
 		return;
 	}
 	w->pointer_in = 1;
-	peak_wayland_to_buf(w, (float)wl_fixed_to_double(x), (float)wl_fixed_to_double(y), &w->last_x, &w->last_y);
+	w->pointer_x = (float)wl_fixed_to_double(x);
+	w->pointer_y = (float)wl_fixed_to_double(y);
+	peak_wayland_to_buf(w, w->pointer_x, w->pointer_y, &w->last_x, &w->last_y);
 	peak_wayland_cursor_apply(w);
 }
 
@@ -1042,7 +1042,9 @@ peak_wayland_pointer_motion(void *data, struct wl_pointer *p, uint32_t time, wl_
 	w = peak_wayland.hover;
 	if (!w)
 		return;
-	if (!peak_wayland_ptr_inside(w, (float)wl_fixed_to_double(x), (float)wl_fixed_to_double(y))) {
+	w->pointer_x = (float)wl_fixed_to_double(x);
+	w->pointer_y = (float)wl_fixed_to_double(y);
+	if (!peak_wayland_ptr_inside(w, w->pointer_x, w->pointer_y)) {
 		if (w->pointer_in) {
 			w->pointer_in = 0;
 			peak_wayland_release_buttons(w);
@@ -1089,6 +1091,15 @@ peak_wayland_pointer_button(void *data, struct wl_pointer *p, uint32_t serial, u
 	w = peak_wayland.hover;
 	if (!w || !w->pointer_in)
 		return;
+	/* A configure can shrink the tile without another pointer motion. */
+	if (!peak_wayland_ptr_inside(w, w->pointer_x, w->pointer_y)) {
+		w->pointer_in = 0;
+		peak_wayland_release_buttons(w);
+		return;
+	}
+	if (button != BTN_LEFT && button != BTN_MIDDLE && button != BTN_RIGHT)
+		return;
+	peak_wayland_to_buf(w, w->pointer_x, w->pointer_y, &w->last_x, &w->last_y);
 	peak_wayland.serial = serial;
 	if (state)
 		peak_wayland.btn_serial = serial;
@@ -1128,8 +1139,10 @@ peak_wayland_wheel(struct peak_wayland_win *w, int down, int n)
 	PeakEvent ev;
 	int i;
 
-	if (!w || n <= 0)
+	if (!w || !w->pointer_in || n <= 0 ||
+		!peak_wayland_ptr_inside(w, w->pointer_x, w->pointer_y))
 		return;
+	peak_wayland_to_buf(w, w->pointer_x, w->pointer_y, &w->last_x, &w->last_y);
 	if (n > 16)
 		n = 16;
 	for (i = 0; i < n; i++) {
