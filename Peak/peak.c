@@ -15,11 +15,25 @@ typedef struct {
     PeakEvent e[PEAK_Q];
 } PeakQ;
 
+static int
+peak_q_motion(PeakEvent ev)
+{
+    return ev.type == PEAK_EVENT_POINTER && ev.pointer.state == PEAK_POINTER_MOVED;
+}
+
 static void
 peak_q_push(PeakQ *q, PeakEvent ev)
 {
-    if (!q || q->n == PEAK_Q)
+    if (!q)
         return;
+    /* Motion floods must not eat a button release. A dropped release leaves
+     * a drag running, so a later click changes the selection. */
+    if (q->n == PEAK_Q) {
+        if (peak_q_motion(ev))
+            return;
+        q->h = (q->h + 1) % PEAK_Q;
+        q->n--;
+    }
     q->e[(q->h + q->n++) % PEAK_Q] = ev;
 }
 

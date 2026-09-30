@@ -1044,10 +1044,11 @@ peak_platform_window_pointer_relative(PeakWindowInternal *intern, int on)
 	if (!w || !w->window || !peak_linux.display)
 		return;
 	w->relative = on;
+	/* confine_to the window trapped the cursor and ate clicks meant for other apps. */
 	if (on && peak_x11.XGrabPointer)
 		peak_x11.XGrabPointer(peak_linux.display, w->window, True,
 			PointerMotionMask | ButtonPressMask | ButtonReleaseMask,
-			GrabModeAsync, GrabModeAsync, w->window, None, CurrentTime);
+			GrabModeAsync, GrabModeAsync, None, None, CurrentTime);
 	else if (!on && peak_x11.XUngrabPointer)
 		peak_x11.XUngrabPointer(peak_linux.display, CurrentTime);
 }
@@ -1262,6 +1263,8 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 			ev->focus.on = 1;
 			return 1;
 		case FocusOut:
+			if (w->relative && peak_x11.XUngrabPointer)
+				peak_x11.XUngrabPointer(peak_linux.display, CurrentTime);
 			ev->type = PEAK_EVENT_FOCUS;
 			ev->focus.on = 0;
 			return 1;

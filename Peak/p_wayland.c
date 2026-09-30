@@ -87,6 +87,7 @@ struct wl_interface wl_shm_interface;
 struct wl_interface wl_shm_pool_interface;
 struct wl_interface wl_buffer_interface;
 struct wl_interface wl_surface_interface;
+struct wl_interface wl_region_interface;
 struct wl_interface wl_seat_interface;
 struct wl_interface wl_pointer_interface;
 struct wl_interface wl_keyboard_interface;
@@ -135,6 +136,7 @@ struct peak_wayland_win {
 	int relative;
 	int touch_n;
 	int pointer_in;
+	uint32_t attached_w, attached_h;
 	float last_x, last_y;
 	PeakQ q;
 };
@@ -210,6 +212,7 @@ typedef struct {
 	uint32_t buttons;
 	PeakKeyMod mod;
 	struct peak_wayland_win *focus;
+	struct peak_wayland_win *hover;
 	int32_t repeat_rate;
 	int32_t repeat_delay;
 	uint32_t repeat_key;
@@ -355,6 +358,7 @@ peak_wayland_load(void)
 		return 0;
 	if (!peak_wayland_copy_iface("wl_surface_interface", &wl_surface_interface))
 		return 0;
+	peak_wayland_copy_iface("wl_region_interface", &wl_region_interface);
 	if (!peak_wayland_copy_iface("wl_seat_interface", &wl_seat_interface))
 		return 0;
 	if (!peak_wayland_copy_iface("wl_pointer_interface", &wl_pointer_interface))
@@ -468,6 +472,80 @@ peak_wayland_viewport_dest(struct peak_wayland_win *w)
 	args[0].i = (int32_t)w->logical_w;
 	args[1].i = (int32_t)w->logical_h;
 	peak_wayland_marshal((struct wl_proxy *)w->viewport, 2, NULL, args);
+}
+
+/* Hit box is the logical tile, not the fractional-scale buffer. Source is
+ * separate: it must match the buffer attached in the same commit. */
+static void
+peak_wayland_clip_input(struct peak_wayland_win *w)
+{
+	union wl_argument args[4];
+	struct wl_region *reg;
+
+	if (!w || !w->surface || !w->logical_w || !w->logical_h)
+		return;
+	if (w->viewport)
+		peak_wayland_viewport_dest(w);
+	/* Geometry is applied with dest, so it matches the new surface size. */
+	if (w->xdg_surface && (w->viewport || w->attached_w)) {
+		memset(args, 0, sizeof args);
+		args[0].i = 0;
+		args[1].i = 0;
+		args[2].i = (int32_t)w->logical_w;
+		args[3].i = (int32_t)w->logical_h;
+		peak_wayland_marshal((struct wl_proxy *)w->xdg_surface, 3, NULL, args);
+	}
+	if (!wl_region_interface.name || !peak_wayland.compositor)
+		return;
+	reg = (struct wl_region *)peak_wayland_marshal((struct wl_proxy *)peak_wayland.compositor, 1, &wl_region_interface, NULL);
+	if (!reg)
+		return;
+	memset(args, 0, sizeof args);
+	args[0].i = 0;
+	args[1].i = 0;
+	args[2].i = (int32_t)w->logical_w;
+	args[3].i = (int32_t)w->logical_h;
+	peak_wayland_marshal((struct wl_proxy *)reg, 1, NULL, args);
+	memset(args, 0, sizeof args);
+	args[0].o = (struct wl_object *)reg;
+	peak_wayland_marshal((struct wl_proxy *)w->surface, 5, NULL, args);
+	peak_wl.wl_proxy_destroy((struct wl_proxy *)reg);
+}
+
+static void
+peak_wayland_clip_source(struct peak_wayland_win *w)
+{
+	union wl_argument args[4];
+
+	if (!w || !w->viewport || !w->width || !w->height)
+		return;
+	memset(args, 0, sizeof args);
+	args[0].f = wl_fixed_from_int(0);
+	args[1].f = wl_fixed_from_int(0);
+	args[2].f = wl_fixed_from_int((int)w->width);
+	args[3].f = wl_fixed_from_int((int)w->height);
+	peak_wayland_marshal((struct wl_proxy *)w->viewport, 1, NULL, args);
+	peak_wayland_viewport_dest(w);
+}
+
+static void
+peak_wayland_bind_geom(struct peak_wayland_win *w)
+{
+	peak_wayland_clip_input(w);
+	peak_wayland_clip_source(w);
+}
+
+/* Shrink the hit target before the next damaged present. A configure that
+ * only waits for present leaves the previous scaled buffer covering the tile
+ * beside this one. No source change: the attached buffer is unchanged. */
+static void
+peak_wayland_commit_clip(struct peak_wayland_win *w)
+{
+	if (!w || !w->surface || !w->configured || !w->attached_w)
+		return;
+	peak_wayland_clip_input(w);
+	peak_wayland_marshal((struct wl_proxy *)w->surface, 6, NULL, NULL);
+	peak_wl.wl_display_flush(peak_wayland.display);
 }
 
 static void
@@ -640,6 +718,7 @@ peak_wayland_surface_preferred_scale(void *data, struct wl_surface *surface, int
 		return;
 	w->int_scale = scale;
 	peak_wayland_apply_scale(w);
+	peak_wayland_commit_clip(w);
 }
 
 static void
@@ -664,6 +743,7 @@ peak_wayland_frac_scale(void *data, struct wp_fractional_scale_v1 *frac, uint32_
 	w->frac_120 = scale;
 	w->have_frac = 1;
 	peak_wayland_apply_scale(w);
+	peak_wayland_commit_clip(w);
 }
 
 static uint32_t
@@ -785,6 +865,7 @@ peak_wayland_xdg_configure(void *data, struct xdg_surface *surf, uint32_t serial
 	args[0].u = serial;
 	peak_wayland_marshal((struct wl_proxy *)surf, 4, NULL, args);
 	w->configured = 1;
+	peak_wayland_commit_clip(w);
 }
 
 static void
@@ -832,42 +913,120 @@ peak_wayland_toplevel_caps(void *data, struct xdg_toplevel *top, struct wl_array
 	(void)caps;
 }
 
+static struct peak_wayland_win *
+peak_wayland_win_from_surface(struct wl_surface *s)
+{
+	int i;
+
+	if (!s)
+		return NULL;
+	for (i = 0; i < 8; i++) {
+		if (peak_wayland.wins[i] && peak_wayland.wins[i]->surface == s)
+			return peak_wayland.wins[i];
+	}
+	return NULL;
+}
+
+static void
+peak_wayland_release_buttons(struct peak_wayland_win *w)
+{
+	PeakEvent ev;
+	uint32_t bits;
+
+	if (!w)
+		return;
+	bits = peak_wayland.buttons;
+	peak_wayland.buttons = 0;
+	if (!bits)
+		return;
+	if (bits & 1) {
+		memset(&ev, 0, sizeof ev);
+		ev.type = PEAK_EVENT_POINTER;
+		ev.pointer.state = PEAK_POINTER_RELEASED;
+		ev.pointer.type = PEAK_POINTER_LEFT;
+		ev.pointer.x = w->last_x;
+		ev.pointer.y = w->last_y;
+		ev.pointer.mod = peak_wayland.mod;
+		peak_q_push(&w->q, ev);
+	}
+	if (bits & 2) {
+		memset(&ev, 0, sizeof ev);
+		ev.type = PEAK_EVENT_POINTER;
+		ev.pointer.state = PEAK_POINTER_RELEASED;
+		ev.pointer.type = PEAK_POINTER_MIDDLE;
+		ev.pointer.x = w->last_x;
+		ev.pointer.y = w->last_y;
+		ev.pointer.mod = peak_wayland.mod;
+		peak_q_push(&w->q, ev);
+	}
+	if (bits & 4) {
+		memset(&ev, 0, sizeof ev);
+		ev.type = PEAK_EVENT_POINTER;
+		ev.pointer.state = PEAK_POINTER_RELEASED;
+		ev.pointer.type = PEAK_POINTER_RIGHT;
+		ev.pointer.x = w->last_x;
+		ev.pointer.y = w->last_y;
+		ev.pointer.mod = peak_wayland.mod;
+		peak_q_push(&w->q, ev);
+	}
+}
+
+static int
+peak_wayland_ptr_inside(struct peak_wayland_win *w, float x, float y)
+{
+	if (!w)
+		return 0;
+	if (x < -1.f || y < -1.f)
+		return 0;
+	if (w->logical_w && x > (float)w->logical_w + 1.f)
+		return 0;
+	if (w->logical_h && y > (float)w->logical_h + 1.f)
+		return 0;
+	return 1;
+}
+
 static void
 peak_wayland_pointer_enter(void *data, struct wl_pointer *p, uint32_t serial, struct wl_surface *s, wl_fixed_t x, wl_fixed_t y)
 {
+	struct peak_wayland_win *w;
+
 	(void)data;
 	(void)p;
-	(void)s;
 	peak_wayland.serial = serial;
-	if (peak_wayland.focus) {
-		peak_wayland.focus->pointer_in = 1;
-		peak_wayland_to_buf(peak_wayland.focus, (float)wl_fixed_to_double(x), (float)wl_fixed_to_double(y), &peak_wayland.focus->last_x, &peak_wayland.focus->last_y);
-		peak_wayland_cursor_apply(peak_wayland.focus);
+	w = peak_wayland_win_from_surface(s);
+	peak_wayland.hover = w;
+	if (!w)
+		return;
+	/* Coords outside the logical tile belong to the window beside us. */
+	if (!peak_wayland_ptr_inside(w, (float)wl_fixed_to_double(x), (float)wl_fixed_to_double(y))) {
+		w->pointer_in = 0;
+		peak_wayland_release_buttons(w);
+		return;
 	}
+	w->pointer_in = 1;
+	peak_wayland_to_buf(w, (float)wl_fixed_to_double(x), (float)wl_fixed_to_double(y), &w->last_x, &w->last_y);
+	peak_wayland_cursor_apply(w);
 }
 
 static void
 peak_wayland_pointer_leave(void *data, struct wl_pointer *p, uint32_t serial, struct wl_surface *s)
 {
 	struct peak_wayland_win *w;
-	PeakEvent ev;
 
 	(void)data;
 	(void)p;
-	(void)s;
 	peak_wayland.serial = serial;
-	w = peak_wayland.focus;
+	w = peak_wayland_win_from_surface(s);
+	if (!w)
+		w = peak_wayland.hover;
+	if (peak_wayland.hover == w)
+		peak_wayland.hover = NULL;
 	if (!w)
 		return;
 	w->pointer_in = 0;
-	memset(&ev, 0, sizeof ev);
-	ev.type = PEAK_EVENT_POINTER;
-	ev.pointer.state = PEAK_POINTER_MOVED;
-	ev.pointer.type = peak_wayland_ptr_type();
-	ev.pointer.x = w->last_x;
-	ev.pointer.y = w->last_y;
-	ev.pointer.mod = peak_wayland.mod;
-	peak_q_push(&w->q, ev);
+	/* A move here used to extend the selection after the pointer had left.
+	 * Release instead, so a click on the next window is not a continued drag. */
+	peak_wayland_release_buttons(w);
 }
 
 static void
@@ -880,9 +1039,17 @@ peak_wayland_pointer_motion(void *data, struct wl_pointer *p, uint32_t time, wl_
 	(void)data;
 	(void)p;
 	(void)time;
-	w = peak_wayland.focus;
+	w = peak_wayland.hover;
 	if (!w)
 		return;
+	if (!peak_wayland_ptr_inside(w, (float)wl_fixed_to_double(x), (float)wl_fixed_to_double(y))) {
+		if (w->pointer_in) {
+			w->pointer_in = 0;
+			peak_wayland_release_buttons(w);
+		}
+		return;
+	}
+	w->pointer_in = 1;
 	peak_wayland_to_buf(w, (float)wl_fixed_to_double(x), (float)wl_fixed_to_double(y), &px, &py);
 	memset(&ev, 0, sizeof ev);
 	ev.type = PEAK_EVENT_POINTER;
@@ -919,8 +1086,8 @@ peak_wayland_pointer_button(void *data, struct wl_pointer *p, uint32_t serial, u
 	(void)data;
 	(void)p;
 	(void)time;
-	w = peak_wayland.focus;
-	if (!w)
+	w = peak_wayland.hover;
+	if (!w || !w->pointer_in)
 		return;
 	peak_wayland.serial = serial;
 	if (state)
@@ -983,7 +1150,7 @@ peak_wayland_axis_flush(struct peak_wayland_win *w)
 	int steps;
 
 	if (!w)
-		w = peak_wayland.focus;
+		w = peak_wayland.hover;
 	if (peak_wayland.frame_saw_120)
 		peak_wayland.acc_v120 += peak_wayland.frame_v120;
 	else if (peak_wayland.frame_saw_disc)
@@ -1043,7 +1210,7 @@ peak_wayland_pointer_axis(void *data, struct wl_pointer *p, uint32_t time, uint3
 	if (!p || peak_wl.wl_proxy_get_version((struct wl_proxy *)p) >= 5)
 		return;
 	if (axis == 0 && v != 0.0)
-		peak_wayland_wheel(peak_wayland.focus, v > 0.0, 1);
+		peak_wayland_wheel(peak_wayland.hover, v > 0.0, 1);
 	peak_wayland.frame_v = 0;
 	peak_wayland.frame_h = 0;
 }
@@ -1053,7 +1220,7 @@ peak_wayland_pointer_frame(void *data, struct wl_pointer *p)
 {
 	(void)data;
 	(void)p;
-	peak_wayland_axis_flush(peak_wayland.focus);
+	peak_wayland_axis_flush(peak_wayland.hover);
 }
 
 static void
@@ -1305,39 +1472,44 @@ peak_wayland_keyboard_keymap(void *data, struct wl_keyboard *k, uint32_t fmt, in
 static void
 peak_wayland_keyboard_enter(void *data, struct wl_keyboard *k, uint32_t serial, struct wl_surface *s, struct wl_array *keys)
 {
+	struct peak_wayland_win *w;
+	PeakEvent ev;
+
 	(void)data;
 	(void)k;
-	(void)s;
 	(void)keys;
 	peak_wayland.serial = serial;
-	if (peak_wayland.focus) {
-		PeakEvent ev;
-
-		memset(&ev, 0, sizeof ev);
-		ev.type = PEAK_EVENT_FOCUS;
-		ev.focus.on = 1;
-		peak_q_push(&peak_wayland.focus->q, ev);
-	}
+	w = peak_wayland_win_from_surface(s);
+	if (!w)
+		return;
+	peak_wayland.focus = w;
+	memset(&ev, 0, sizeof ev);
+	ev.type = PEAK_EVENT_FOCUS;
+	ev.focus.on = 1;
+	peak_q_push(&w->q, ev);
 }
 
 static void
 peak_wayland_keyboard_leave(void *data, struct wl_keyboard *k, uint32_t serial, struct wl_surface *s)
 {
+	struct peak_wayland_win *w;
+	PeakEvent ev;
+
 	(void)data;
 	(void)k;
 	(void)serial;
-	(void)s;
 	peak_wayland_repeat_stop();
 	if (peak_wayland.xkb_compose && peak_xkb.xkb_compose_state_reset)
 		peak_xkb.xkb_compose_state_reset(peak_wayland.xkb_compose);
-	if (peak_wayland.focus) {
-		PeakEvent ev;
-
-		memset(&ev, 0, sizeof ev);
-		ev.type = PEAK_EVENT_FOCUS;
-		ev.focus.on = 0;
-		peak_q_push(&peak_wayland.focus->q, ev);
-	}
+	w = peak_wayland_win_from_surface(s);
+	if (!w)
+		w = peak_wayland.focus;
+	if (!w || (peak_wayland.focus && peak_wayland.focus != w))
+		return;
+	memset(&ev, 0, sizeof ev);
+	ev.type = PEAK_EVENT_FOCUS;
+	ev.focus.on = 0;
+	peak_q_push(&w->q, ev);
 }
 
 static PeakPointerType
@@ -2072,6 +2244,7 @@ peak_wayland_window_open(const char *name, uint32_t width, uint32_t height, uint
 
 		memset(pargs, 0, sizeof pargs);
 		pargs[0].o = (struct wl_object *)w->wl_buf;
+		peak_wayland_bind_geom(w);
 		peak_wayland_marshal((struct wl_proxy *)w->surface, 1, NULL, pargs);
 		pargs[0].i = 0;
 		pargs[1].i = 0;
@@ -2079,6 +2252,8 @@ peak_wayland_window_open(const char *name, uint32_t width, uint32_t height, uint
 		pargs[3].i = (int32_t)(w->logical_h ? w->logical_h : w->height);
 		peak_wayland_marshal((struct wl_proxy *)w->surface, 2, NULL, pargs);
 		peak_wayland_marshal((struct wl_proxy *)w->surface, 6, NULL, NULL);
+		w->attached_w = w->width;
+		w->attached_h = w->height;
 		peak_wl.wl_display_roundtrip(peak_wayland.display);
 	}
 	peak_wayland.focus = w;
@@ -2109,6 +2284,10 @@ peak_wayland_window_close(PeakWindowInternal *intern)
 	if (peak_wayland.focus == w) {
 		peak_wayland.focus = NULL;
 		peak_wayland_repeat_stop();
+	}
+	if (peak_wayland.hover == w) {
+		peak_wayland.hover = NULL;
+		peak_wayland.buttons = 0;
 	}
 	{
 		int i;
@@ -2167,6 +2346,7 @@ peak_wayland_window_present(PeakWindowInternal *intern)
 	w = intern ? intern->w : NULL;
 	if (!w || !w->surface || !w->wl_buf || !w->buffer || !w->shm)
 		return;
+	peak_wayland_bind_geom(w);
 	memcpy(w->shm, w->buffer, w->shm_n);
 	if (!w->alpha && w->opacity < 255) {
 		uint32_t *px;
@@ -2194,6 +2374,8 @@ peak_wayland_window_present(PeakWindowInternal *intern)
 	args[3].i = (int32_t)(w->logical_h ? w->logical_h : w->height);
 	peak_wayland_marshal((struct wl_proxy *)w->surface, 2, NULL, args);
 	peak_wayland_marshal((struct wl_proxy *)w->surface, 6, NULL, NULL);
+	w->attached_w = w->width;
+	w->attached_h = w->height;
 	peak_wl.wl_display_flush(peak_wayland.display);
 }
 
@@ -2236,6 +2418,7 @@ peak_wayland_window_set_size(PeakWindowInternal *intern, uint32_t width, uint32_
 	w->logical_w = width;
 	w->logical_h = height;
 	peak_wayland_apply_scale(w);
+	peak_wayland_commit_clip(w);
 }
 
 static void
@@ -2292,8 +2475,7 @@ peak_wayland_window_set_opacity(PeakWindowInternal *intern, uint8_t alpha)
 	memset(args, 0, sizeof args);
 	args[0].u = (uint32_t)alpha * 0x01010101u;
 	peak_wayland_marshal((struct wl_proxy *)w->alpha, 1, NULL, args);
-	peak_wayland_marshal((struct wl_proxy *)w->surface, 6, NULL, NULL);
-	peak_wl.wl_display_flush(peak_wayland.display);
+	peak_wayland_commit_clip(w);
 }
 
 static void
@@ -2503,14 +2685,14 @@ peak_wayland_dd_enter(void *data, struct wl_data_device *dd, uint32_t serial, st
 
 	(void)data;
 	(void)dd;
-	(void)s;
 	peak_wayland.serial = serial;
 	peak_wayland.dnd_serial = serial;
-	w = peak_wayland.focus;
-	if (w) {
+	w = peak_wayland_win_from_surface(s);
+	if (!w)
+		w = peak_wayland.hover;
+	if (w && peak_wayland_ptr_inside(w, (float)wl_fixed_to_double(x), (float)wl_fixed_to_double(y))) {
 		w->pointer_in = 1;
-		w->last_x = (float)wl_fixed_to_double(x);
-		w->last_y = (float)wl_fixed_to_double(y);
+		peak_wayland_to_buf(w, (float)wl_fixed_to_double(x), (float)wl_fixed_to_double(y), &w->last_x, &w->last_y);
 	}
 	if (peak_wayland.dnd && peak_wayland.dnd != id) {
 		if (peak_wayland.dnd_busy)
