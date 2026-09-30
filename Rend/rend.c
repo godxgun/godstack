@@ -8,7 +8,6 @@
 #ifdef PEAK_VULKAN
 #include "rend_vk14.c"
 #endif
-#include "rend_cpu.c"
 
 static void rend__pipeline_free_list(RendPipeline pipeline);
 static bool rend__renderer_init(RendRenderer renderer, RendBackendType backend);
@@ -26,7 +25,8 @@ static RendRenderer rend_renderers_head = NULL;
 
 bool rend_backend_vk_initialized = false;
 
-RendVTable rend_vtables[] = {
+RendVTable rend_vtables[REND_BACKEND_COUNT] = {
+    [REND_BACKEND_AUTO] = {0},
 #ifdef PEAK_VULKAN
     [REND_BACKEND_VULKAN_14] = {
             .renderer_create = rend_vk14_renderer_create,
@@ -36,7 +36,7 @@ RendVTable rend_vtables[] = {
             .renderer_frame_end = rend_vk14_renderer_frame_end,
             .color_target = rend_vk14_color_target,
 
-            .buffer_create_lifetime = rend_vk14_buffer_create_lifetime,
+            .buffer_create = rend_vk14_buffer_create,
             .buffer_destroy = rend_vk14_buffer_destroy,
             .buffer_copy = rend_vk14_buffer_copy,
 
@@ -67,44 +67,6 @@ RendVTable rend_vtables[] = {
             .descriptor_write_texture = rend_vk14_descriptor_write_texture,
     },
 #endif
-    [REND_BACKEND_CPU] = {
-            .renderer_create = rend_cpu_renderer_create,
-            .renderer_create_offscreen = rend_cpu_renderer_create_offscreen,
-            .renderer_destroy = rend_cpu_renderer_destroy,
-            .renderer_frame_begin = rend_cpu_renderer_frame_begin,
-            .renderer_frame_end = rend_cpu_renderer_frame_end,
-            .color_target = rend_cpu_color_target,
-
-            .buffer_create_lifetime = rend_cpu_buffer_create_lifetime,
-            .buffer_destroy = rend_cpu_buffer_destroy,
-            .buffer_copy = rend_cpu_buffer_copy,
-
-            .texture_create = rend_cpu_texture_create,
-            .texture_destroy = rend_cpu_texture_destroy,
-            .texture_copy_buffer = rend_cpu_texture_copy_buffer,
-            .texture_copy_to_buffer = rend_cpu_texture_copy_to_buffer,
-            .texture_blit = rend_cpu_texture_blit,
-
-            .pipeline_create = rend_cpu_pipeline_create,
-            .pipeline_bind = rend_cpu_pipeline_bind,
-            .pipeline_push_constants = rend_cpu_pipeline_push_constants,
-
-            .pipeline_bind_vertex_buffer = rend_cpu_pipeline_bind_vertex_buffer,
-            .pipeline_bind_index_buffer = rend_cpu_pipeline_bind_index_buffer,
-
-            .pipeline_dispatch = rend_cpu_pipeline_dispatch,
-            .pipeline_draw = rend_cpu_pipeline_draw,
-            .pipeline_draw_indexed = rend_cpu_pipeline_draw_indexed,
-            .pipeline_set_blend = rend_cpu_pipeline_set_blend,
-
-            .renderer_render_pass_begin = rend_cpu_renderer_render_pass_begin,
-            .renderer_render_pass_begin_texture = rend_cpu_renderer_render_pass_begin_texture,
-            .renderer_render_pass_end = rend_cpu_renderer_render_pass_end,
-            .renderer_render_pass_end_texture = rend_cpu_renderer_render_pass_end_texture,
-
-            .descriptor_write_buffer = rend_cpu_descriptor_write_buffer,
-            .descriptor_write_texture = rend_cpu_descriptor_write_texture,
-    },
 };
 
 extern void
@@ -136,10 +98,6 @@ rend_renderer_create(PeakWindow *target, RendBackendType backend, void *device, 
     rend->window = target;
     if (rend_vtables[rend->backend].renderer_create)
         rend->context = rend_vtables[rend->backend].renderer_create(target, bind_info, vsync);
-    if (!rend->context && backend == REND_BACKEND_AUTO && rend->backend != REND_BACKEND_CPU) {
-        rend->backend = REND_BACKEND_CPU;
-        rend->context = rend_vtables[REND_BACKEND_CPU].renderer_create(target, bind_info, vsync);
-    }
     if (!rend->context) {
         rfree(rend);
         return NULL;
@@ -162,10 +120,6 @@ rend_renderer_create_offscreen(uint32_t width, uint32_t height, RendFormat forma
     rend->window = NULL;
     if (rend_vtables[rend->backend].renderer_create_offscreen)
         rend->context = rend_vtables[rend->backend].renderer_create_offscreen(width, height, format, bind_info);
-    if (!rend->context && backend == REND_BACKEND_AUTO && rend->backend != REND_BACKEND_CPU) {
-        rend->backend = REND_BACKEND_CPU;
-        rend->context = rend_vtables[REND_BACKEND_CPU].renderer_create_offscreen(width, height, format, bind_info);
-    }
     if (!rend->context) {
         rfree(rend);
         return NULL;
@@ -345,7 +299,7 @@ rend_buffer_create(RendRenderer renderer, size_t size, RendBufferType type, bool
 {
     RendBuffer buffer;
 
-    buffer = rend_vtables[renderer->backend].buffer_create_lifetime(renderer->context, size, type, gpu, REND_LIFETIME_PERMANENT);
+    buffer = rend_vtables[renderer->backend].buffer_create(renderer->context, size, type, gpu);
     buffer.backend = renderer->backend;
     return buffer;
 }
@@ -515,27 +469,6 @@ rend_pipeline_create_graphics_spirv(RendRenderer renderer, uint8_t *vertex_bytes
 }
 
 extern RendPipeline
-rend_pipeline_create_graphics_c(RendRenderer renderer, void *vertex, size_t vertex_size, void *frag, size_t frag_size, const RendVertexBinding *vertex_bindings, uint32_t vertex_binding_count, const RendVertexAttributes *vertex_attributes, uint32_t vertex_attribute_count, const RendPushConstantInfo *push_constants, uint32_t push_constant_count, RendPolygonMode polygon_mode, RendCullMode cull_mode, RendTopology topology, RendFormat color_format, bool depth_test_enable)
-{
-    Rend__PipelineConfig config;
-
-    config = (Rend__PipelineConfig) {
-        .vertex_bindings = vertex_bindings,
-        .vertex_binding_count = vertex_binding_count,
-        .vertex_attributes = vertex_attributes,
-        .vertex_attribute_count = vertex_attribute_count,
-        .push_constants = push_constants,
-        .push_constant_count = push_constant_count,
-        .polygon_mode = polygon_mode,
-        .cull_mode = cull_mode,
-        .topology = topology,
-        .depth_test_enable = depth_test_enable,
-        .color_format = color_format,
-    };
-    return rend__pipeline_create(renderer, config, REND__PIPELINE_GRAPHICS_C, vertex, vertex_size, frag, frag_size);
-}
-
-extern RendPipeline
 rend_pipeline_create_graphics_bindless_spirv(RendRenderer renderer, uint8_t *vertex_bytes, size_t vertex_size, uint8_t *frag_bytes, size_t frag_size, const RendPushConstantInfo *push_constants, uint32_t push_constant_count, RendPolygonMode polygon_mode, RendCullMode cull_mode, RendTopology topology, RendFormat color_format, bool depth_test_enable)
 {
     return rend_pipeline_create_graphics_spirv(renderer, vertex_bytes, vertex_size, frag_bytes, frag_size,
@@ -697,33 +630,19 @@ rend_cmd_blit(RendRenderer renderer, RendTexture *src, RendTexture *dst, uint32_
 static bool
 rend__renderer_init(RendRenderer renderer, RendBackendType backend)
 {
-    RendBackendType first;
-    RendBackendType last;
-    RendBackendType i;
-
-    if (backend == REND_BACKEND_AUTO) {
-        first = (RendBackendType)(REND_BACKEND_AUTO + 1);
-        last = (RendBackendType)(REND_BACKEND_COUNT - 1);
-    } else if (backend > REND_BACKEND_AUTO && backend < REND_BACKEND_COUNT) {
-        first = last = backend;
-    } else {
-        REND__CRASH("Invalid backend type!");
+    if (backend != REND_BACKEND_AUTO && backend != REND_BACKEND_VULKAN_14) {
+        REND__WARN("Invalid backend type!");
         return false;
     }
-
-    for (i = first; i <= last; i++) {
 #ifdef PEAK_VULKAN
-        if (i == REND_BACKEND_VULKAN_14 && rend_vk_init()) {
-            rend_backend_vk_initialized = true;
-            renderer->backend = REND_BACKEND_VULKAN_14;
-            return true;
-        }
-#endif
-        if (i == REND_BACKEND_CPU) {
-            renderer->backend = REND_BACKEND_CPU;
-            return true;
-        }
+    if (rend_vk_init()) {
+        rend_backend_vk_initialized = true;
+        renderer->backend = REND_BACKEND_VULKAN_14;
+        return true;
     }
+#else
+    (void)renderer;
+#endif
     return false;
 }
 
@@ -819,8 +738,8 @@ rend__staging_map(RendRenderer renderer, size_t size)
         vt->buffer_destroy(&renderer->staging);
         memset(&renderer->staging, 0, sizeof renderer->staging);
     }
-    renderer->staging = vt->buffer_create_lifetime(
-        renderer->context, size, REND_BUFFER_TRANSFER, false, REND_LIFETIME_PERMANENT);
+    renderer->staging = vt->buffer_create(
+        renderer->context, size, REND_BUFFER_TRANSFER, false);
     renderer->staging.backend = renderer->backend;
     return renderer->staging.mapped_memory;
 }

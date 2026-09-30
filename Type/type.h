@@ -295,6 +295,9 @@ void type_clear_fonts(TypeCtx *ctx); /* Drops faces. Font bytes may be freed aft
 void type_select(TypeCtx *ctx, uint32_t font_id);
 TypeError type_set_fallbacks(TypeCtx *ctx, const uint32_t *ids, uint32_t count);
 
+/* Coverage pixel revision; cache hits/packing alone do not change it.
+ * Non-consuming: each GPU consumer keeps its own last uploaded revision. */
+uint64_t type_ctx_atlas_revision(const TypeCtx *ctx);
 const uint8_t *type_ctx_atlas(const TypeCtx *ctx, uint32_t *width, uint32_t *height);
 const uint32_t *type_ctx_color_atlas(const TypeCtx *ctx, uint32_t *width, uint32_t *height);
 

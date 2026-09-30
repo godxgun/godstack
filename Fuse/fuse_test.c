@@ -11,6 +11,11 @@
 
 static int g_fails;
 
+// NOTE(vasco): helper because bad things can happen to good people
+FuseError get_error(FuseCanvas c) {
+    return (c) ? c->error : FUSE_ERR_BUF_TOO_SMALL;
+}
+
 static void expect(int ok, const char *what);
 static int nearly(float a, float b, float eps);
 static FuseCmd *find_rect(FuseCmd *cmds, size_t n, uint32_t color);
@@ -26,6 +31,8 @@ static void test_scroll(void);
 static void test_debug(void);
 static void test_columns(void);
 static void test_sizing(void);
+static void test_textbox(void);
+static FuseCmd *find_text(FuseCmd *cmds, size_t n);
 static int has_rect_at(FuseCmd *cmds, size_t n, float x, float y, float w, float h, uint32_t color);
 static int has_panel(FuseCmd *cmds, size_t n, float width, float height);
 
@@ -84,6 +91,20 @@ has_rect_at(FuseCmd *cmds, size_t n, float x, float y, float w, float h, uint32_
     return 0;
 }
 
+FuseCmd *
+find_text(FuseCmd *cmds, size_t n)
+{
+    size_t i;
+
+    if (!cmds)
+        return NULL;
+    for (i = 0; i < n; i++) {
+        if (cmds[i].type == FUSE_CMD_TEXT)
+            return &cmds[i];
+    }
+    return NULL;
+}
+
 int
 has_panel(FuseCmd *cmds, size_t n, float width, float height)
 {
@@ -117,13 +138,13 @@ test_memory(void)
     printf("memory\n");
     expect(fuse_canvas_create(NULL, 1024) == NULL, "create null buf");
     expect(fuse_canvas_create(small, sizeof small) == NULL, "create too small");
-    expect(fuse_canvas_error(NULL) == FUSE_ERR_BUF_TOO_SMALL, "error null canvas");
+    expect(get_error(NULL) == FUSE_ERR_BUF_TOO_SMALL, "error null canvas");
     need = fuse_canvas_memory(64);
     expect(need > 0 && need <= sizeof buf, "memory(64) fits");
     expect(fuse_canvas_memory(8192) <= (2u << 20), "memory(8192) fits 2MiB");
     c = fuse_canvas_create(buf, need);
     expect(c != NULL, "create exact");
-    expect(fuse_canvas_error(c) == FUSE_ERR_OK, "create ok");
+    expect(get_error(c) == FUSE_ERR_OK, "create ok");
 }
 
 void
@@ -232,7 +253,7 @@ test_sidebar(void)
     } fuse_div_end(c);
     cmds = fuse_canvas_draw(c, &n);
     expect(cmds != NULL && n > 0, "frame 1 cmds");
-    expect(fuse_canvas_error(c) == FUSE_ERR_OK, "frame 1 ok");
+    expect(get_error(c) == FUSE_ERR_OK, "frame 1 ok");
 
     saw_clip = 0;
     saw_button = 0;
@@ -303,15 +324,15 @@ test_unbalanced(void)
     fuse_canvas_resize(c, 100, 100);
     fuse_canvas_clear(c);
     fuse_div_end(c);
-    expect(fuse_canvas_error(c) == FUSE_ERR_UNBALANCED, "extra end");
+    expect(get_error(c) == FUSE_ERR_UNBALANCED, "extra end");
     cmds = fuse_canvas_draw(c, &n);
     expect(cmds == NULL && n == 0, "draw fails");
 
     fuse_canvas_clear(c);
-    expect(fuse_canvas_error(c) == FUSE_ERR_OK, "clear resets error");
+    expect(get_error(c) == FUSE_ERR_OK, "clear resets error");
     fuse_div_begin(c, 0, 0, 50, 50, NULL);
     cmds = fuse_canvas_draw(c, &n);
-    expect(cmds == NULL && fuse_canvas_error(c) == FUSE_ERR_UNBALANCED, "missing end");
+    expect(cmds == NULL && get_error(c) == FUSE_ERR_UNBALANCED, "missing end");
 }
 
 void
@@ -517,7 +538,7 @@ test_debug(void)
     fuse_id(c, "ok");
     fuse_button(c, 10, 10, 40, 20, 0xFF111111u, 0xFF222222u);
     cmds = fuse_canvas_draw(c, &n);
-    expect(cmds && fuse_canvas_error(c) == FUSE_ERR_OK, "debug draw");
+    expect(cmds && get_error(c) == FUSE_ERR_OK, "debug draw");
     expect(has_panel(cmds, n, 200, 100), "panel on the right");
     expect(has_rect_at(cmds, n, 10, 10, 40, 1, 0xFFFF9900u), "hover box");
 
@@ -533,7 +554,7 @@ test_debug(void)
     clicked = fuse_button(c, 10, 10, 40, 20, 0xFF111111u, 0xFF222222u);
     cmds = fuse_canvas_draw(c, &n);
     expect(!clicked, "inspect does not click");
-    expect(fuse_canvas_error(c) == FUSE_ERR_OK, "inspect click ok");
+    expect(get_error(c) == FUSE_ERR_OK, "inspect click ok");
 
     fuse_canvas_pointer(c, FUSE_POINTER_RELEASED, 0, 0);
     fuse_canvas_clear(c);
@@ -553,7 +574,7 @@ test_debug(void)
     } fuse_div_end(c);
     fuse_canvas_draw(c, &n);
     expect(nearly(scroll, 0.0f, 0.01f), "wheel over the panel does not scroll the list");
-    expect(fuse_canvas_error(c) == FUSE_ERR_OK, "panel wheel ok");
+    expect(get_error(c) == FUSE_ERR_OK, "panel wheel ok");
 
     scroll = 0.0f;
     fuse_canvas_pointer(c, FUSE_POINTER_RELEASED, 20, 20);
@@ -599,7 +620,7 @@ test_columns(void)
         fuse_rect(c, 2.0f, 4.0f, 6.0f, 6.0f, 0xFF020202u);
     } fuse_col_end(c);
     cmds = fuse_canvas_draw(c, &n);
-    expect(cmds && fuse_canvas_error(c) == FUSE_ERR_OK, "ratio draw");
+    expect(cmds && get_error(c) == FUSE_ERR_OK, "ratio draw");
     expect(has_rect_at(cmds, n, 10.0f, 20.0f, 8.0f, 8.0f, 0xFF010101u), "left column origin");
     expect(has_rect_at(cmds, n, 32.0f, 24.0f, 6.0f, 6.0f, 0xFF020202u), "right column is 3/4");
     saw_glyph = 0;
@@ -626,19 +647,19 @@ test_columns(void)
         fuse_rect(c, 0.0f, 0.0f, 10.0f, 10.0f, 0xFF0C0C0Cu);
     } fuse_col_end(c);
     cmds = fuse_canvas_draw(c, &n);
-    expect(cmds && fuse_canvas_error(c) == FUSE_ERR_OK, "stack draw");
+    expect(cmds && get_error(c) == FUSE_ERR_OK, "stack draw");
     expect(has_rect_at(cmds, n, 0.0f, 0.0f, 10.0f, 10.0f, 0xFF0A0A0Au), "first stacked child");
     expect(has_rect_at(cmds, n, 0.0f, 14.0f, 10.0f, 10.0f, 0xFF0B0B0Bu), "second stacked child");
     expect(has_rect_at(cmds, n, 52.0f, 0.0f, 10.0f, 24.0f, 0xFF0C0C0Cu), "short column grows to the tall one");
 
     fuse_canvas_clear(c);
     fuse_col_end(c);
-    expect(fuse_canvas_error(c) == FUSE_ERR_UNBALANCED, "end without begin");
+    expect(get_error(c) == FUSE_ERR_UNBALANCED, "end without begin");
     fuse_canvas_clear(c);
     fuse_col_begin(c, 0.0f, 0.0f, 40.0f, NULL, ratio, 2);
     fuse_col_switch(c);
     fuse_col_switch(c);
-    expect(fuse_canvas_error(c) == FUSE_ERR_UNBALANCED, "switch past the last column");
+    expect(get_error(c) == FUSE_ERR_UNBALANCED, "switch past the last column");
 }
 
 static int
@@ -687,7 +708,7 @@ test_sizing(void)
         fuse_rect(c, 0, 0, 30, 10, 0xFF222222u);
     } fuse_div_end(c);
     cmds = fuse_canvas_draw(c, &n);
-    expect(cmds && fuse_canvas_error(c) == FUSE_ERR_OK, "space draw");
+    expect(cmds && get_error(c) == FUSE_ERR_OK, "space draw");
     expect(has_rect_at(cmds, n, 0, 0, 20, 10, 0xFF111111u), "space keeps the left child");
     expect(has_rect_at(cmds, n, 170, 0, 30, 10, 0xFF222222u), "space pushes the right child");
 
@@ -720,6 +741,146 @@ test_sizing(void)
     expect(!has_ink_in(cmds, n, 0, 0, 10, 10, 0xFF000000u), "label is not a sibling outside the button");
 }
 
+static int
+allow_digit(unsigned char ch, void *user)
+{
+    (void)user;
+    return ch >= '0' && ch <= '9';
+}
+
+void
+test_textbox(void)
+{
+    unsigned char buf[1 << 16];
+    FuseCanvas c;
+    FuseCmd *cmds;
+    FuseCmd *text;
+    size_t n;
+    size_t i;
+    int saw_clip;
+    char name[32];
+    char path[32];
+    int caret;
+    int changed;
+
+    printf("textbox\n");
+    c = fuse_canvas_create(buf, sizeof buf);
+    fuse_canvas_resize(c, 200, 100);
+    fuse_canvas_pointer(c, FUSE_POINTER_RELEASED, 0, 0);
+
+    name[0] = 0;
+    caret = 0;
+    fuse_focus(c, "name");
+    fuse_canvas_text(c, "Hi!");
+    fuse_canvas_clear(c);
+    fuse_id(c, "name");
+    changed = fuse_textbox(c, 10, 10, 120, 32, 8, 8, name, (int)sizeof name, &caret,
+        "name", 16, 0xFF111111u, 0xFF222222u, 0xFFEEEEEE, 0xFF888888u, 1, NULL, NULL);
+    cmds = fuse_canvas_draw(c, &n);
+    text = find_text(cmds, n);
+    {
+        const FuseFieldRun *runs;
+        size_t nf;
+        const FuseFieldRun *run;
+
+        runs = fuse_canvas_fields(c, &nf);
+        run = (text && runs && text->text.slot < nf) ? &runs[text->text.slot] : NULL;
+        expect(changed, "text inserts");
+        expect(strcmp(name, "Hi!") == 0 && caret == 3, "buffer and caret");
+        expect(run && run->str && strcmp(run->str, "Hi!") == 0, "text command");
+        expect(run && run->caret == 3, "caret is sent to the renderer");
+    }
+    saw_clip = 0;
+    if (cmds) {
+        for (i = 0; i < n; i++) {
+            if (cmds[i].type == FUSE_CMD_CLIP_START)
+                saw_clip = 1;
+        }
+    }
+    expect(saw_clip, "field clips the glyphs");
+    expect(fuse_focused(c, "name"), "focus stays on the field");
+
+    fuse_canvas_key(c, FUSE_KEY_BACKSPACE);
+    fuse_canvas_clear(c);
+    fuse_id(c, "name");
+    changed = fuse_textbox(c, 10, 10, 120, 32, 8, 8, name, (int)sizeof name, &caret,
+        "name", 16, 0xFF111111u, 0xFF222222u, 0xFFEEEEEE, 0xFF888888u, 0, NULL, NULL);
+    cmds = fuse_canvas_draw(c, &n);
+    text = find_text(cmds, n);
+    {
+        const FuseFieldRun *runs;
+        size_t nf;
+        const FuseFieldRun *run;
+
+        runs = fuse_canvas_fields(c, &nf);
+        run = (text && runs && text->text.slot < nf) ? &runs[text->text.slot] : NULL;
+        expect(changed && strcmp(name, "Hi") == 0 && caret == 2, "backspace");
+        expect(run && run->caret < 0, "blink hides the caret");
+    }
+
+    path[0] = 0;
+    caret = 0;
+    fuse_focus(c, "path");
+    fuse_canvas_text(c, "a1b2");
+    fuse_canvas_clear(c);
+    fuse_id(c, "name");
+    changed = fuse_textbox(c, 10, 10, 80, 32, 4, 4, name, (int)sizeof name, &caret,
+        NULL, 16, 0xFF111111u, 0xFF222222u, 0xFFEEEEEE, 0xFF888888u, 1, NULL, NULL);
+    expect(!changed && strcmp(name, "Hi") == 0, "unfocused field ignores keys");
+    fuse_id(c, "path");
+    changed = fuse_textbox(c, 10, 50, 80, 32, 4, 4, path, (int)sizeof path, &caret,
+        "path", 16, 0xFF111111u, 0xFF222222u, 0xFFEEEEEE, 0xFF888888u, 1, allow_digit, NULL);
+    cmds = fuse_canvas_draw(c, &n);
+    {
+        const FuseFieldRun *runs;
+        size_t nf;
+        const FuseFieldRun *run;
+
+        runs = fuse_canvas_fields(c, &nf);
+        run = NULL;
+        if (cmds && runs) {
+            for (i = 0; i < n; i++) {
+                if (cmds[i].type != FUSE_CMD_TEXT || cmds[i].text.slot >= nf)
+                    continue;
+                if (runs[cmds[i].text.slot].str &&
+                    strcmp(runs[cmds[i].text.slot].str, "12") == 0)
+                    run = &runs[cmds[i].text.slot];
+            }
+        }
+        expect(changed && strcmp(path, "12") == 0, "filter drops letters");
+        expect(run && run->color == 0xFFEEEEEE, "value uses the ink");
+    }
+
+    name[0] = 0;
+    caret = 0;
+    fuse_focus(c, NULL);
+    fuse_canvas_clear(c);
+    fuse_id(c, "name");
+    fuse_textbox(c, 10, 10, 80, 32, 4, 4, name, (int)sizeof name, &caret,
+        "Find", 16, 0xFF111111u, 0xFF222222u, 0xFFEEEEEE, 0xFF888888u, 1, NULL, NULL);
+    cmds = fuse_canvas_draw(c, &n);
+    text = find_text(cmds, n);
+    {
+        const FuseFieldRun *runs;
+        size_t nf;
+        const FuseFieldRun *run;
+
+        runs = fuse_canvas_fields(c, &nf);
+        run = (text && runs && text->text.slot < nf) ? &runs[text->text.slot] : NULL;
+        expect(run && run->str && strcmp(run->str, "Find") == 0, "placeholder");
+        expect(run && run->color == 0xFF888888u, "placeholder is ghost ink");
+    }
+
+    fuse_canvas_pointer(c, FUSE_POINTER_PRESSED, 20, 20);
+    fuse_canvas_pointer(c, FUSE_POINTER_RELEASED, 20, 20);
+    fuse_canvas_clear(c);
+    fuse_id(c, "name");
+    fuse_textbox(c, 10, 10, 80, 32, 4, 4, name, (int)sizeof name, &caret,
+        "Find", 16, 0xFF111111u, 0xFF222222u, 0xFFEEEEEE, 0xFF888888u, 1, NULL, NULL);
+    fuse_canvas_draw(c, &n);
+    expect(fuse_focused(c, "name"), "click focuses the field");
+}
+
 int
 main(void)
 {
@@ -735,6 +896,7 @@ main(void)
     test_debug();
     test_columns();
     test_sizing();
+    test_textbox();
     if (g_fails) {
         printf("%d failed\n", g_fails);
         return 1;

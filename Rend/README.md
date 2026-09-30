@@ -1,6 +1,23 @@
 # Rend 
 
-Send data to the GPU in a stable cross-platform and cross-graphics-API way. 
+Send data to the GPU through Vulkan 1.4. Define `PEAK_VULKAN` when compiling.
+`REND_BACKEND_AUTO` selects Vulkan; creation returns `NULL` if it is unavailable.
+
+## Memory lifetimes
+
+Vulkan manages its own host allocations using the default allocation callbacks.
+Buffers and caller-created textures still use renderer-lifetime device-memory
+arenas: destroying these objects does not reclaim their arena space. Avoid
+unbounded resource replacement within one renderer. Internal depth images own
+separate device allocations; replacement reclaims both the image and its memory
+once GPU use has completed.
+
+The unused frame-lifetime allocator and CPU backend have been removed in 2.0.
+CPU shader callbacks and `rend_pipeline_create_graphics_c` are no longer supported.
+For software-drawn pixels, use Peak's backbuffer and presentation API directly.
+
+Run the offscreen Vulkan lifetime regression from the godstack directory with
+`./build rend test` (requires Vulkan validation layers).
 
 Here's an example render loop used in my game! 
 

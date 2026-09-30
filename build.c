@@ -45,7 +45,7 @@ add_rend_demo(Poof_Batch *batch, const char *src, const char *out, uint32_t opt,
     poof_cmd_append(&cc.includes, ".", "Rend", "Peak", "Fuse", "Grit");
     poof_cmd_append(&cc.defines, "PEAK_VULKAN");
     if (define) poof_cmd_append(&cc.defines, define);
-    poof_cmd_append(&cc.libs, "m");
+    poof_cmd_append(&cc.libs, "m", "z");
     poof_cmd_append(&cc.extra_flags, "-std=c99", "-Wall", "-Werror");
     add_peak_config(&cc);
     poof_batch_append_cc(batch, &cc);
@@ -201,6 +201,8 @@ build_rend_demos(void)
 
     slangc_entry(&batch, "demos/dashboard/fuse_ui.slang", "vertMain", "vertex", "demos/dashboard/fuse_ui.vert.spv");
     slangc_entry(&batch, "demos/dashboard/fuse_ui.slang", "fragMain", "fragment", "demos/dashboard/fuse_ui.frag.spv");
+    slangc_entry(&batch, "demos/dashboard/fuse_text.slang", "vertMain", "vertex", "demos/dashboard/fuse_text.vert.spv");
+    slangc_entry(&batch, "demos/dashboard/fuse_text.slang", "fragMain", "fragment", "demos/dashboard/fuse_text.frag.spv");
     add_rend_demo(&batch, "demos/dashboard/dashboard.c", "demos/dashboard/dashboard", POOF_O0, "REND_DEBUG");
 
     return poof_batch_run(&batch, "Rend Demos");
@@ -256,7 +258,7 @@ build_codeanalizer(void)
 }
 
 static bool
-build_rend_cpu_test(void)
+build_rend_vk_test(void)
 {
     Poof_CC cc = {0};
 
@@ -264,13 +266,14 @@ build_rend_cpu_test(void)
     poof_cc_init(&cc, POOF_CC_GCC | POOF_CC_CLANG, POOF_TARGET_HOST);
     cc.debug_mode = true;
     cc.optimization = POOF_O0;
-    cc.output = "tests/rend_cpu";
-    poof_cmd_append(&cc.inputs, "tests/rend_cpu.c");
+    cc.output = "tests/rend_vk";
+    poof_cmd_append(&cc.inputs, "tests/rend_vk.c");
     poof_cmd_append(&cc.includes, ".", "Rend", "Peak");
-    poof_cmd_append(&cc.defines, "REND_DEBUG");
+    poof_cmd_append(&cc.defines, "PEAK_VULKAN", "REND_DEBUG");
     poof_cmd_append(&cc.libs, "m");
     poof_cmd_append(&cc.extra_flags, "-std=c99", "-Wall", "-Werror");
-    poof_cc_append_linux(&cc, "-ldl");
+    add_peak_link(&cc);
+    add_peak_config(&cc);
     return poof_cc_run(&cc);
 }
 
@@ -306,7 +309,7 @@ run_tests(void)
     if (!run_one(&cmd)) return false;
 
     cmd = (Poof_Cmd){0};
-    poof_cmd_append(&cmd, "./tests/rend_cpu");
+    poof_cmd_append(&cmd, "./tests/rend_vk");
     if (!run_one(&cmd)) return false;
 
     cmd = (Poof_Cmd){0};
@@ -345,21 +348,35 @@ main(int argc, char **argv)
 {
     int test;
     int peak_only;
+    int rend_only;
     int i;
 
     POOF_GO_REBUILD_URSELF(argc, argv);
 
     test = 0;
     peak_only = 0;
+    rend_only = 0;
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "test") == 0)
             test = 1;
         if (strcmp(argv[i], "peak") == 0)
             peak_only = 1;
+        if (strcmp(argv[i], "rend") == 0)
+            rend_only = 1;
         if (strcmp(argv[i], "tools") == 0) {
             if (!build_codeanalizer()) return 1;
             return 0;
         }
+    }
+
+    if (rend_only) {
+        if (!build_rend_vk_test()) return 1;
+        if (test) {
+            Poof_Cmd cmd = {0};
+            poof_cmd_append(&cmd, "./tests/rend_vk");
+            if (!run_one(&cmd)) return 1;
+        }
+        return 0;
     }
 
     if (peak_only) {
@@ -382,7 +399,7 @@ main(int argc, char **argv)
     if (!build_rend_demos()) return 1;
     if (!build_cast_test()) return 1;
     if (!build_cool_transpiler()) return 1;
-    if (!build_rend_cpu_test()) return 1;
+    if (!build_rend_vk_test()) return 1;
     if (test && !run_tests()) return 1;
     return 0;
 }

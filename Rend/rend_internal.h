@@ -45,7 +45,6 @@ enum RendPipelineType {
     REND__PIPELINE_GRAPHICS,
     REND__PIPELINE_COMPUTE,
     REND__PIPELINE_MESH,
-    REND__PIPELINE_GRAPHICS_C,
 };
 
 typedef struct rend_pipeline_config_t {
@@ -81,7 +80,7 @@ typedef struct {
     void (*descriptor_write_buffer)(RendContextHandle handle, RendBuffer ubo, uint32_t binding, uint32_t slot, uint32_t offset, uint32_t size, bool is_ubo);
     void (*descriptor_write_texture)(RendContextHandle handle, RendTexture *texture, uint32_t binding, uint32_t slot);
 
-    RendBuffer   (*buffer_create_lifetime)(RendContextHandle handle, size_t size, RendBufferType type, bool gpu, int lifetime);
+    RendBuffer   (*buffer_create)(RendContextHandle handle, size_t size, RendBufferType type, bool gpu);
     void         (*buffer_destroy)(RendBuffer *buffer);
     void         (*buffer_copy)(RendContextHandle handle, RendBuffer *dest, size_t dest_offset, RendBuffer *src, size_t src_offset, size_t bytes);
     

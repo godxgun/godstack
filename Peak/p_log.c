@@ -46,7 +46,7 @@ peak_log_printf(PeakLogLevel level, const char *src, ...)
 void *
 peak_debug_malloc_impl(size_t size, const char *file, int line, const char *func)
 {
-    void *ptr = malloc(size);
+    void *ptr = (malloc)(size);
     printf("[ALLOC] %p (%zu bytes) -> %s:%d %s()\n", ptr, size, file, line, func);
 
     if (ptr) {
@@ -63,6 +63,19 @@ peak_debug_malloc_impl(size_t size, const char *file, int line, const char *func
         }
     }
     return ptr;
+}
+
+void *
+peak_debug_calloc_impl(size_t count, size_t size, const char *file, int line, const char *func)
+{
+	void *ptr;
+
+	if (size && count > SIZE_MAX / size)
+		return NULL;
+	ptr = peak_debug_malloc_impl(count * size, file, line, func);
+	if (ptr)
+		memset(ptr, 0, count * size);
+	return ptr;
 }
 
 void
@@ -92,7 +105,7 @@ peak_debug_free_impl(void *ptr, const char *file, int line, const char *func)
                 ptr, file, line, func);
     }
 
-    free(ptr);
+    (free)(ptr);
 }
 
 void *
@@ -107,7 +120,7 @@ peak_debug_realloc_impl(void *ptr, size_t size, const char *file, int line, cons
     }
 
     uintptr_t old_addr = (uintptr_t)ptr;
-    void *new_ptr = realloc(ptr, size);
+    void *new_ptr = (realloc)(ptr, size);
     printf("[REALLOC] %p -> %p (%zu bytes) -> %s:%d %s()\n", (void *)old_addr, new_ptr, size, file, line, func);
 
     if (new_ptr) {

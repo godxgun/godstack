@@ -55,7 +55,6 @@ typedef struct {
 typedef struct RendVkPage {
 	RendMemory memory;
 	size_t head;
-	int reserved;
 } RendVkPage;
 
 typedef struct RendVkPagedArena {
@@ -65,7 +64,6 @@ typedef struct RendVkPagedArena {
 } RendVkPagedArena;
 
 struct RendVkArenaAllocator {
-	VkAllocationCallbacks *allocator;
 	RendVkPagedArena *mem_arenas;
 	VkDevice logical_device;
 	VkPhysicalDevice physical_device;
@@ -79,6 +77,7 @@ struct RendVkImage {
 	VkDevice logical_device;
 	VkImage handle;
 	VkImageView view;
+	VkDeviceMemory owned_memory; /* depth images; other images borrow arena memory */
 
 	VkMemoryRequirements requirements;
 
@@ -96,54 +95,11 @@ struct RendVkImage {
 	RendMemory *memory;
 };
 
-typedef struct RendVkAllocatorHeader {
-	size_t size;
-	size_t pad;
-} RendVkAllocatorHeader;
-
-/* Ginger Bill's linear arena: 
- * - https://www.gingerbill.org/article/2019/02/08/memory-allocation-strategies-002/ */
-typedef struct RendVkHostArena {
-	unsigned char *buf;
-	size_t buf_len;
-	size_t prev_offset;
-	size_t curr_offset;
-} RendVkHostArena;
-
-#define REND_VK_HOST_DEFAULT_ALIGNMENT (2 * sizeof(void *))
-
-static bool rend_vk_is_power_of_two(uintptr_t x);
-static uintptr_t rend_vk_align_forward(uintptr_t ptr, size_t align);
-
-static void *rend_vk_allocator_alloc(void *pUserData, size_t size, size_t alignment, VkSystemAllocationScope allocationScope);
-static void *rend_vk_allocator_realloc(void *pUserData, void *pOriginal, size_t size, size_t alignment, VkSystemAllocationScope allocationScope);
-static void rend_vk_allocator_free(void *pUserData, void *pMemory);
-static void rend_vk_allocator_internal_notification(void *pUserData, size_t size, VkInternalAllocationType allocationType, VkSystemAllocationScope allocationScope);
-static void rend_vk_allocator_free_notification(void *pUserData, size_t size, VkInternalAllocationType allocationType, VkSystemAllocationScope allocationScope);
-
-static VkAllocationCallbacks rend_vk_allocator = {
-	.pUserData = NULL,
-	.pfnAllocation = rend_vk_allocator_alloc,
-	.pfnReallocation = rend_vk_allocator_realloc,
-	.pfnFree = rend_vk_allocator_free,
-	.pfnInternalAllocation = rend_vk_allocator_internal_notification,
-	.pfnInternalFree = rend_vk_allocator_free_notification,
-};
-
-#if P_LOG_DEBUG_ENABLED == 1
-static const char *rend_vk_allocator_scope_name[] = {
-	[VK_SYSTEM_ALLOCATION_SCOPE_CACHE] = "Cache",
-	[VK_SYSTEM_ALLOCATION_SCOPE_COMMAND] = "Command",
-	[VK_SYSTEM_ALLOCATION_SCOPE_DEVICE] = "Device",
-	[VK_SYSTEM_ALLOCATION_SCOPE_INSTANCE] = "Instance",
-	[VK_SYSTEM_ALLOCATION_SCOPE_OBJECT] = "Object",
-};
-#endif
-
 static VkInstance vk_instance = 0;
 static VkDebugUtilsMessengerEXT vk_debug_messenger = 0;
 static RendVkDevice vk_device = {0};
-static VkAllocationCallbacks *vk_allocator = &rend_vk_allocator;
+/* Always use Vulkan's default host allocator, including on destruction. */
+static const VkAllocationCallbacks *const vk_allocator = NULL;
 
 static VkFormat vk_format_from_rend_format[] = {
 	[REND_FORMAT_R8_UNORM]           = VK_FORMAT_R8_UNORM,
@@ -204,124 +160,6 @@ static const VkShaderStageFlagBits vk_pipeline_stages[][3] = {
 	[REND__PIPELINE_COMPUTE]  = { VK_SHADER_STAGE_COMPUTE_BIT },
 	[REND__PIPELINE_MESH]     = { VK_SHADER_STAGE_MESH_BIT_EXT, VK_SHADER_STAGE_FRAGMENT_BIT },
 };
-
-static bool
-rend_vk_is_power_of_two(uintptr_t x)
-{
-	return (x & (x - 1)) == 0;
-}
-
-static uintptr_t
-rend_vk_align_forward(uintptr_t ptr, size_t align)
-{
-	uintptr_t p, a, modulo;
-
-	assert(rend_vk_is_power_of_two(align));
-
-	p = ptr;
-	a = (uintptr_t)align;
-	modulo = p & (a - 1);
-
-	if (modulo != 0) {
-		p += a - modulo;
-	}
-	return p;
-}
-
-static size_t
-rend_vk_host_header_pad(size_t alignment)
-{
-	return rend_vk_align_forward(sizeof(RendVkAllocatorHeader), alignment);
-}
-
-static void *
-rend_vk_allocator_alloc(void *pUserData, size_t size, size_t alignment, VkSystemAllocationScope allocationScope)
-{
-	size_t pad;
-	unsigned char *block;
-	unsigned char *user;
-	RendVkAllocatorHeader *header;
-
-	(void)pUserData;
-	(void)allocationScope;
-	if (size == 0) {
-		return NULL;
-	}
-	if (alignment < REND_VK_HOST_DEFAULT_ALIGNMENT) {
-		alignment = REND_VK_HOST_DEFAULT_ALIGNMENT;
-	}
-
-	pad = rend_vk_host_header_pad(alignment);
-	block = peak_aligned_alloc(pad + size, alignment);
-	if (!block) {
-		return NULL;
-	}
-	memset(block, 0, pad + size);
-
-	user = block + pad;
-	header = (RendVkAllocatorHeader *)user - 1;
-	header->size = size;
-	header->pad = pad;
-	return user;
-}
-
-static void *
-rend_vk_allocator_realloc(void *pUserData, void *pOriginal, size_t size, size_t alignment, VkSystemAllocationScope allocationScope)
-{
-	RendVkAllocatorHeader *header;
-	size_t old_size;
-	size_t copy;
-	void *fresh;
-
-	if (!pOriginal) {
-		return rend_vk_allocator_alloc(pUserData, size, alignment, allocationScope);
-	}
-	if (size == 0) {
-		rend_vk_allocator_free(pUserData, pOriginal);
-		return NULL;
-	}
-
-	header = (RendVkAllocatorHeader *)pOriginal - 1;
-	old_size = header->size;
-	fresh = rend_vk_allocator_alloc(pUserData, size, alignment, allocationScope);
-	if (!fresh) {
-		return NULL;
-	}
-	copy = old_size < size ? old_size : size;
-	memmove(fresh, pOriginal, copy);
-	rend_vk_allocator_free(pUserData, pOriginal);
-	return fresh;
-}
-
-static void
-rend_vk_allocator_free(void *pUserData, void *pMemory)
-{
-	RendVkAllocatorHeader *header;
-
-	(void)pUserData;
-	if (!pMemory) {
-		return;
-	}
-	header = (RendVkAllocatorHeader *)pMemory - 1;
-	peak_aligned_free((unsigned char *)pMemory - header->pad);
-}
-
-static void
-rend_vk_allocator_internal_notification(void *pUserData, size_t size, VkInternalAllocationType allocationType, VkSystemAllocationScope allocationScope)
-{
-	(void)pUserData;
-	(void)allocationType;
-	PDEBUG("[VK_ALLOC_INTERNAL] bytes %lu - scope %s", (unsigned long)size, rend_vk_allocator_scope_name[allocationScope]);
-}
-
-static void
-rend_vk_allocator_free_notification(void *pUserData, size_t size, VkInternalAllocationType allocationType, VkSystemAllocationScope allocationScope)
-{
-	(void)pUserData;
-	(void)allocationType;
-	PDEBUG("[VK_FREE_INTERNAL] bytes %lu - scope %s",
-			(unsigned long)size, rend_vk_allocator_scope_name[allocationScope]);
-}
 
 /* --- device --- */
 
@@ -763,7 +601,7 @@ rend_vk_device_detect_depth_format(RendVkDevice *device)
 /* --- arena --- */
 
 static RendVkArenaAllocator
-rend_vk_arena_create(VkDevice logical_device, VkPhysicalDevice physical_device, VkPhysicalDeviceLimits device_limits, VkAllocationCallbacks *allocator)
+rend_vk_arena_create(VkDevice logical_device, VkPhysicalDevice physical_device, VkPhysicalDeviceLimits device_limits)
 {
 	RendVkArenaAllocator arena;
 	VkPhysicalDeviceMemoryProperties mem_properties;
@@ -772,7 +610,6 @@ rend_vk_arena_create(VkDevice logical_device, VkPhysicalDevice physical_device, 
 	uint32_t u;
 
 	arena = (RendVkArenaAllocator){
-		.allocator = allocator,
 		.logical_device = logical_device,
 		.physical_device = physical_device,
 		.gpu_alignment = 0,
@@ -853,7 +690,7 @@ rend_vk_arena_add_page(RendVkArenaAllocator *arena, VkDeviceSize size, uint32_t 
 	page.memory.offset = 0;
 	page.memory.size = new_arena_size;
 
-	res = vkAllocateMemory(arena->logical_device, &alloc_info, arena->allocator, (VkDeviceMemory *)&page.memory.device_memory);
+	res = vkAllocateMemory(arena->logical_device, &alloc_info, vk_allocator, (VkDeviceMemory *)&page.memory.device_memory);
 	if (res != VK_SUCCESS) {
 		return UINT32_MAX;
 	}
@@ -875,7 +712,7 @@ rend_vk_arena_add_page(RendVkArenaAllocator *arena, VkDeviceSize size, uint32_t 
 		new_capacity = mem_arena->capacity * 2;
 		new_darr = rrealloc(mem_arena->page_darr, new_capacity * sizeof(*mem_arena->page_darr));
 		if (!new_darr) {
-			vkFreeMemory(arena->logical_device, (VkDeviceMemory)page.memory.device_memory, arena->allocator);
+			vkFreeMemory(arena->logical_device, (VkDeviceMemory)page.memory.device_memory, vk_allocator);
 			return UINT32_MAX;
 		}
 		mem_arena->page_darr = new_darr;
@@ -936,8 +773,6 @@ rend_vk_arena_alloc(RendVkArenaAllocator *arena, VkDeviceSize size, VkDeviceSize
 		aligned_head = (mem_arena->page_darr[page_idx].head + align - 1) & ~(align - 1);
 	}
 
-	mem_arena->page_darr[page_idx].reserved = whole_page;
-
 	memory = (RendMemory){
 		.device_memory = mem_arena->page_darr[page_idx].memory.device_memory,
 		.size = aligned_size,
@@ -953,32 +788,6 @@ rend_vk_arena_alloc(RendVkArenaAllocator *arena, VkDeviceSize size, VkDeviceSize
 
 	mem_arena->page_darr[page_idx].head = aligned_head + aligned_size;
 	return memory;
-}
-
-static void
-rend_vk_arena_clear(RendVkArenaAllocator *arena, uint32_t heap_index)
-{
-	RendVkPagedArena mem_arena;
-	uint32_t u;
-
-	assert(heap_index < 32 && "Unusual heap index. Did you pass the memory type instead?");
-	mem_arena = arena->mem_arenas[heap_index];
-	if (mem_arena.page_darr) {
-		for (u = 0; u < mem_arena.elements; ++u) {
-			mem_arena.page_darr[u].head = 0;
-			mem_arena.page_darr[u].reserved = 0;
-		}
-	}
-}
-
-static void
-rend_vk_arena_clear_all(RendVkArenaAllocator *arena)
-{
-	uint32_t u;
-
-	for (u = 0; u < arena->properties.memoryTypeCount; ++u) {
-		rend_vk_arena_clear(arena, u);
-	}
 }
 
 static void
@@ -998,7 +807,7 @@ rend_vk_arena_destroy(RendVkArenaAllocator *arena)
 					if (memory.host_mapped_memory) {
 						vkUnmapMemory(arena->logical_device, (VkDeviceMemory)memory.device_memory);
 					}
-					vkFreeMemory(arena->logical_device, (VkDeviceMemory)memory.device_memory, arena->allocator);
+					vkFreeMemory(arena->logical_device, (VkDeviceMemory)memory.device_memory, vk_allocator);
 				} else {
 					PWARN("[REND_VK] Attempted to free memory with an offset!");
 				}
@@ -1089,6 +898,10 @@ rend_vk_image_destroy(RendVkImage *img)
 	if (img->handle) {
 		vkDestroyImage(img->logical_device, img->handle, vk_allocator);
 		img->handle = 0;
+	}
+	if (img->owned_memory) {
+		vkFreeMemory(img->logical_device, img->owned_memory, vk_allocator);
+		img->owned_memory = 0;
 	}
 }
 

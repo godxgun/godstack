@@ -450,36 +450,6 @@ peak_file_write(const char *path, const void *buf, size_t n)
     return 1;
 }
 
-void *
-peak_aligned_alloc(size_t size, size_t alignment)
-{
-    void *p;
-
-    if (!size)
-        return NULL;
-    if (alignment < sizeof (void *))
-        alignment = sizeof (void *);
-#if defined(PEAK_WIN32)
-    p = _aligned_malloc(size, alignment);
-#else
-    if (posix_memalign(&p, alignment, size) != 0)
-        return NULL;
-#endif
-    return p;
-}
-
-void
-peak_aligned_free(void *p)
-{
-    if (!p)
-        return;
-#if defined(PEAK_WIN32)
-    _aligned_free(p);
-#else
-    free(p);
-#endif
-}
-
 const char **
 peak_vulkan_get_extensions(uint32_t *count)
 {

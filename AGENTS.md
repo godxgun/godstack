@@ -12,7 +12,7 @@
 - `./build` in this directory (includes `Poof/poof.c`).
 - `./build test` builds then runs.
 - `./build peak` builds Peak demos + `tests/peak`.
-- `tests/rend_cpu` is offscreen Rend CPU raster (no window, no Vulkan).
+- `./build rend test` builds and runs `tests/rend_vk` (offscreen Vulkan depth lifetime; requires validation layers).
 - `tests/peak` is Peak window tests (needs a display).
 
 
@@ -52,42 +52,10 @@ hello()
 
 ## C Features
 - Use C99.
-- Do not use for loop initial declarations.
-- Use /* */ for comments, not //.
-
-## Blocks
-- { on same line preceded by single space (except functions).
-- } on own line unless continuing statement (if else, do while, ...).
-- Use block for single statement if inner statement needs a block.
-
-```
-for (;;) {
-	if (foo) {
-		bar;
-		baz;
-	}
-}
-```
-
-Use block if another branch of the same statement needs a block:
-
-if (foo) {
-	bar;
-} else {
-	baz;
-	qux;
-}
-```
 
 ## Leading Whitespace
-
 - Use tabs for indentation and spaces for alignment.
 - This ensures everything will line up independent of tab size.
-
-This means:
-
-1. No tabs except beginning of line.
-2. Use spaces - not tabs - for multiline macros as the indentation level is 0, where the #define began.
 
 ## Functions
 - Return type and modifiers on own line.

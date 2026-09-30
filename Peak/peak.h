@@ -107,7 +107,8 @@
  * 0.11.2 - @vasco - focus/expose events; set_class; set_opacity
  * 0.11.3 - @vasco - wayland fractional scale, cursor shape, primary, alpha, wheel
  * 0.11.4 - @vasco - pty spawn keeps OPOST|ONLCR; child COLUMNS and LINES
- * 0.11.5 - @vasco - Delete is a key, not text DEL (tty erase)
+ * 0.11.5 - @vasco - Delete is treated as a key
+ * 0.11.6 - @vasco - aligned_alloc and aligned_free are now macros
  */
 
 #include <assert.h>
@@ -351,8 +352,16 @@ PEAK void     peak_sleep_ns(int64_t ns);
 PEAK int   peak_file_exists(const char *path);
 PEAK void *peak_file_alloc(const char *path, unsigned long *buf_size);
 PEAK int   peak_file_write(const char *path, const void *buf, size_t n); /* create/overwrite */
-PEAK void *peak_aligned_alloc(size_t size, size_t alignment); /* power-of-two; 0 on fail */
-PEAK void  peak_aligned_free(void *p);
+
+/* NOTE(vasco): both these functions are now macros so that they can be replaced 
+ * by the peak_debug_ macros */
+#if defined(PEAK_WIN32)
+#   define peak_aligned_alloc(size, alignment) ((size) ? _aligned_malloc((size), (alignment)) : NULL)
+#   define peak_aligned_free(p) do { if (p) _aligned_free(p); } while (0)
+#else
+#   define peak_aligned_alloc(size, alignment) ((size) ? aligned_alloc((alignment), (size)) : NULL)
+#   define peak_aligned_free(p) do { if (p) free(p); } while (0)
+#endif
 
 PEAK int peak_pid(void);
 PEAK int peak_env_set(const char *name, const char *value); /* NULL unsets */
@@ -550,6 +559,7 @@ static const char *p_prefix[P_COUNT_LOG_LEVEL] = {
 
 PEAK void  peak_log_printf(PeakLogLevel level, const char *src, ...);
 PEAK void *peak_debug_malloc_impl(size_t size, const char *file, int line, const char *func);
+PEAK void *peak_debug_calloc_impl(size_t count, size_t size, const char *file, int line, const char *func);
 PEAK void  peak_debug_free_impl(void *ptr, const char *file, int line, const char *func);
 PEAK void *peak_debug_realloc_impl(void *ptr, size_t size, const char *file, int line, const char *func);
 PEAK void  peak_debug_memory_report(void);
