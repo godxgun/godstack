@@ -123,6 +123,7 @@ build_fuse_test(void)
     poof_cmd_append(&cc.inputs, "Fuse/fuse_test.c");
     poof_cmd_append(&cc.includes, "Fuse");
     poof_cmd_append(&cc.defines, "FUSE_DEBUG");
+    poof_cmd_append(&cc.libs, "m");
     poof_cmd_append(&cc.extra_flags, "-std=c99", "-Wall", "-Werror");
     return poof_cc_run(&cc);
 }

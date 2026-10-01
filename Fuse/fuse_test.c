@@ -4,6 +4,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "fuse.h"
@@ -32,6 +33,7 @@ static void test_debug(void);
 static void test_columns(void);
 static void test_sizing(void);
 static void test_textbox(void);
+static void test_radial(void);
 static FuseCmd *find_text(FuseCmd *cmds, size_t n);
 static int has_rect_at(FuseCmd *cmds, size_t n, float x, float y, float w, float h, uint32_t color);
 static int has_panel(FuseCmd *cmds, size_t n, float width, float height);
@@ -141,7 +143,8 @@ test_memory(void)
     expect(get_error(NULL) == FUSE_ERR_BUF_TOO_SMALL, "error null canvas");
     need = fuse_canvas_memory(64);
     expect(need > 0 && need <= sizeof buf, "memory(64) fits");
-    expect(fuse_canvas_memory(8192) <= (2u << 20), "memory(8192) fits 2MiB");
+    /* Triangle commands add one float to each command-buffer slot. */
+    expect(fuse_canvas_memory(8192) <= (2u << 20) + (128u << 10), "memory(8192) fits 2MiB + 128KiB");
     c = fuse_canvas_create(buf, need);
     expect(c != NULL, "create exact");
     expect(get_error(c) == FUSE_ERR_OK, "create ok");
@@ -881,9 +884,56 @@ test_textbox(void)
     expect(fuse_focused(c, "name"), "click focuses the field");
 }
 
+void
+test_radial(void)
+{
+    size_t bytes = fuse_canvas_memory(128), n, i, triangles = 0;
+    void *memory = malloc(bytes);
+    FuseCanvas c = fuse_canvas_create(memory, bytes);
+    FuseCmd *cmds;
+
+    expect(c != NULL, "radial canvas");
+    fuse_canvas_resize(c, 300, 300);
+    fuse_div_begin(c, 20, 30, 200, 200, NULL);
+    expect(fuse_radial(c, 100, 100, 20, 80, 2, 150, 100, 1, 2) == 0, "radial right");
+    fuse_div_end(c);
+    cmds = fuse_canvas_draw(c, &n);
+    expect(cmds != NULL, "radial draw");
+    for (i = 0; cmds && i < n; i++) {
+        if (cmds[i].type != FUSE_CMD_TRIANGLE)
+            continue;
+        triangles++;
+        expect(cmds[i].triangle.x1 >= 40 && cmds[i].triangle.x1 <= 200 &&
+            cmds[i].triangle.y1 >= 50 && cmds[i].triangle.y1 <= 210, "translated radial geometry");
+    }
+    expect(triangles == 128, "bounded radial tessellation");
+    expect(fuse_radial_pick(0, 0, 20, 80, 2, -50, 0) == 1, "radial left");
+    expect(fuse_radial_pick(0, 0, 20, 80, 2, 0, 0) == -1, "dead zone");
+    expect(fuse_radial_pick(0, 0, 20, 80, 2, 20, 0) == -1, "inner boundary cancels");
+    expect(fuse_radial_pick(0, 0, 20, 80, 2, 80, 0) == -1, "outer boundary cancels");
+    expect(fuse_radial_pick(0, 0, 20, 80, 2, 0, 50) == 1, "lower angular boundary");
+    expect(fuse_radial_pick(0, 0, 20, 80, 2, 0, -50) == 0, "upper angular boundary");
+    expect(fuse_radial_pick(0, 0, 20, 80, 0, 50, 0) == -1, "invalid count");
+    expect(fuse_radial_pick(0, 0, 20, 80, 2, NAN, 0) == -1, "nonfinite pointer");
+    free(memory);
+    bytes = fuse_canvas_memory(8);
+    memory = malloc(bytes);
+    c = fuse_canvas_create(memory, bytes);
+    fuse_canvas_resize(c, 300, 300);
+    fuse_radial(c, 100, 100, 20, 80, 2, 150, 100, 1, 2);
+    expect(fuse_canvas_draw(c, &n) == NULL && get_error(c) == FUSE_ERR_OVERFLOW,
+        "radial command overflow reported");
+    free(memory);
+}
+
+
+#include "fuse_dock_test.c"
+
 int
 main(void)
 {
+    test_dock();
+    test_dock_interaction();
     test_memory();
     test_two_canvases();
     test_screen_origin();
@@ -897,6 +947,7 @@ main(void)
     test_columns();
     test_sizing();
     test_textbox();
+    test_radial();
     if (g_fails) {
         printf("%d failed\n", g_fails);
         return 1;

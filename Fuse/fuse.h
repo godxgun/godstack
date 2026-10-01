@@ -40,10 +40,11 @@
 #define FUSE_H
 
 #define FUSE_MAJOR 0
-#define FUSE_MINOR 10
-#define FUSE_PATCH 7
+#define FUSE_MINOR 11
+#define FUSE_PATCH 0
 
 /* CHANGE LOG
+ * 0.11.0 - caller-backed docking and explicit command layers; rebuild consumers
  * 0.0.1 - @vasco - slider
  * 0.1.0 - @vasco - canvas memory / create; no malloc, no globals
  * 0.2.0 - @vasco - RECT LINE CLIP_START CLIP_END
@@ -62,6 +63,7 @@
  * 0.10.5 - @vasco - image element: a box plus a caller handle
  * 0.10.6 - @vasco - per-child sizing; space; button label is a child
  * 0.10.7 - @vasco - text box: focus, edit queue, clipped text command
+ * 0.10.8 - radial drawing/picking and triangle commands; link with libm
  */
 
 #include <stddef.h>
@@ -109,6 +111,7 @@ typedef enum {
     FUSE_CMD_CLIP_END,
     FUSE_CMD_IMAGE,
     FUSE_CMD_TEXT,
+    FUSE_CMD_TRIANGLE,
     FUSE_CMD_COUNT,
 } FuseCmdType;
 
@@ -127,6 +130,11 @@ typedef struct {
     float x, y, w, h;
 } FuseCmdClip;
 
+typedef struct {
+    float x1, y1, x2, y2, x3, y3;
+    uint32_t color;
+} FuseCmdTriangle;
+
 /**
  * Laid-out image box, like an img with a width and height. x,y,w,h are
  * canvas pixels and are not snapped. Handle is the caller's.
@@ -139,7 +147,7 @@ typedef struct {
 
 /* Proportional text. The command is only the clip box plus a slot.
  * Glyphs, caret, and the string live in FuseFieldRun so this union
- * stays the size of a line command. */
+ * does not enlarge the command union. */
 typedef struct {
     float x, y, w, h;
     uint32_t slot;
@@ -158,7 +166,7 @@ typedef struct FuseFieldRun {
 /**
  * FuseCmd is the basic unit emited by fuse that your renderer will turn
  * into One draw record. draw() returns these packed, already in canvas space,
- * z-stable in emit order (z is reserved, currently 0). id is the widget
+ * in emit order; z is the explicit caller layer (default 0). id is the widget
  * that produced the command, or 0 for anonymous geometry.
  */
 typedef struct {
@@ -168,6 +176,7 @@ typedef struct {
         FuseCmdClip clip;
         FuseCmdImage image;
         FuseCmdText text;
+        FuseCmdTriangle triangle;
     };
     uint32_t id;
     int16_t  z;
@@ -220,7 +229,13 @@ typedef struct fuse_canvas_t *FuseCanvas; // Opaque
 
 size_t     fuse_canvas_memory(size_t max_elements); // Returns amount of memory required.
 FuseCanvas fuse_canvas_create(void *buf, size_t bufsize); // Creates the canvas and places it in the allocated memory region.
-void       fuse_canvas_clear(FuseCanvas); 
+void       fuse_canvas_clear(FuseCanvas);
+/* Applies to subsequently built elements. Resets to 0 on clear. */
+void       fuse_canvas_layer(FuseCanvas, int16_t layer);
+/* Gate pointer/wheel picking and captured slider updates for subsequent widgets.
+ * Keyboard focus/edits survive; capture still ends on release. Resets on clear.
+ * This is a builder setting, not a stack: callers restore it after a panel. */
+void       fuse_canvas_input_enabled(FuseCanvas, int enabled);
 void       fuse_canvas_resize(FuseCanvas, float w, float h);
 void       fuse_canvas_pointer(FuseCanvas, FusePointerState pointer_state, float x, float y);
 void       fuse_canvas_wheel(FuseCanvas, float dx, float dy); // +dy is wheel up
@@ -237,7 +252,8 @@ typedef enum {
 
 void       fuse_canvas_text(FuseCanvas, const char *utf8);
 void       fuse_canvas_key(FuseCanvas, FuseKey key);
-/* NULL clears. The name is the fuse_id of a text box. */
+/* NULL clears. The name is the fuse_id of a text box in the current ID scope.
+ * Focus queries and textbox_edit must run inside that same scope. */
 void       fuse_focus(FuseCanvas, const char *name);
 bool       fuse_focused(FuseCanvas, const char *name);
 
@@ -277,6 +293,19 @@ float fuse_percent_y(FuseCanvas, float p);
 
 void fuse_div_begin(FuseCanvas, float x, float y, float w, float h, const FuseClass *cls);
 void fuse_div_begin_scroll(FuseCanvas, float x, float y, float w, float h, const FuseClass *cls, float *scroll);
+/* After opening a stable named div, scope explicitly named child IDs to its ID.
+ * Call before child IDs/queries. Ordinary nested divs inherit; a nested scope
+ * combines its own scoped ID with child names. div_end restores the outer scope.
+ * No scope means names remain canvas-global (legacy behavior). Anonymous child
+ * IDs already derive from parent IDs. Requires an open div; no extra storage. */
+void fuse_div_scope(FuseCanvas);
+/* Temporarily enter a named child scope without emitting a layout element.
+ * Resolves name against the current scope, exactly like id + div_scope.
+ * Pair with restore(previous) in LIFO order before closing enclosing divs or
+ * building other panels. Tokens are canvas-local; clear resets this override.
+ * Intended for focus/edit queries outside panel building; no allocation. */
+uint32_t fuse_scope_enter(FuseCanvas, const char *name);
+void fuse_scope_restore(FuseCanvas, uint32_t previous);
 void fuse_div_end(FuseCanvas);
 void fuse_col_begin(FuseCanvas, float x, float y, float w, const FuseClass *cls, const float *ratios, uint32_t n);
 void fuse_col_switch(FuseCanvas);
@@ -304,6 +333,7 @@ void fuse_col_end(FuseCanvas);
  * similar to what is seen in non-tiling desktop environments like Windows.
  */
 
+/* Standalone named div wrappers; persistent docking uses fuse_dock.h. */
 void fuse_window_begin(FuseCanvas, char *name, float x, float y, float w, float h, const FuseClass *cls);
 void fuse_window_begin_scroll(FuseCanvas, float x, float y, float w, float h, const FuseClass *cls, float *scroll);
 void fuse_window_end(FuseCanvas);
@@ -315,8 +345,8 @@ void fuse_window_end(FuseCanvas);
 // █   █  █   █ █ █ █   █ █  █    █
 // ███ ██ ███ █ █ █ ███ █ █  ██ ███
 //
-// id functions stem the next element with a name
-// We can then extract information from that tag.
+// id functions stem the next element with a name in the current div ID scope.
+// Hover/focus/edit queries resolve names in that same scope.
 void fuse_id(FuseCanvas, const char *name);
 void fuse_idi(FuseCanvas, const char *name, int index);
 bool fuse_element_is_hovered(FuseCanvas, const char *name);
@@ -359,6 +389,18 @@ bool fuse_textbox_edit(FuseCanvas, const char *name, char *buf, int cap, int *ca
 // ███ █   ███  █ █
 //
 void    fuse_rect(FuseCanvas, float x, float y, float w, float h, uint32_t color);
+
+/* Annular menu, 1..8 slices. Slice 0 is centered to the right; indices
+ * increase clockwise in screen coordinates. Inner/outer boundaries cancel;
+ * angular boundaries belong to the following slice. Invalid/nonfinite input
+ * returns -1. Pointer coordinates are relative to the same parent as center.
+ * The caller owns capture, release, labels and actions. No input is consumed.
+ * Drawing uses at most 144 triangle commands; no heap allocation. Link libm.
+ * Rebuild consumers and size canvas buffers with fuse_canvas_memory:
+ * FuseCmd grew by one float. The menu is a fixed-size drawing leaf. */
+int fuse_radial_pick(float cx, float cy, float inner, float outer, int count, float px, float py);
+int fuse_radial(FuseCanvas, float cx, float cy, float inner, float outer, int count,
+    float px, float py, uint32_t idle, uint32_t hovered);
 
 /* Image in the layout, same coordinates as fuse_rect. w and h are the
  * displayed size (intrinsic pixels times the caller's scale). */

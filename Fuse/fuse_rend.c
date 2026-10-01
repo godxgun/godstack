@@ -99,8 +99,10 @@ fuse_rend_internal_emit6(FuseRend *fr, float x0, float y0, float x1, float y1, u
     FuseRendVertex *v;
     float r, g, b, a;
     size_t i;
-    if (fr->vert_count + 6 > fr->vert_cap)
+    if (fr->vert_count > fr->vert_cap || fr->vert_cap - fr->vert_count < 6) {
+        fr->overflow = 1;
         return;
+    }
     fuse_rend_internal_color(color, &r, &g, &b, &a);
     v = &fr->verts[fr->vert_count];
     v[0].x = x0; v[0].y = y0;
@@ -129,8 +131,6 @@ fuse_rend_internal_glyph(FuseRend *fr, float x, float y, const TypeGlyph *g, uin
         return;
     if (fr->atlas_w <= 0.0f || fr->atlas_h <= 0.0f)
         return;
-    if (fr->glyph_count + 6 > fr->glyph_cap)
-        return;
     gx = floorf(x + g->bearing_x + 0.5f);
     gy = floorf(y - g->bearing_y + 0.5f);
     w = (float)g->width;
@@ -141,6 +141,10 @@ fuse_rend_internal_glyph(FuseRend *fr, float x, float y, const TypeGlyph *g, uin
     v1 = (float)(g->atlas_y + g->height) / fr->atlas_h;
     if (!fuse_rend_internal_clip_uv(fr, &gx, &gy, &w, &h, &u0, &v0, &u1, &v1))
         return;
+    if (fr->glyph_count > fr->glyph_cap || fr->glyph_cap - fr->glyph_count < 6) {
+        fr->overflow = 1;
+        return;
+    }
     fuse_rend_internal_color(color, &r, &gv, &b, &a);
     v = &fr->glyphs[fr->glyph_count];
     v[0].x = gx;     v[0].y = gy;     v[0].u = u0; v[0].v = v0;
@@ -324,7 +328,9 @@ fuse_rend_begin(FuseRend *fr, float screen_w, float screen_h)
 {
     if (!fr)
         return;
+    fr->batch_count = 0;
     fr->vert_count = 0;
+    fr->overflow = 0;
     fr->glyph_count = 0;
     fr->screen_w = screen_w;
     fr->screen_h = screen_h;
@@ -346,6 +352,74 @@ fuse_rend_quad(FuseRend *fr, float x, float y, float w, float h, uint32_t color)
 }
 
 void
+fuse_rend_triangle(FuseRend *fr, const FuseCmdTriangle *triangle)
+{
+    float points[2][8][2], bound, a, b, t, r, g, blue, alpha;
+    int n = 3, out, edge, axis, i, j, k, source = 0;
+    int inside_a, inside_b;
+    size_t needed;
+    FuseRendVertex *v;
+
+    if (!fr || !triangle)
+        return;
+    points[0][0][0] = triangle->x1; points[0][0][1] = triangle->y1;
+    points[0][1][0] = triangle->x2; points[0][1][1] = triangle->y2;
+    points[0][2][0] = triangle->x3; points[0][2][1] = triangle->y3;
+    for (i = 0; i < 3; i++)
+        if (!isfinite(points[0][i][0]) || !isfinite(points[0][i][1]))
+            return;
+    if (fr->clip_n) {
+        const float *clip = fr->clip[fr->clip_n - 1];
+        if (clip[2] <= 0.0f || clip[3] <= 0.0f)
+            return;
+        /* A triangle clipped to a rectangle has at most seven vertices. */
+        for (edge = 0; edge < 4 && n; edge++) {
+            axis = edge / 2;
+            bound = clip[axis] + (edge % 2 ? clip[axis + 2] : 0.0f);
+            out = 0;
+            for (i = 0; i < n; i++) {
+                j = (i + n - 1) % n;
+                a = points[source][j][axis];
+                b = points[source][i][axis];
+                inside_a = edge % 2 ? a <= bound : a >= bound;
+                inside_b = edge % 2 ? b <= bound : b >= bound;
+                if (inside_a != inside_b) {
+                    t = (bound - a) / (b - a);
+                    for (k = 0; k < 2; k++)
+                        points[!source][out][k] = points[source][j][k] +
+                            t * (points[source][i][k] - points[source][j][k]);
+                    points[!source][out++][axis] = bound;
+                }
+                if (inside_b) {
+                    points[!source][out][0] = points[source][i][0];
+                    points[!source][out++][1] = points[source][i][1];
+                }
+            }
+            n = out;
+            source = !source;
+        }
+    }
+    if (n < 3)
+        return;
+    needed = (size_t)(n - 2) * 3;
+    if (fr->vert_count > fr->vert_cap || needed > fr->vert_cap - fr->vert_count) {
+        fr->overflow = 1;
+        return;
+    }
+    fuse_rend_internal_color(triangle->color, &r, &g, &blue, &alpha);
+    v = fr->verts + fr->vert_count;
+    for (i = 1; i < n - 1; i++) {
+        int indices[3] = {0, i, i + 1};
+        for (j = 0; j < 3; j++, v++) {
+            v->x = points[source][indices[j]][0];
+            v->y = points[source][indices[j]][1];
+            v->r = r; v->g = g; v->b = blue; v->a = alpha;
+        }
+    }
+    fr->vert_count += needed;
+}
+
+void
 fuse_rend_cmds(FuseRend *fr, const FuseCmd *cmds, size_t n)
 {
     size_t i;
@@ -357,6 +431,9 @@ fuse_rend_cmds(FuseRend *fr, const FuseCmd *cmds, size_t n)
             fuse_rend_quad(fr, cmds[i].rect.x, cmds[i].rect.y,
                            cmds[i].rect.w, cmds[i].rect.h, cmds[i].rect.color);
             break;
+        case FUSE_CMD_TRIANGLE:
+            fuse_rend_triangle(fr, &cmds[i].triangle);
+            break;
         case FUSE_CMD_CLIP_START:
             if (fr->clip_n < FUSE_REND_CLIP_MAX) {
                 float x, y, w, h;
@@ -364,12 +441,17 @@ fuse_rend_cmds(FuseRend *fr, const FuseCmd *cmds, size_t n)
                 y = cmds[i].clip.y;
                 w = cmds[i].clip.w;
                 h = cmds[i].clip.h;
-                fuse_rend_internal_clip_rect(fr, &x, &y, &w, &h);
+                if (!fuse_rend_internal_clip_rect(fr, &x, &y, &w, &h))
+                    w = h = 0.0f;
                 fr->clip[fr->clip_n][0] = x;
                 fr->clip[fr->clip_n][1] = y;
                 fr->clip[fr->clip_n][2] = w;
                 fr->clip[fr->clip_n][3] = h;
                 fr->clip_n++;
+            } else {
+                /* Never silently pop a parent after ignoring a deeper push. */
+                fr->overflow = 1;
+                return;
             }
             break;
         case FUSE_CMD_CLIP_END:
@@ -577,32 +659,84 @@ fuse_rend_text_sync(FuseRend *fr, RendRenderer renderer)
 }
 
 void
+fuse_rend_batches(FuseRend *fr, FuseRendBatch *batches, size_t capacity)
+{
+	if (!fr)
+		return;
+	fr->batches = batches;
+	fr->batch_cap = batches ? capacity : 0;
+	fr->batch_count = 0;
+}
+
+int
+fuse_rend_layer(FuseRend *fr)
+{
+	if (!fr)
+		return 0;
+	if (fr->overflow)
+		return 0;
+	if (!fr->batches || fr->batch_count >= fr->batch_cap) {
+		fr->overflow = 1;
+		return 0;
+	}
+	/* Geometry emitted before the first explicit layer belongs to that layer. */
+	fr->batches[fr->batch_count] = fr->batch_count ?
+		(FuseRendBatch){fr->vert_count, fr->glyph_count} : (FuseRendBatch){0, 0};
+	fr->batch_count++;
+	return 1;
+}
+
+void
+fuse_rend_cmds_layer(FuseRend *fr, const FuseCmd *cmds, size_t n, int16_t layer)
+{
+	float clip[FUSE_REND_CLIP_MAX][4];
+	uint32_t clip_n;
+	size_t i;
+	if (!fr || !cmds || fr->overflow)
+		return;
+	clip_n = fr->clip_n;
+	memcpy(clip, fr->clip, sizeof(clip));
+	/* Ancestor clips may belong to another layer. Replay all clip structure,
+	 * but only the selected layer's geometry. Do not leak its clips to labels. */
+	for (i = 0; i < n && !fr->overflow; i++)
+		if (cmds[i].z == layer || cmds[i].type == FUSE_CMD_CLIP_START ||
+		    cmds[i].type == FUSE_CMD_CLIP_END)
+			fuse_rend_cmds(fr, cmds + i, 1);
+	memcpy(fr->clip, clip, sizeof(clip));
+	fr->clip_n = clip_n;
+}
+
+void
 fuse_rend_flush(FuseRend *fr, RendRenderer renderer)
 {
-    FuseRendPC pc;
-    FuseRendTextPC tpc;
-    if (!fr || !renderer)
-        return;
-    if (fr->pipeline && fr->vert_count) {
-        pc.screen_w = fr->screen_w;
-        pc.screen_h = fr->screen_h;
-        pc.pad0 = 0.0f;
-        pc.pad1 = 0.0f;
-        rend_buffer_write(renderer, &fr->vbo, fr->verts, fr->vert_count * sizeof (FuseRendVertex), 0);
-        rend_cmd_bind_pipeline(fr->pipeline);
-        rend_cmd_push_constants(fr->pipeline, &pc, sizeof pc);
-        rend_cmd_bind_vertex_buffer(fr->pipeline, 0, fr->vbo, 0);
-        rend_cmd_draw(fr->pipeline, fr->vert_count, 1);
-    }
-    if (!fr->text_pipeline || fr->glyph_count == 0)
-        return;
-    tpc.screen_w = fr->screen_w;
-    tpc.screen_h = fr->screen_h;
-    tpc.atlas_w = fr->atlas_w;
-    tpc.atlas_h = fr->atlas_h;
-    rend_buffer_write(renderer, &fr->text_vbo, fr->glyphs, fr->glyph_count * sizeof (FuseRendGlyph), 0);
-    rend_cmd_bind_pipeline(fr->text_pipeline);
-    rend_cmd_push_constants(fr->text_pipeline, &tpc, sizeof tpc);
-    rend_cmd_bind_vertex_buffer(fr->text_pipeline, 0, fr->text_vbo, 0);
-    rend_cmd_draw(fr->text_pipeline, fr->glyph_count, 1);
+	FuseRendPC pc;
+	FuseRendTextPC tpc;
+	size_t i, start, end, count;
+	if (!fr || !renderer || fr->overflow)
+		return;
+	pc = (FuseRendPC){fr->screen_w, fr->screen_h, 0, 0};
+	tpc = (FuseRendTextPC){fr->screen_w, fr->screen_h, fr->atlas_w, fr->atlas_h};
+	if (fr->pipeline && fr->vert_count)
+		rend_buffer_write(renderer, &fr->vbo, fr->verts, fr->vert_count * sizeof(FuseRendVertex), 0);
+	if (fr->text_pipeline && fr->glyph_count)
+		rend_buffer_write(renderer, &fr->text_vbo, fr->glyphs, fr->glyph_count * sizeof(FuseRendGlyph), 0);
+	count = fr->batch_count ? fr->batch_count : 1;
+	for (i = 0; i < count; i++) {
+		start = fr->batch_count ? fr->batches[i].vertex_start : 0;
+		end = i + 1 < fr->batch_count ? fr->batches[i + 1].vertex_start : fr->vert_count;
+		if (fr->pipeline && end > start) {
+			rend_cmd_bind_pipeline(fr->pipeline);
+			rend_cmd_push_constants(fr->pipeline, &pc, sizeof(pc));
+			rend_cmd_bind_vertex_buffer(fr->pipeline, 0, fr->vbo, start * sizeof(FuseRendVertex));
+			rend_cmd_draw(fr->pipeline, end - start, 1);
+		}
+		start = fr->batch_count ? fr->batches[i].glyph_start : 0;
+		end = i + 1 < fr->batch_count ? fr->batches[i + 1].glyph_start : fr->glyph_count;
+		if (fr->text_pipeline && end > start) {
+			rend_cmd_bind_pipeline(fr->text_pipeline);
+			rend_cmd_push_constants(fr->text_pipeline, &tpc, sizeof(tpc));
+			rend_cmd_bind_vertex_buffer(fr->text_pipeline, 0, fr->text_vbo, start * sizeof(FuseRendGlyph));
+			rend_cmd_draw(fr->text_pipeline, end - start, 1);
+		}
+	}
 }

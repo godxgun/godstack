@@ -1,6 +1,7 @@
 #pragma  once
 
 #include <assert.h>
+#include <math.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -34,6 +35,9 @@
 #define FUSE_EL_IMAGE 256
 #define FUSE_EL_SPACE 512
 #define FUSE_EL_FIELD 1024
+#define FUSE_EL_RADIAL 2048
+#define FUSE_EL_ID_SCOPE 4096
+#define FUSE_PI 3.14159265358979323846f
 #define FUSE_FIELD_MAX 8
 #define FUSE_INP_MAX 32
 #define FUSE_INP_BYTES 512
@@ -136,10 +140,16 @@ struct fuse_canvas_t {
     FuseFieldRun fields[FUSE_FIELD_MAX];
     char inp_bytes[FUSE_INP_BYTES];
 
+    int input_enabled;
+    int16_t layer, emit_layer;
+    uint32_t layer_elements[64];
+    int16_t layers[64];
+    uint32_t layer_count;
     uint32_t element_count, cmd_count;
     uint32_t screen_count;
     uint32_t generation, capture_id, pending_id;
     uint32_t focus_id, focus_frame;
+    uint32_t named_scope; /* 0 inherits the builder's div scope. */
 
     float width, height, pointer_x, pointer_y;
     float wheel_x, wheel_y;
@@ -176,9 +186,11 @@ static void fuse_internal_hash_keep_last(FuseCanvas c);
 static FuseHashItem *fuse_internal_hash_slot(FuseCanvas c, uint32_t id, int vacant_ok);
 static uint32_t fuse_internal_hash_str(const char *s);
 static uint32_t fuse_internal_hash_mix(uint32_t a, uint32_t b);
+static uint32_t fuse_internal_scoped_id(FuseCanvas c, uint32_t id);
 static int fuse_internal_ok(FuseCanvas c);
 static void fuse_internal_fail(FuseCanvas c, FuseError err);
 static void fuse_internal_reset_frame(FuseCanvas c, int bump_gen);
+static int16_t fuse_internal_layer(FuseCanvas c, uint32_t index);
 static uint32_t fuse_internal_take_id(FuseCanvas c, uint32_t parent_id, uint32_t sibling);
 static uint32_t fuse_internal_add_element(FuseCanvas c, uint32_t parent, uint32_t id, float x, float y, float w, float h, uint16_t flags);
 static uint32_t fuse_internal_open_el(FuseCanvas c, float x, float y, float w, float h, uint16_t flags);
@@ -205,6 +217,7 @@ static int fuse_internal_rect_visible(FuseCanvas c, float x, float y, float w, f
 static FuseCmd *fuse_internal_emit(FuseCanvas c, uint8_t type, uint32_t id);
 static void fuse_internal_emit_rect(FuseCanvas c, uint32_t id, float x, float y, float w, float h, uint32_t color);
 static void fuse_internal_emit_clip(FuseCanvas c, uint8_t type, float x, float y, float w, float h);
+static void fuse_internal_emit_radial(FuseCanvas c, const FuseElement *el, float x, float y);
 static void fuse_internal_emit_tree(FuseCanvas c, uint32_t index, float ox, float oy);
 static void fuse_internal_emit_children(FuseCanvas c, FuseElement *el, float ox, float oy);
 static uint32_t fuse_internal_open_maybe_anon(FuseCanvas c, float x, float y, float w, float h, uint16_t flags);
@@ -423,6 +436,23 @@ fuse_internal_hash_mix(uint32_t a, uint32_t b)
     return h;
 }
 
+/* Nearest explicitly scoped div; ordinary nested layout does not change IDs. */
+static uint32_t
+fuse_internal_scoped_id(FuseCanvas c, uint32_t id)
+{
+    uint32_t i;
+    FuseElement *el;
+
+    if (c->named_scope)
+        return fuse_internal_hash_mix(c->named_scope, id);
+    for (i = c->screen_count; i > 1; i--) {
+        el = &c->elements[c->screens[i - 1].element];
+        if (el->flags & FUSE_EL_ID_SCOPE)
+            return fuse_internal_hash_mix(el->id, id);
+    }
+    return id;
+}
+
 static int
 fuse_internal_ok(FuseCanvas c)
 {
@@ -448,9 +478,13 @@ fuse_internal_reset_frame(FuseCanvas c, int bump_gen)
             fuse_internal_hash_keep_last(c);
         }
     }
+    c->input_enabled = 1;
+    c->layer_count = 0;
+    c->layer = c->emit_layer = 0;
     c->element_count = 1;
     c->cmd_count = 0;
     c->screen_count = 1;
+    c->named_scope = 0;
     c->pending_id = 0;
     c->pending_name[0] = 0;
     c->pending_sizing = 0;
@@ -550,6 +584,7 @@ static int
 fuse_internal_geom_hit(FuseCanvas c, uint32_t id)
 {
     FuseHashItem *item;
+    if (!c->input_enabled) return 0;
     item = fuse_internal_last_box(c, id);
     if (!item)
         return 0;
@@ -1199,7 +1234,7 @@ fuse_internal_emit(FuseCanvas c, uint8_t type, uint32_t id)
     memset(cmd, 0, sizeof *cmd);
     cmd->type = type;
     cmd->id = id;
-    cmd->z = 0;
+    cmd->z = c->emit_layer;
     return cmd;
 }
 
@@ -1245,6 +1280,38 @@ fuse_internal_emit_children(FuseCanvas c, FuseElement *el, float ox, float oy)
 }
 
 static void
+fuse_internal_emit_radial(FuseCanvas c, const FuseElement *el, float x, float y)
+{
+    int slice, step, half, count = (int)el->child_count;
+    int steps = (64 + count - 1) / count;
+    float span = 2.0f * FUSE_PI / count;
+    float inner = el->nob_pos, outer = el->w * 0.5f;
+    float a, b, ix0, iy0, ix1, iy1, ox0, oy0, ox1, oy1;
+    FuseCmd *cmd;
+
+    x += outer;
+    y += outer;
+    for (slice = 0; slice < count; slice++) {
+        for (step = 0; step < steps; step++) {
+            a = (slice - 0.5f + (float)step / steps) * span;
+            b = (slice - 0.5f + (float)(step + 1) / steps) * span;
+            ix0 = x + inner * cosf(a); iy0 = y + inner * sinf(a);
+            ix1 = x + inner * cosf(b); iy1 = y + inner * sinf(b);
+            ox0 = x + outer * cosf(a); oy0 = y + outer * sinf(a);
+            ox1 = x + outer * cosf(b); oy1 = y + outer * sinf(b);
+            for (half = 0; half < 2; half++) {
+                if (!(cmd = fuse_internal_emit(c, FUSE_CMD_TRIANGLE, el->id)))
+                    return;
+                cmd->triangle = half ?
+                    (FuseCmdTriangle){ix0, iy0, ox1, oy1, ix1, iy1, 0} :
+                    (FuseCmdTriangle){ix0, iy0, ox0, oy0, ox1, oy1, 0};
+                cmd->triangle.color = slice == (int)el->scroll ? el->color_alt : el->color;
+            }
+        }
+    }
+}
+
+static void
 fuse_internal_emit_tree(FuseCanvas c, uint32_t index, float ox, float oy)
 {
     FuseElement *el;
@@ -1252,6 +1319,7 @@ fuse_internal_emit_tree(FuseCanvas c, uint32_t index, float ox, float oy)
     float cx, cy, nob_w, nob_x;
     float bx, by, bw, bh;
     el = &c->elements[index];
+    c->emit_layer = fuse_internal_layer(c, index);
     cx = ox + el->x;
     cy = oy + el->y;
     if (el->id != 0) {
@@ -1294,6 +1362,7 @@ fuse_internal_emit_tree(FuseCanvas c, uint32_t index, float ox, float oy)
                 coy -= el->scroll;
         }
         fuse_internal_emit_children(c, el, cox, coy);
+        c->emit_layer = fuse_internal_layer(c, index);
         if (el->flags & FUSE_EL_SCROLL)
             fuse_internal_emit_scrollbar(c, el, cx, cy);
         fuse_internal_emit_clip(c, FUSE_CMD_CLIP_END, cx, cy, el->w, el->h);
@@ -1302,6 +1371,10 @@ fuse_internal_emit_tree(FuseCanvas c, uint32_t index, float ox, float oy)
     }
     if (el->flags & FUSE_EL_TEXT) {
         fuse_internal_emit_children(c, el, cx, cy);
+        return;
+    }
+    if (el->flags & FUSE_EL_RADIAL) {
+        fuse_internal_emit_radial(c, el, cx, cy);
         return;
     }
     if (el->flags & FUSE_EL_IMAGE) {
@@ -2047,6 +2120,26 @@ fuse_canvas_key(FuseCanvas c, FuseKey key)
     c->inp_n++;
 }
 
+uint32_t
+fuse_scope_enter(FuseCanvas c, const char *name)
+{
+    uint32_t previous;
+    FASSERT(c && name, "null scope");
+    if (!c || !name)
+        return 0;
+    previous = c->named_scope;
+    c->named_scope = fuse_internal_scoped_id(c, fuse_internal_hash_str(name));
+    return previous;
+}
+
+void
+fuse_scope_restore(FuseCanvas c, uint32_t previous)
+{
+    FASSERT(c, "null canvas");
+    if (c)
+        c->named_scope = previous;
+}
+
 void
 fuse_focus(FuseCanvas c, const char *name)
 {
@@ -2056,7 +2149,7 @@ fuse_focus(FuseCanvas c, const char *name)
     if (!name || !name[0])
         c->focus_id = 0;
     else
-        c->focus_id = fuse_internal_hash_str(name);
+        c->focus_id = fuse_internal_scoped_id(c, fuse_internal_hash_str(name));
     c->focus_frame = c->focus_id;
 }
 
@@ -2067,7 +2160,7 @@ fuse_focused(FuseCanvas c, const char *name)
     FASSERT(name, "null focus name");
     if (!c || !name || !name[0] || c->focus_id == 0)
         return false;
-    return c->focus_id == fuse_internal_hash_str(name);
+    return c->focus_id == fuse_internal_scoped_id(c, fuse_internal_hash_str(name));
 }
 
 FuseCmd *
@@ -2168,6 +2261,19 @@ fuse_div_begin_scroll(FuseCanvas c, float x, float y, float w, float h, const Fu
     id = c->elements[index].id;
     if (fuse_internal_geom_hit(c, id) && !fuse_debug_over_panel(c))
         c->wheel_capture = id;
+}
+
+void
+fuse_div_scope(FuseCanvas c)
+{
+    FASSERT(c, "null canvas");
+    if (!fuse_internal_ok(c))
+        return;
+    if (c->screen_count <= 1) {
+        fuse_internal_fail(c, FUSE_ERR_UNBALANCED);
+        return;
+    }
+    c->elements[c->screens[c->screen_count - 1].element].flags |= FUSE_EL_ID_SCOPE;
 }
 
 void
@@ -2325,7 +2431,7 @@ fuse_id(FuseCanvas c, const char *name)
     FASSERT(name, "null id name");
     if (!fuse_internal_ok(c))
         return;
-    c->pending_id = fuse_internal_hash_str(name);
+    c->pending_id = fuse_internal_scoped_id(c, fuse_internal_hash_str(name));
     fuse_copy_n(c->pending_name, FUSE_NAME_MAX, name);
 }
 
@@ -2336,7 +2442,8 @@ fuse_idi(FuseCanvas c, const char *name, int index)
     FASSERT(name, "null id name");
     if (!fuse_internal_ok(c))
         return;
-    c->pending_id = fuse_internal_hash_mix(fuse_internal_hash_str(name), (uint32_t)index);
+    c->pending_id = fuse_internal_scoped_id(c,
+        fuse_internal_hash_mix(fuse_internal_hash_str(name), (uint32_t)index));
     fuse_name_index(c->pending_name, name, index);
 }
 
@@ -2347,7 +2454,8 @@ fuse_element_is_hovered(FuseCanvas c, const char *name)
     FASSERT(name, "null hover name");
     if (!fuse_internal_ok(c) || !name)
         return false;
-    return fuse_internal_last_hit(c, fuse_internal_hash_str(name)) ? true : false;
+    return fuse_internal_last_hit(c,
+        fuse_internal_scoped_id(c, fuse_internal_hash_str(name))) ? true : false;
 }
 
 bool
@@ -2390,7 +2498,7 @@ fuse_slider(FuseCanvas c, float x, float y, float w, float h, uint32_t track, ui
     } else if (c->capture_id == 0 && hit && c->pointer_edge == FUSE_EDGE_PRESSED) {
         c->capture_id = id;
     }
-    if (c->capture_id == id) {
+    if (c->input_enabled && c->capture_id == id) {
         item = fuse_internal_last_box(c, id);
         if (item && item->w > 0.0f)
             *nob_pos = fuse_internal_clamp01((c->pointer_x - item->x) / item->w);
@@ -2631,7 +2739,7 @@ fuse_textbox_edit(FuseCanvas c, const char *name, char *buf, int cap, int *caret
     FASSERT(name, "null textbox name");
     if (!c || !name || !name[0] || !buf || !caret || cap < 2)
         return false;
-    id = fuse_internal_hash_str(name);
+    id = fuse_internal_scoped_id(c, fuse_internal_hash_str(name));
     if (id == 0 || id != c->focus_frame)
         return false;
     return fuse_textbox_apply(c, buf, cap, caret, allow, user) ? true : false;
@@ -2704,6 +2812,58 @@ fuse_rect(FuseCanvas c, float x, float y, float w, float h, uint32_t color)
     if (!fuse_internal_ok(c))
         return;
     c->elements[index].color = color;
+}
+
+int
+fuse_radial_pick(float cx, float cy, float inner, float outer, int count, float px, float py)
+{
+    float dx, dy, radius, angle, span;
+    int slice;
+
+    if (count < 1 || count > 8 || !isfinite(cx) || !isfinite(cy) ||
+        !isfinite(inner) || !isfinite(outer) || !isfinite(px) || !isfinite(py) ||
+        inner < 0.0f || outer <= inner)
+        return -1;
+    dx = px - cx;
+    dy = py - cy;
+    radius = hypotf(dx, dy);
+    if (!(radius > inner && radius < outer))
+        return -1;
+    span = 2.0f * FUSE_PI / count;
+    angle = atan2f(dy, dx) + span * 0.5f;
+    if (angle < 0.0f)
+        angle += 2.0f * FUSE_PI;
+    slice = (int)(angle / span);
+    return slice >= count ? 0 : slice;
+}
+
+int
+fuse_radial(FuseCanvas c, float cx, float cy, float inner, float outer, int count,
+    float px, float py, uint32_t idle, uint32_t hovered)
+{
+    uint32_t index;
+    FuseElement *el;
+    int pick = fuse_radial_pick(cx, cy, inner, outer, count, px, py);
+
+    if (!fuse_internal_ok(c) || count < 1 || count > 8 ||
+        !isfinite(cx) || !isfinite(cy) || !isfinite(inner) || !isfinite(outer) ||
+        inner < 0.0f || outer <= inner)
+        return -1;
+    index = fuse_internal_open_maybe_anon(c, cx - outer, cy - outer,
+        outer * 2.0f, outer * 2.0f, FUSE_EL_RADIAL);
+    if (!fuse_internal_ok(c))
+        return -1;
+    el = &c->elements[index];
+    /* Preserve unsnapped geometry. These slots are unused by this leaf:
+     * nob_pos = inner radius, scroll = hover, child_count = slice count. */
+    el->x = cx - outer; el->y = cy - outer;
+    el->w = el->h = outer * 2.0f;
+    el->nob_pos = inner;
+    el->scroll = (float)pick;
+    el->child_count = (uint32_t)count;
+    el->color = idle;
+    el->color_alt = hovered;
+    return pick;
 }
 
 void
@@ -2872,4 +3032,55 @@ fuse_button_text(FuseCanvas c, char *text, float x, float y, float w, float h, u
     fuse_text(c, (float)(((int)(w - tw)) / 2), (float)(((int)(h - 7.0f * s)) / 2), s, text, 0xFF000000u);
     c->screen_count--;
     return clicked;
+}
+
+void
+fuse_canvas_layer(FuseCanvas c, int16_t layer)
+{
+	if (!c) return;
+	if (c->layer_count && c->layer_elements[c->layer_count - 1] == c->element_count) {
+		c->layers[c->layer_count - 1] = layer;
+		return;
+	}
+	if (c->layer_count == 64) {
+		fuse_internal_fail(c, FUSE_ERR_OVERFLOW);
+		return;
+	}
+	c->layer_elements[c->layer_count] = c->element_count;
+	c->layers[c->layer_count++] = layer;
+}
+
+void
+fuse_window_begin(FuseCanvas c, char *name, float x, float y, float w, float h, const FuseClass *cls)
+{
+	fuse_id(c, name);
+	fuse_div_begin(c, x, y, w, h, cls);
+}
+
+void
+fuse_window_begin_scroll(FuseCanvas c, float x, float y, float w, float h, const FuseClass *cls, float *scroll)
+{
+	fuse_div_begin_scroll(c, x, y, w, h, cls, scroll);
+}
+
+void
+fuse_window_end(FuseCanvas c)
+{
+	fuse_div_end(c);
+}
+
+void
+fuse_canvas_input_enabled(FuseCanvas c, int enabled)
+{
+	if (c) c->input_enabled = enabled != 0;
+}
+
+int16_t
+fuse_internal_layer(FuseCanvas c, uint32_t index)
+{
+	uint32_t i;
+	int16_t layer = 0;
+	for (i = 0; i < c->layer_count && c->layer_elements[i] <= index; i++)
+		layer = c->layers[i];
+	return layer;
 }
