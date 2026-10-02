@@ -105,6 +105,7 @@ typedef struct {
     void (*pipeline_set_blend)(RendPipeline, bool);
 
     void (*renderer_render_pass_begin)(RendContextHandle handle, float r, float g, float b, float a);
+    void (*renderer_render_pass_begin_preserve)(RendContextHandle);
     void (*renderer_render_pass_begin_texture)(RendContextHandle, RendTexture*);
     void (*renderer_render_pass_end)(RendContextHandle handle);
     void (*renderer_render_pass_end_texture)(RendContextHandle handle, RendTexture*);

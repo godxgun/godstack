@@ -911,6 +911,23 @@ rend_vk14_renderer_render_pass_begin(RendContextHandle handle, float r, float g,
 }
 
 void
+rend_vk14_renderer_render_pass_begin_preserve(RendContextHandle handle)
+{
+	RendVk14Context *ctx = (RendVk14Context *)handle;
+	RendTexture *color = rend_vk14_color_target_at(ctx);
+
+	RASSERT(ctx->in_frame && color, "No acquired color target.");
+	if (!ctx->in_frame || !color)
+		return;
+	rend_vk_texture_transition_layout(handle, ctx->frame_resources[ctx->frame_index].command_buffer,
+		color, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	rend_vk14_depth_barrier_img(&ctx->swap_depth, ctx->frame_resources[ctx->frame_index].command_buffer);
+	rend_vk14__renderer_render_pass_begin_internal(handle, 0, 0, 0, 0,
+		color->view, (uint64_t)ctx->swap_depth.view, 0, 0,
+		color->width, color->height, VK_ATTACHMENT_LOAD_OP_LOAD);
+}
+
+void
 rend_vk14_renderer_render_pass_begin_texture(RendContextHandle handle, RendTexture *texture)
 {
 	RendVk14Context *ctx = (RendVk14Context *)handle;

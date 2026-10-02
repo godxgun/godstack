@@ -208,6 +208,28 @@ main(void)
 		assert(pixels[i * 4] == 255 && pixels[i * 4 + 1] == 0);
 		assert(pixels[i * 4 + 2] == 0 && pixels[i * 4 + 3] == 255);
 	}
+	/* Clear base -> transfer blit -> preserving foreground pass -> readback.
+	 * Repeated loads use the existing default depth, not texture-pass backing. */
+	/* targets[0] was cleared to black by its first texture pass above. */
+	for (j = 0; j < 8; j++) {
+		assert(rend_renderer_frame_begin(renderer));
+		rend_cmd_render_begin(renderer, 1, 0, 0, 1);
+		rend_cmd_render_end(renderer);
+		rend_cmd_blit(renderer, &targets[0], rend_renderer_color_target(renderer),
+			0, 0, 32, 32, 0, 0, 32, 32);
+		rend_cmd_render_begin_preserve(renderer);
+		rend_cmd_render_end(renderer);
+		rend_cmd_render_begin_preserve(renderer); /* Also load after color writes. */
+		rend_cmd_render_end(renderer);
+		rend_renderer_frame_end(renderer, NULL);
+		rend_renderer_read(renderer, pixels, sizeof(pixels));
+		for (i = 0; i < 64 * 64; i++) {
+			int black = i / 64 < 32 && i % 64 < 32;
+			assert(pixels[i * 4] == (black ? 0 : 255));
+			assert(pixels[i * 4 + 1] == 0 && pixels[i * 4 + 2] == 0);
+			assert(pixels[i * 4 + 3] == (black ? 0 : 255));
+		}
+	}
 	rend_texture_destroy(renderer, &targets[0]);
 	rend_texture_destroy(renderer, &targets[1]);
 	rend_renderer_destroy(renderer);

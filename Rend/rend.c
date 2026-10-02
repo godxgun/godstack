@@ -59,6 +59,7 @@ RendVTable rend_vtables[REND_BACKEND_COUNT] = {
             .pipeline_set_blend = rend_vk14_pipeline_set_blend,
 
             .renderer_render_pass_begin = rend_vk14_renderer_render_pass_begin,
+            .renderer_render_pass_begin_preserve = rend_vk14_renderer_render_pass_begin_preserve,
             .renderer_render_pass_begin_texture = rend_vk14_renderer_render_pass_begin_texture,
             .renderer_render_pass_end = rend_vk14_renderer_render_pass_end,
             .renderer_render_pass_end_texture = rend_vk14_renderer_render_pass_end_texture,
@@ -537,6 +538,16 @@ rend_cmd_render_begin(RendRenderer renderer, float r, float g, float b, float a)
 {
     renderer->in_pass = 1;
     rend_vtables[renderer->backend].renderer_render_pass_begin(renderer->context, r, g, b, a);
+}
+
+extern void
+rend_cmd_render_begin_preserve(RendRenderer renderer)
+{
+    RASSERT(renderer && renderer->in_frame && !renderer->in_pass, "Must resume inside a frame, outside a pass.");
+    if (!renderer || !renderer->in_frame || renderer->in_pass)
+        return;
+    renderer->in_pass = 1;
+    rend_vtables[renderer->backend].renderer_render_pass_begin_preserve(renderer->context);
 }
 
 extern void

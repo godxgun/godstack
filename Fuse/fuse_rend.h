@@ -23,6 +23,7 @@
 #include "../Type/type.h"
 
 #define FUSE_REND_CLIP_MAX 16
+#define FUSE_REND_BATCH_RANGE_API 1
 
 typedef struct FuseRendVertex {
     float x, y;
@@ -41,6 +42,7 @@ typedef struct FuseRendBatch {
 typedef struct FuseRend {
     FuseRendBatch *batches;
     size_t batch_cap, batch_count;
+    RendRenderer prepared_renderer; /* Geometry uploaded by prepare this frame. */
     RendPipeline pipeline;
     RendBuffer vbo;
     FuseRendVertex *verts;
@@ -105,12 +107,19 @@ void fuse_rend_triangle(FuseRend *fr, const FuseCmdTriangle *triangle);
 float fuse_rend_text(FuseRend *fr, float x, float y, float size_px, const char *utf8, uint32_t color);
 float fuse_rend_text_width(FuseRend *fr, float size_px, const char *utf8);
 float fuse_rend_text_styled(FuseRend *fr, float x, float y, float size_px, const char *utf8, TypeStyle style, uint32_t color);
-/* After all glyph emission, before frame_begin. Uploads only changed resources.
- * Must run even when no glyphs are visible: clears invalidate old GPU pixels.
- * No allocation, pixel scan, or GPU work when the atlas revision is unchanged. */
+/* After all geometry/glyph emission, before frame_begin. Uploads geometry once
+ * per begin and only changed atlas resources. No emission after preparation.
+ * Overflow suppresses all uploads. Must run with no visible glyphs too: clears
+ * invalidate old GPU pixels. No atlas work when its revision is unchanged. */
 void fuse_rend_prepare(FuseRend *fr, RendRenderer renderer);
 /* Compatibility wrapper; prefer fuse_rend_prepare. */
 void fuse_rend_text_sync(FuseRend *fr, RendRenderer renderer);
+/* Draw half-open batch range [first, end) in the current pass, after prepare.
+ * No uploads/allocations. Without explicit batches the frame has one batch.
+ * Empty ranges succeed; invalid bounds/offsets, overflow or missing preparation
+ * return 0 without backend calls. Validate before submitting any part of a frame.
+ * Full flush remains compatible and prepares geometry lazily if necessary. */
+int fuse_rend_flush_range(FuseRend *fr, RendRenderer renderer, size_t first, size_t end);
 void fuse_rend_flush(FuseRend *fr, RendRenderer renderer);
 
 #endif /* FUSE_REND_H */

@@ -1,6 +1,7 @@
 /* fuse_rend.c - FuseCmd to Rend triangles, Type glyphs to a coverage atlas
  * 0.0.1 - @vasco - rect, cpu clip
  * 0.1.0 - @vasco - type font rendering
+ * 0.2.0 - prepared geometry and bounded batch-range drawing
  */
 
 #include <math.h>
@@ -26,6 +27,8 @@ static void fuse_rend_internal_glyph(FuseRend *fr, float x, float y, const TypeG
 static float fuse_rend_text_nwidth(FuseRend *fr, float size_px, const char *utf8, int nbytes);
 static float fuse_rend_baseline(FuseRend *fr, float y, float h, float size);
 static void fuse_rend_text_cmd(FuseRend *fr, const FuseCmd *cmd);
+static int fuse_rend_internal_valid(const FuseRend *fr);
+static void fuse_rend_internal_prepare_geometry(FuseRend *fr, RendRenderer renderer);
 
 static void
 fuse_rend_internal_color(uint32_t c, float *r, float *g, float *b, float *a)
@@ -328,6 +331,7 @@ fuse_rend_begin(FuseRend *fr, float screen_w, float screen_h)
 {
     if (!fr)
         return;
+    fr->prepared_renderer = NULL;
     fr->batch_count = 0;
     fr->vert_count = 0;
     fr->overflow = 0;
@@ -631,13 +635,46 @@ fuse_rend_text_styled(FuseRend *fr, float x, float y, float size_px, const char 
     return pen - floorf(x + 0.5f);
 }
 
+int
+fuse_rend_internal_valid(const FuseRend *fr)
+{
+	size_t i, vertex = 0, glyph = 0;
+
+	if (!fr || fr->overflow || fr->vert_count > fr->vert_cap || fr->glyph_count > fr->glyph_cap ||
+		fr->batch_count > fr->batch_cap || (fr->batch_count && !fr->batches))
+		return 0;
+	for (i = 0; i < fr->batch_count; i++) {
+		if (fr->batches[i].vertex_start < vertex || fr->batches[i].vertex_start > fr->vert_count ||
+			fr->batches[i].glyph_start < glyph || fr->batches[i].glyph_start > fr->glyph_count)
+			return 0;
+		vertex = fr->batches[i].vertex_start;
+		glyph = fr->batches[i].glyph_start;
+	}
+	return !fr->batch_count || (!fr->batches[0].vertex_start && !fr->batches[0].glyph_start);
+}
+
+void
+fuse_rend_internal_prepare_geometry(FuseRend *fr, RendRenderer renderer)
+{
+	if (!renderer || !fuse_rend_internal_valid(fr) || fr->prepared_renderer == renderer)
+		return;
+	if (fr->pipeline && fr->vert_count)
+		rend_buffer_write(renderer, &fr->vbo, fr->verts, fr->vert_count * sizeof(FuseRendVertex), 0);
+	if (fr->text_pipeline && fr->glyph_count)
+		rend_buffer_write(renderer, &fr->text_vbo, fr->glyphs, fr->glyph_count * sizeof(FuseRendGlyph), 0);
+	fr->prepared_renderer = renderer;
+}
+
 void
 fuse_rend_prepare(FuseRend *fr, RendRenderer renderer)
 {
     const uint8_t *px;
     uint32_t w, h;
     uint64_t revision;
-    if (!fr || !renderer || !fr->atlas_on || !fr->type)
+    if (!renderer || !fuse_rend_internal_valid(fr))
+        return;
+    fuse_rend_internal_prepare_geometry(fr, renderer);
+    if (!fr->atlas_on || !fr->type)
         return;
     revision = type_ctx_atlas_revision(fr->type);
     if (fr->atlas_uploaded && fr->atlas_revision == revision)
@@ -706,22 +743,24 @@ fuse_rend_cmds_layer(FuseRend *fr, const FuseCmd *cmds, size_t n, int16_t layer)
 	fr->clip_n = clip_n;
 }
 
-void
-fuse_rend_flush(FuseRend *fr, RendRenderer renderer)
+int
+fuse_rend_flush_range(FuseRend *fr, RendRenderer renderer, size_t first, size_t limit)
 {
 	FuseRendPC pc;
 	FuseRendTextPC tpc;
 	size_t i, start, end, count;
-	if (!fr || !renderer || fr->overflow)
-		return;
+	if (!renderer || !fuse_rend_internal_valid(fr))
+		return 0;
+	count = fr->batch_count ? fr->batch_count : 1;
+	if (first > limit || limit > count)
+		return 0;
+	if (first == limit)
+		return 1;
+	if (fr->prepared_renderer != renderer)
+		return 0;
 	pc = (FuseRendPC){fr->screen_w, fr->screen_h, 0, 0};
 	tpc = (FuseRendTextPC){fr->screen_w, fr->screen_h, fr->atlas_w, fr->atlas_h};
-	if (fr->pipeline && fr->vert_count)
-		rend_buffer_write(renderer, &fr->vbo, fr->verts, fr->vert_count * sizeof(FuseRendVertex), 0);
-	if (fr->text_pipeline && fr->glyph_count)
-		rend_buffer_write(renderer, &fr->text_vbo, fr->glyphs, fr->glyph_count * sizeof(FuseRendGlyph), 0);
-	count = fr->batch_count ? fr->batch_count : 1;
-	for (i = 0; i < count; i++) {
+	for (i = first; i < limit; i++) {
 		start = fr->batch_count ? fr->batches[i].vertex_start : 0;
 		end = i + 1 < fr->batch_count ? fr->batches[i + 1].vertex_start : fr->vert_count;
 		if (fr->pipeline && end > start) {
@@ -739,4 +778,13 @@ fuse_rend_flush(FuseRend *fr, RendRenderer renderer)
 			rend_cmd_draw(fr->text_pipeline, end - start, 1);
 		}
 	}
+	return 1;
+}
+
+void
+fuse_rend_flush(FuseRend *fr, RendRenderer renderer)
+{
+	fuse_rend_internal_prepare_geometry(fr, renderer);
+	if (fr)
+		fuse_rend_flush_range(fr, renderer, 0, fr->batch_count ? fr->batch_count : 1);
 }

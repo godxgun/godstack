@@ -25,6 +25,7 @@ static void test_reset(void);
 static void test_glyph(FuseRend *fr);
 static void test_order(void);
 static void test_capacity(void);
+static void test_ranges(void);
 static void test_clips(void);
 
 static struct rend_pipeline_t solid_pipeline, glyph_pipeline;
@@ -32,6 +33,13 @@ static struct rend_renderer_t renderer;
 static TestDraw draws[32];
 static size_t draw_n, upload_n, bound_offset;
 static RendPipeline bound_pipeline;
+
+void
+rend_texture_copy_data(RendRenderer r, RendTexture *texture, const void *data, size_t size)
+{
+	(void)r; (void)texture; (void)data; (void)size;
+	assert(0); /* No text atlas in these geometry tests. */
+}
 
 void
 rend_buffer_write(RendRenderer r, RendBuffer *buffer, const void *data, size_t size, size_t offset)
@@ -138,6 +146,55 @@ test_order(void)
 }
 
 static void
+test_ranges(void)
+{
+	FuseRend fr = {0};
+	FuseRendVertex verts[12];
+	FuseRendGlyph glyphs[12];
+	FuseRendBatch batches[3];
+
+	fr.verts = verts; fr.vert_cap = 12;
+	fr.glyphs = glyphs; fr.glyph_cap = 12;
+	fr.atlas_w = fr.atlas_h = 64;
+	fr.pipeline = &solid_pipeline; fr.text_pipeline = &glyph_pipeline;
+	fuse_rend_batches(&fr, batches, 3);
+	fuse_rend_begin(&fr, 100, 100);
+	assert(fuse_rend_layer(&fr));
+	fuse_rend_quad(&fr, 0, 0, 20, 20, 0xffffffff);
+	test_glyph(&fr);
+	assert(fuse_rend_layer(&fr)); /* Empty middle batch. */
+	assert(fuse_rend_layer(&fr));
+	fuse_rend_quad(&fr, 0, 0, 20, 20, 0xffffffff);
+	test_glyph(&fr);
+	test_reset();
+	assert(!fuse_rend_flush_range(&fr, &renderer, 0, 1));
+	assert(!upload_n && !draw_n);
+	fuse_rend_prepare(&fr, &renderer);
+	fuse_rend_prepare(&fr, &renderer);
+	assert(upload_n == 2 && !draw_n);
+	assert(fuse_rend_flush_range(&fr, &renderer, 0, 1));
+	assert(draw_n == 2 && draws[0].offset == 0 && draws[1].offset == 0);
+	assert(fuse_rend_flush_range(&fr, &renderer, 1, 3));
+	assert(draw_n == 4 && upload_n == 2);
+	assert(draws[2].offset == 6 * sizeof(*verts) && draws[3].offset == 6 * sizeof(*glyphs));
+	assert(fuse_rend_flush_range(&fr, &renderer, 3, 3));
+	assert(!fuse_rend_flush_range(&fr, &renderer, 2, 1));
+	assert(!fuse_rend_flush_range(&fr, &renderer, 0, SIZE_MAX));
+	batches[2].vertex_start = 13;
+	assert(!fuse_rend_flush_range(&fr, &renderer, 0, 1)); /* Validate whole list. */
+	batches[2].vertex_start = 0; /* Non-monotonic. */
+	assert(!fuse_rend_flush_range(&fr, &renderer, 0, 1));
+	batches[2].vertex_start = 6;
+	fr.overflow = 1;
+	assert(!fuse_rend_flush_range(&fr, &renderer, 0, 3));
+	assert(draw_n == 4 && upload_n == 2);
+	fuse_rend_begin(&fr, 100, 100);
+	assert(!fr.prepared_renderer);
+	assert(!fuse_rend_flush_range(&fr, &renderer, 0, 1));
+	assert(fuse_rend_flush_range(&fr, &renderer, 0, 0));
+}
+
+static void
 test_capacity(void)
 {
 	FuseRend fr = {0};
@@ -233,6 +290,7 @@ main(void)
 	(void)p_prefix;
 	test_order();
 	test_capacity();
+	test_ranges();
 	test_clips();
 	puts("Fuse Rend headless geometry/draw-record tests passed (no GPU coverage)");
 	return 0;

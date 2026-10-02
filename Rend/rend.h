@@ -177,6 +177,11 @@ extern void         rend_pipeline_set_blend(RendPipeline pipeline, bool blend);
 
 /* Commands */
 extern void rend_cmd_render_begin(RendRenderer renderer, float r, float g, float b, float a); // Pass on color_target(). Clear to RGBA.
+/* Resume the acquired default color after a completed pass/blit in this frame.
+ * Inside a frame, outside a pass. Loads color, clears depth, transitions the
+ * color target from transfer destination when needed. End with render_end.
+ * Never loads a previous frame or a target from a failed acquire. */
+extern void rend_cmd_render_begin_preserve(RendRenderer renderer);
 extern void rend_cmd_render_begin_texture(RendRenderer renderer, RendTexture *texture); // Pass on a caller texture (not the borrowed color_target unless you mean to).
 extern void rend_cmd_render_end(RendRenderer renderer); // End render pass.
 extern void rend_cmd_render_end_texture(RendRenderer renderer, RendTexture *texture); // End pass on a caller texture. Ready to sample.
@@ -341,6 +346,7 @@ enum RendBufferType_t {
  * 1.0.0 - @vasco -  finished API release
  * 1.0.1 - @vasco - render pass that targets textures 
  * 1.0.2 - @vasco - Peak instead of Podium
+ * 1.0.4 - preserving default-color pass after transfer blits
  * 1.0.3 - @vasco - frame_begin no longer sticks in_frame or burns timeline on OUT_OF_DATE
  * 1.0.4 - @vasco - vulkan backend collapsed; renderer create fails cleanly
  * 1.0.5 - @vasco - vulkan host linear arena
