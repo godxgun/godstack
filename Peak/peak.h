@@ -27,6 +27,8 @@
  * - P_LOG_INFO_ENABLED  default 1. PINFO.
  * - P_LOG_DEBUG_ENABLED default 0. PDEBUG.
  * - P_LOG_TRACE_ENABLED default 0. PTRACE.
+ * - PEAK_DEBUG_MEMORY_TRACE default 0. Per-request diagnostic output.
+ * - PEAK_MAX_ALLOCS      default 512 live entries per memory domain.
  *
  * DEFINED:
  * - PEAK_WEB                wasm / emscripten
@@ -563,7 +565,48 @@ PEAK void *peak_debug_malloc_impl(size_t size, const char *file, int line, const
 PEAK void *peak_debug_calloc_impl(size_t count, size_t size, const char *file, int line, const char *func);
 PEAK void  peak_debug_free_impl(void *ptr, const char *file, int line, const char *func);
 PEAK void *peak_debug_realloc_impl(void *ptr, size_t size, const char *file, int line, const char *func);
-PEAK void  peak_debug_memory_report(void);
+/* Direct instrumented backing calls only, not libc/DSO or Vulkan internals.
+ * Single-threaded diagnostics; counters persist for the process lifetime.
+ * Each domain has independent fixed live-pointer capacity (512 by default).
+ * Exhaustion leaves request counters valid, but live/release evidence incomplete;
+ * live_blocks/live_bytes/peak_bytes are not exact when tracking is incomplete.
+ * Unknown-pointer operations invalidate BOTH domains' accounting: original
+ * ownership is unknowable. Request counts remain useful but uncertified.
+ * Overflow saturates counters and clears accounting_complete. No reset API.
+ * PEAK_DEBUG_MEMORY_TRACE (default 0) enables per-request output.
+ */
+typedef enum {
+	PEAK_MEMORY_NON_DRIVER = 0,
+	PEAK_MEMORY_DRIVER,
+	PEAK_MEMORY_DOMAIN_COUNT
+} PeakMemoryDomain;
+
+typedef struct {
+	uint64_t allocation_requests; /* successful malloc/calloc/nonzero realloc */
+	uint64_t failed_requests;
+	uint64_t realloc_requests; /* includes NULL, failure and zero-size release */
+	uint64_t released_blocks;
+	uint64_t live_blocks;
+	uint64_t live_bytes;
+	uint64_t peak_bytes; /* requested live bytes, not allocator resident bytes */
+	uint64_t domain_errors;
+	uint64_t unknown_operations;
+	int tracking_complete;
+	int accounting_complete;
+} PeakMemoryStats;
+
+PEAK void *peak_debug_malloc_domain_impl(size_t size, PeakMemoryDomain domain, const char *file, int line, const char *func);
+PEAK void *peak_debug_calloc_domain_impl(size_t count, size_t size, PeakMemoryDomain domain, const char *file, int line, const char *func);
+PEAK void *peak_debug_realloc_domain_impl(void *ptr, size_t size, PeakMemoryDomain domain, const char *file, int line, const char *func);
+PEAK void  peak_debug_free_domain_impl(void *ptr, PeakMemoryDomain domain, const char *file, int line, const char *func);
+PEAK PeakMemoryStats peak_debug_memory_stats(PeakMemoryDomain domain);
+/* Prints both domains and leaks; returns successful NON_DRIVER requests.
+ * realloc(NULL,0) returns NULL without a backing request or release; every
+ * realloc wrapper call increments realloc_requests, including zero-size calls.
+ * Original tracked domain is authoritative on free/realloc despite mismatch.
+ * Unknown-pointer operations clear completeness; no release is invented.
+ */
+PEAK uint64_t peak_debug_memory_report(void);
 
 #endif /* PEAK_H */
 

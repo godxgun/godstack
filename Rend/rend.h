@@ -19,7 +19,8 @@
  * MACRO FLAGS:
  * - PEAK_VULKAN              Vulkan 1.4. peak.h sets WSI. Required to create renderers.
  * - REND_DEBUG               Asserts and Peak debug log.
- * - REND_DEBUG_MEMORY        Debug malloc (internal).
+ * - REND_DEBUG_MEMORY        Explicit Peak driver-domain host backing diagnostics.
+ *                            Without it, preserve consumer allocator macros.
  * - REND_VK_ARENA_GROW       Device-memory page grow (default 2). 1 = fit the alloc.
  * - REND_VK_ARENA_MIN        Device-memory page floor in bytes. 0 / unset = granularity*10.
  * - REND_VK_SWAPCHAIN_EXTRA  Images above minImageCount (default 2).

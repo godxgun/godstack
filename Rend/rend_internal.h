@@ -13,14 +13,16 @@
 #define RASSERT(...) ((void)0)
 #endif
 
+/* Explicit opt-in preserves custom allocators in other consumers.
+ * These calls bypass global malloc/free macros, hence exactly one event. */
 #if defined(REND_DEBUG_MEMORY)
-#define rmalloc(size)  peak_debug_malloc_impl((size), __FILE__, __LINE__, __func__)
-#define rrealloc(ptr, size) peak_debug_realloc_impl((ptr), (size), __FILE__, __LINE__, __func__)
-#define rfree(ptr)     peak_debug_free_impl((ptr), __FILE__, __LINE__, __func__)
+#define rmalloc(size) peak_debug_malloc_domain_impl((size), PEAK_MEMORY_DRIVER, __FILE__, __LINE__, __func__)
+#define rrealloc(ptr, size) peak_debug_realloc_domain_impl((ptr), (size), PEAK_MEMORY_DRIVER, __FILE__, __LINE__, __func__)
+#define rfree(ptr) peak_debug_free_domain_impl((ptr), PEAK_MEMORY_DRIVER, __FILE__, __LINE__, __func__)
 #else
 #define rmalloc malloc
 #define rrealloc(ptr, size) realloc((ptr), (size))
-#define rfree   free
+#define rfree free
 #endif
 
 #define REND_TODO \
