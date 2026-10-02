@@ -1,4 +1,5 @@
 #include "peak.h"
+static PeakCtx *peak_demo_ctx;
 #include "peak.c"
 
 #include <stdio.h>
@@ -36,9 +37,9 @@ int main(int argc, char **argv) {
     (void)argc;
     (void)argv;
 
-    if (!peak_init()) return 1;
+    if (!(peak_demo_ctx = peak_init_legacy())) return 1;
 
-    PeakWindow win = peak_window_open("Demo", 800, 600, 0);
+    PeakWindow win = peak_window_open(peak_demo_ctx, "Demo", 800, 600, 0);
     peak_window_clear(&win, 0.5, 0.5, 0, 1);
 
     PeakEvent ev;
@@ -56,6 +57,6 @@ int main(int argc, char **argv) {
     }
 
     peak_window_close(&win);
-    peak_quit();
+    peak_quit(peak_demo_ctx);
     return 0;
 }

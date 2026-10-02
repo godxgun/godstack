@@ -1144,6 +1144,7 @@ main(int argc, char **argv)
 {
 	App app;
 	PeakWindow win;
+	PeakCtx *peak_ctx;
 	size_t back_width, back_height;
 	PeakEvent ev;
 	int i, running, hit;
@@ -1184,16 +1185,16 @@ main(int argc, char **argv)
 	    app.nroots, app.nroots == 1 ? "" : "s", app.ntree, app.nfuncs);
 	PINFO("%s", status);
 
-	if (!peak_init()) {
-		PFATAL("peak_init failed");
+	if (!(peak_ctx = peak_init_legacy())) {
+		PFATAL("peak_init_legacy failed");
 		return 1;
 	}
 	width = 1280;
 	height = 720;
-	win = peak_window_open("codeanalizer", width, height, 0);
+	win = peak_window_open(peak_ctx, "codeanalizer", width, height, 0);
 	if (!win.running) {
 		PFATAL("window_open failed");
-		peak_quit();
+		peak_quit(peak_ctx);
 		return 1;
 	}
 	width = win.width;
@@ -1283,6 +1284,6 @@ main(int argc, char **argv)
 	}
 
 	peak_window_close(&win);
-	peak_quit();
+	peak_quit(peak_ctx);
 	return 0;
 }

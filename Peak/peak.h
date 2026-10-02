@@ -62,8 +62,8 @@
 #endif
 
 #define PEAK_MAJOR "0"
-#define PEAK_MINOR "11"
-#define PEAK_PATCH "5"
+#define PEAK_MINOR "12"
+#define PEAK_PATCH "0"
 
 /* CHANGE LOG
  * 0.0.0 - @vasco - prototyping
@@ -112,6 +112,7 @@
  * 0.11.4 - @vasco - pty spawn keeps OPOST|ONLCR; child COLUMNS and LINES
  * 0.11.5 - @vasco - Delete is treated as a key
  * 0.11.6 - @vasco - aligned_alloc and aligned_free are now macros
+ * 0.12.0 - @vasco - opaque runtime context; bounded caller-backed Linux Vulkan host storage
  */
 
 #include <assert.h>
@@ -192,8 +193,25 @@ typedef int PEAK_HANDLE;
 // █ █ █ █  █
 // █ █ █ █  ██
 
-PEAK int  peak_init(void);
-PEAK void peak_quit(void);
+typedef struct PeakParams {
+    size_t max_windows;
+    size_t clipboard_capacity;
+    size_t transfer_capacity;
+} PeakParams;
+
+typedef struct PeakCtx PeakCtx;
+
+/* Linux Vulkan borrowed backing: 16-byte aligned, retained through quit.
+ * max_windows: 1..8; explicit byte capacities must be positive (NULL params:
+ * one window and 1 MiB defaults). Positive capacities are real limits; impossible
+ * sizing/conversion profiles return zero/NULL. One active runtime, lazy display.
+ * Failed initialization may modify backing. Quit(NULL), repeated/stale quit
+ * are harmless. A context pointer expires at quit; do not use it after reuse.
+ * Other hosts use explicit legacy initialization (not caller-backed). */
+PEAK size_t     peak_memory(const PeakParams *params);
+PEAK PeakCtx   *peak_place_in_memory_and_init(void *buf, size_t size, const PeakParams *params);
+PEAK PeakCtx   *peak_init_legacy(void);
+PEAK void       peak_quit(PeakCtx *ctx);
 
 //                  █
 // ███ █ █ ███ ███ ███
@@ -292,6 +310,8 @@ typedef struct peak_window_internal_t {
 } PeakWindowInternal;
 
 typedef struct PeakWindow {
+    PeakCtx *ctx;
+    uint64_t generation; /* private lifetime token; do not modify */
     PeakWindowInternal internal;
     int (*tick)(struct PeakWindow *win, void *userdata);
     void *userdata;
@@ -303,7 +323,7 @@ typedef struct PeakWindow {
     int running;
 } PeakWindow;
 
-PEAK PeakWindow peak_window_open(const char *name, uint32_t width, uint32_t height, uint32_t flags);
+PEAK PeakWindow peak_window_open(PeakCtx *ctx, const char *name, uint32_t width, uint32_t height, uint32_t flags);
 PEAK void       peak_window_close(PeakWindow *window);
 PEAK void       peak_window_run(PeakWindow *win, int (*peak_tick)(PeakWindow *win, void *userdata), void *userdata); /* hijack main loop (web) */
 PEAK int        peak_window_epoll(PeakWindow *win, PeakEvent *ev);
@@ -484,16 +504,20 @@ PEAK int          peak_vulkan_create_surface(PeakWindow *win, void *instance, co
 //          █
 //          █
 
-/* UTF-8 clipboard. Cap 1 MiB. win NULL: process-local slot. PRIMARY aliases
+/* Window-only methods validate their owned context. Linux additionally validates
+ * native allocation/slot lifetimes, rejecting copied handles after close/reuse.
+ * Other legacy hosts require exclusive window-handle ownership: do not retain
+ * copies after close or quit; stale-copy validation is not provided there.
+ * UTF-8 clipboard. Configured clipboard cap. win NULL: context-local slot. PRIMARY aliases
  * CLIPBOARD on Win32/macOS/web. request completes as PEAK_EVENT_CLIP; take copies. */
-PEAK int peak_clip_set(PeakWindow *win, PeakClip which, const char *utf8, size_t n);
-PEAK int peak_clip_request(PeakWindow *win, PeakClip which);
-PEAK int peak_clip_take(PeakWindow *win, char *dst, size_t cap, size_t *n);
+PEAK int peak_clip_set(PeakCtx *ctx, PeakWindow *win, PeakClip which, const char *utf8, size_t n);
+PEAK int peak_clip_request(PeakCtx *ctx, PeakWindow *win, PeakClip which);
+PEAK int peak_clip_take(PeakCtx *ctx, PeakWindow *win, char *dst, size_t cap, size_t *n);
 
-/* UTF-8 text / drop path. Cap 1 MiB. Completes as PEAK_EVENT_TEXT / DROP; take copies. */
-PEAK int peak_text_take(PeakWindow *win, char *dst, size_t cap, size_t *n);
-PEAK int peak_drop_take(PeakWindow *win, char *dst, size_t cap, size_t *n);
-PEAK int peak_drop_drag(PeakWindow *win, const char *utf8, size_t n); /* start OS drag; 0 if none */
+/* UTF-8 text / drop path. Configured transfer cap. Completes as PEAK_EVENT_TEXT / DROP; take copies. */
+PEAK int peak_text_take(PeakCtx *ctx, PeakWindow *win, char *dst, size_t cap, size_t *n);
+PEAK int peak_drop_take(PeakCtx *ctx, PeakWindow *win, char *dst, size_t cap, size_t *n);
+PEAK int peak_drop_drag(PeakCtx *ctx, PeakWindow *win, const char *utf8, size_t n); /* start OS drag; 0 if none */
 
 //   █     █
 //   █     █

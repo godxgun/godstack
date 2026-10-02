@@ -46,6 +46,8 @@ float cool_beans(uint32_t *seed) {
     return (float) *seed / 4294967295.0;
 }
 
+static PeakCtx *peak_demo_ctx;
+
 static uint8_t *
 load_spv(const char *a, const char *b, unsigned long *size)
 {
@@ -68,12 +70,12 @@ int main(int argc, char **argv) {
     memset(&win, 0, sizeof win);
 
     if (!headless) {
-        if (!peak_init()) {
+        if (!(peak_demo_ctx = peak_init_legacy())) {
             PFATAL("Failed to init Peak!");
             return 1;
         }
 
-        win = peak_window_open("demo", width, height, 0);
+        win = peak_window_open(peak_demo_ctx, "demo", width, height, 0);
         if (!win.running) {
             PFATAL("Failed to open a window!");
             return 1;
@@ -88,7 +90,7 @@ int main(int argc, char **argv) {
         PFATAL("Failed to create renderer!");
         if (!headless) {
             peak_window_close(&win);
-            peak_quit();
+            peak_quit(peak_demo_ctx);
         }
         return 1;
     }
@@ -254,7 +256,7 @@ int main(int argc, char **argv) {
 
     if (!headless) {
         peak_window_close(&win);
-        peak_quit();
+        peak_quit(peak_demo_ctx);
     }
 
     peak_debug_memory_report();

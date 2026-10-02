@@ -86,6 +86,8 @@ typedef struct DashFonts {
 	char probe[192];
 } DashFonts;
 
+static PeakCtx *peak_demo_ctx;
+
 static uint8_t *zip_ttf(const uint8_t *zip, size_t n, size_t *out_len);
 static uint8_t *dash_file(const char *a, const char *b, size_t *out_n);
 static int dash_text_init(DashText *dt, DashVert *verts, size_t cap, RendRenderer renderer, uint8_t *vert_spv, size_t vert_n, uint8_t *frag_spv, size_t frag_n);
@@ -833,11 +835,11 @@ main(int argc, char **argv)
 	page = PAGE_SPECIMEN;
 
 	if (!headless) {
-		if (!peak_init()) {
+		if (!(peak_demo_ctx = peak_init_legacy())) {
 			PFATAL("Failed to init Peak!");
 			return 1;
 		}
-		win = peak_window_open("Type Dashboard", width, height, 0);
+		win = peak_window_open(peak_demo_ctx, "Type Dashboard", width, height, 0);
 		if (!win.running) {
 			PFATAL("Failed to open a window!");
 			return 1;
@@ -858,7 +860,7 @@ main(int argc, char **argv)
 		PFATAL("Failed to create renderer!");
 		if (!headless) {
 			peak_window_close(&win);
-			peak_quit();
+			peak_quit(peak_demo_ctx);
 		}
 		return 1;
 	}
@@ -1081,7 +1083,7 @@ main(int argc, char **argv)
 	rend_renderer_destroy(renderer);
 	if (!headless) {
 		peak_window_close(&win);
-		peak_quit();
+		peak_quit(peak_demo_ctx);
 	}
 	rend_quit();
 	return 0;

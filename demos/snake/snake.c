@@ -63,6 +63,8 @@ typedef struct SnakePush {
     float mvp[16];
 } SnakePush;
 
+static PeakCtx *peak_demo_ctx;
+
 static uint8_t *snake_load_spv(const char *a, const char *b, unsigned long *size);
 static void snake_reset(SnakeGame *g);
 static int snake_occupied(SnakeGame *g, int x, int y);
@@ -500,15 +502,15 @@ main(int argc, char **argv)
     headless = headless_parse(argc, argv, &frames, &ppm);
 
     if (!headless) {
-        if (!peak_init()) {
+        if (!(peak_demo_ctx = peak_init_legacy())) {
             PFATAL("Failed to init Peak!");
             return 1;
         }
 
-        win = peak_window_open("snake", width, height, 0);
+        win = peak_window_open(peak_demo_ctx, "snake", width, height, 0);
         if (!win.running) {
             PFATAL("Failed to open a window!");
-            peak_quit();
+            peak_quit(peak_demo_ctx);
             return 1;
         }
         width = win.width;
@@ -524,7 +526,7 @@ main(int argc, char **argv)
         PFATAL("Failed to create renderer!");
         if (!headless) {
             peak_window_close(&win);
-            peak_quit();
+            peak_quit(peak_demo_ctx);
         }
         return 1;
     }
@@ -706,7 +708,7 @@ main(int argc, char **argv)
     rend_renderer_destroy(renderer);
     if (!headless) {
         peak_window_close(&win);
-        peak_quit();
+        peak_quit(peak_demo_ctx);
     }
     rend_quit();
     return (headless && running == 0) ? 1 : 0;

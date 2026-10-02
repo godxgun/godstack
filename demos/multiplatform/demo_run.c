@@ -1,4 +1,5 @@
 #include "peak.h"
+static PeakCtx *peak_demo_ctx;
 #include "peak.c"
 
 #include <stdio.h>
@@ -64,13 +65,13 @@ main(int argc, char**argv)
 {
     data.msg = "Hello World";
 
-    if (!peak_init()) {
+    if (!(peak_demo_ctx = peak_init_legacy())) {
         return 1;
     }
 
-    PeakWindow win = peak_window_open("demo", 400, 400, 0);
+    PeakWindow win = peak_window_open(peak_demo_ctx, "demo", 400, 400, 0);
     peak_window_run(&win, peak_run_func, &data);
     peak_window_close(&win);
-    peak_quit();
+    peak_quit(peak_demo_ctx);
     return 0;
 }

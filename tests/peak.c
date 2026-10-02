@@ -1,6 +1,7 @@
 /* Peak stress test. Headless filesystem/proc first; window if peak_init works. */
 
 #include "peak.h"
+static PeakCtx *peak_demo_ctx;
 #include "../Peak/peak.c"
 
 #include <stdio.h>
@@ -221,18 +222,22 @@ test_clip(void)
 	char *big;
 
 	printf("clip\n");
-	expect(peak_clip_set(NULL, (PeakClip)99, "x", 1) == 0, "bad which");
-	expect(peak_clip_set(NULL, PEAK_CLIP_CLIPBOARD, "abc", 3) == 1, "set");
-	expect(peak_clip_request(NULL, PEAK_CLIP_CLIPBOARD) == 1, "request");
-	expect(peak_clip_take(NULL, buf, sizeof buf, &n) == 1 && n == 3, "take");
-	expect(peak_text_take(NULL, buf, sizeof buf, &n) == 0, "text empty");
-	expect(peak_drop_take(NULL, buf, sizeof buf, &n) == 0, "drop empty");
+	peak_demo_ctx = peak_init_legacy();
+	expect(peak_demo_ctx != NULL, "local context init");
+	expect(peak_clip_set(peak_demo_ctx, NULL, (PeakClip)99, "x", 1) == 0, "bad which");
+	expect(peak_clip_set(peak_demo_ctx, NULL, PEAK_CLIP_CLIPBOARD, "abc", 3) == 1, "set");
+	expect(peak_clip_request(peak_demo_ctx, NULL, PEAK_CLIP_CLIPBOARD) == 1, "request");
+	expect(peak_clip_take(peak_demo_ctx, NULL, buf, sizeof buf, &n) == 1 && n == 3, "take");
+	expect(peak_text_take(peak_demo_ctx, NULL, buf, sizeof buf, &n) == 0, "text empty");
+	expect(peak_drop_take(peak_demo_ctx, NULL, buf, sizeof buf, &n) == 0, "drop empty");
 	big = malloc(1024u * 1024u);
 	if (big) {
 		memset(big, 'a', 1024u * 1024u);
-		expect(peak_clip_set(NULL, PEAK_CLIP_CLIPBOARD, big, 1024u * 1024u) == 1, "1MiB");
+		expect(peak_clip_set(peak_demo_ctx, NULL, PEAK_CLIP_CLIPBOARD, big, 1024u * 1024u) == 1, "1MiB");
 		free(big);
 	}
+	peak_quit(peak_demo_ctx);
+	peak_demo_ctx = NULL;
 }
 
 void
@@ -272,11 +277,17 @@ test_window(void)
 	int i;
 
 	printf("window\n");
-	if (!peak_init()) {
+	if (!(peak_demo_ctx = peak_init_legacy())) {
 		printf("  skip  no display\n");
 		return;
 	}
-	w = peak_window_open("peak-test", 320, 240, 0);
+	w = peak_window_open(peak_demo_ctx, "peak-test", 320, 240, 0);
+	if (!w.internal.w) {
+		printf("  skip  no display\n");
+		peak_quit(peak_demo_ctx);
+		peak_demo_ctx = NULL;
+		return;
+	}
 	expect(w.internal.w != NULL, "open");
 	buf = peak_window_backbuffer(&w, &width, &height);
 	expect(buf != NULL && width >= 64 && height >= 64, "buffer");
@@ -294,7 +305,7 @@ test_window(void)
 	expect(peak_window_scale(&w) >= 1.f, "scale");
 	peak_window_fullscreen(&w, 1);
 	peak_window_fullscreen(&w, 0);
-	w2 = peak_window_open("peak-test-b", 160, 120, PEAK_WINDOW_TRANSPARENT);
+	w2 = peak_window_open(peak_demo_ctx, "peak-test-b", 160, 120, PEAK_WINDOW_TRANSPARENT);
 	expect(w2.internal.w != NULL, "open 2");
 	peak_window_present(&w2);
 	peak_window_close(&w2);
@@ -302,13 +313,13 @@ test_window(void)
 	peak_window_run(&w, tick_stop, &ticks);
 	expect(ticks == 3, "run ticks");
 	for (i = 0; i < 16; i++) {
-		w2 = peak_window_open("cycle", 64, 64, 0);
+		w2 = peak_window_open(peak_demo_ctx, "cycle", 64, 64, 0);
 		if (w2.internal.w)
 			peak_window_present(&w2);
 		peak_window_close(&w2);
 	}
 	peak_window_close(&w);
-	peak_quit();
+	peak_quit(peak_demo_ctx);
 }
 
 static void

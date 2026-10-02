@@ -2005,6 +2005,12 @@ peak_wayland_shm_resize(struct peak_wayland_win *w, uint32_t width, uint32_t hei
 
 	if (!width || !height)
 		return 0;
+#ifdef PEAK_VULKAN
+	/* Native configure dimensions only; Vulkan supplies the surface buffers. */
+	w->width = width;
+	w->height = height;
+	return 1;
+#endif
 	n = (size_t)width * height * 4;
 	if (w->shm) {
 		munmap(w->shm, w->shm_n);
@@ -2147,7 +2153,7 @@ fail:
 static void
 peak_wayland_quit(void)
 {
-	free(peak_wayland.drag);
+	peak_host_transfer_free(peak_wayland.drag);
 	peak_wayland_xkb_quit();
 	if (peak_wayland.timer_fd >= 0)
 		close(peak_wayland.timer_fd);
@@ -2179,7 +2185,7 @@ peak_wayland_window_open(const char *name, uint32_t width, uint32_t height, uint
 
 	if (!peak_wayland.display && !peak_wayland_init())
 		return intern;
-	w = calloc(1, sizeof *w);
+	w = peak_host_window_alloc(sizeof *w);
 	if (!w)
 		return intern;
 	w->shm_fd = -1;
@@ -2328,8 +2334,9 @@ peak_wayland_window_close(PeakWindowInternal *intern)
 		munmap(w->shm, w->shm_n);
 	if (w->shm_fd >= 0)
 		close(w->shm_fd);
-	free(w->buffer);
-	free(w);
+	if (w->buffer)
+		free(w->buffer);
+	peak_host_window_free(w);
 	if (intern)
 		intern->w = NULL;
 }
@@ -2635,7 +2642,7 @@ peak_wayland_ds_kill(struct wl_data_source **slot)
 		peak_wayland.ds = NULL;
 	if (peak_wayland.drag_ds == ds) {
 		peak_wayland.drag_ds = NULL;
-		free(peak_wayland.drag);
+		peak_host_transfer_free(peak_wayland.drag);
 		peak_wayland.drag = NULL;
 		peak_wayland.drag_n = 0;
 	}
@@ -2792,11 +2799,11 @@ peak_wayland_dd_drop(void *data, struct wl_data_device *dd)
 	peak_wayland.dnd_busy = 0;
 	peak_wayland.dnd_left = 0;
 	if (!acc || !n) {
-		free(acc);
+		peak_host_transfer_free(acc);
 		return;
 	}
 	peak_drop_store(acc, n);
-	free(acc);
+	peak_host_transfer_free(acc);
 	w = peak_wayland.focus;
 	if (!w)
 		return;
@@ -3194,7 +3201,11 @@ peak_wayland_offer_recv(struct wl_proxy *o, uint32_t opcode, const char *mime, c
 	flags = fcntl(rfd, F_GETFL, 0);
 	if (flags >= 0)
 		fcntl(rfd, F_SETFL, flags | O_NONBLOCK);
-	acc = NULL;
+	acc = peak_host.base ? peak_host_recv_alloc() : NULL;
+	if (peak_host.base && !acc) {
+		close(rfd);
+		return 0;
+	}
 	n = 0;
 	got = 0;
 	empty = 0;
@@ -3205,11 +3216,11 @@ peak_wayland_offer_recv(struct wl_proxy *o, uint32_t opcode, const char *mime, c
 		if (r > 0) {
 			char *q;
 
-			if (n + (size_t)r > PEAK_CLIP_MAX)
-				r = (ssize_t)(PEAK_CLIP_MAX - n);
+			if (n + (size_t)r > PEAK_TRANSFER_CAP)
+				r = (ssize_t)(PEAK_TRANSFER_CAP - n);
 			if (r <= 0)
 				break;
-			q = realloc(acc, n + (size_t)r);
+			q = peak_host.base ? acc : realloc(acc, n + (size_t)r);
 			if (!q)
 				break;
 			acc = q;
@@ -3240,10 +3251,10 @@ peak_wayland_offer_recv(struct wl_proxy *o, uint32_t opcode, const char *mime, c
 	}
 	close(rfd);
 	if (!got) {
-		free(acc);
+		peak_host_transfer_free(acc);
 		return 0;
 	}
-	*out = acc ? acc : calloc(1, 1);
+	*out = acc;
 	*out_n = n;
 	return *out ? 1 : 0;
 }
@@ -3262,7 +3273,7 @@ peak_wayland_clip_take_offer(PeakClip which, struct peak_wayland_win *w)
 	if (!peak_wayland_offer_recv((struct wl_proxy *)peak_wayland.offer, 1, "text/plain;charset=utf-8", &acc, &n))
 		return 0;
 	peak_clip_paste_store(which, acc ? acc : "", n);
-	free(acc);
+	peak_host_transfer_free(acc);
 	memset(&ev, 0, sizeof ev);
 	ev.type = PEAK_EVENT_CLIP;
 	ev.clip.which = which;
@@ -3296,17 +3307,17 @@ peak_wayland_drop_drag(PeakWindowInternal *intern, const char *utf8, size_t n)
 		return 0;
 	if (peak_wayland.drag_ds)
 		return 1;
-	p = malloc(n ? n : 1);
+	p = peak_host.base ? peak_host.store[PEAK_STORE_DRAG] : malloc(n ? n : 1);
 	if (!p)
 		return 0;
 	if (n)
 		memcpy(p, utf8, n);
-	free(peak_wayland.drag);
+	peak_host_transfer_free(peak_wayland.drag);
 	peak_wayland.drag = p;
 	peak_wayland.drag_n = n;
 	peak_wayland.drag_ds = (struct wl_data_source *)peak_wayland_marshal((struct wl_proxy *)peak_wayland.ddm, 0, &wl_data_source_interface, NULL);
 	if (!peak_wayland.drag_ds) {
-		free(p);
+		peak_host_transfer_free(p);
 		peak_wayland.drag = NULL;
 		peak_wayland.drag_n = 0;
 		return 0;
@@ -3353,7 +3364,7 @@ peak_wayland_clip_request(PeakWindowInternal *intern, PeakClip which)
 		pn = 0;
 		if (peak_wayland_offer_recv((struct wl_proxy *)peak_wayland.ps_offer, 0, "text/plain;charset=utf-8", &acc, &pn)) {
 			peak_clip_paste_store(which, acc ? acc : "", pn);
-			free(acc);
+			peak_host_transfer_free(acc);
 			memset(&ev, 0, sizeof ev);
 			ev.type = PEAK_EVENT_CLIP;
 			ev.clip.which = which;
@@ -3361,7 +3372,7 @@ peak_wayland_clip_request(PeakWindowInternal *intern, PeakClip which)
 			peak_q_push(&w->q, ev);
 			return 1;
 		}
-		free(acc);
+		peak_host_transfer_free(acc);
 	}
 	if (which == PEAK_CLIP_PRIMARY && peak_clip_own_get(which, &p, &n) && n) {
 		peak_clip_paste_store(which, p, n);

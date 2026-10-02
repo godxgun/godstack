@@ -20,6 +20,8 @@ typedef struct TestMemory {
 	VkDeviceSize size;
 } TestMemory;
 
+static PeakCtx *peak_demo_ctx;
+
 static VkResult test_memory_alloc(VkDevice device, const VkMemoryAllocateInfo *info, const VkAllocationCallbacks *allocator, VkDeviceMemory *memory);
 static void test_memory_free(VkDevice device, VkDeviceMemory memory, const VkAllocationCallbacks *allocator);
 static VkResult test_memory_bind(VkDevice device, VkImage image, VkDeviceMemory memory, VkDeviceSize offset);
@@ -130,7 +132,7 @@ main(void)
 	unsigned char pixels[64 * 64 * 4];
 	int i, j;
 
-	assert(peak_init());
+	assert((peak_demo_ctx = peak_init_legacy()));
 	renderer = rend_renderer_create_offscreen(64, 64, REND_FORMAT_R8G8B8A8_UNORM, REND_BACKEND_AUTO, NULL);
 	assert(renderer && renderer->backend == REND_BACKEND_VULKAN_14);
 	ctx = renderer->context;
@@ -213,7 +215,7 @@ main(void)
 	assert(test_validation_errors == 0);
 	destroy_messenger(vk_instance, messenger, NULL);
 	rend_quit();
-	peak_quit();
+	peak_quit(peak_demo_ctx);
 	puts("rend_vk: passed");
 	return 0;
 }
