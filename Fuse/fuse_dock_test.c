@@ -202,12 +202,51 @@ test_dock_regressions(void)
 	fuse_canvas_clear(c);
 	fuse_dock_place(&d, 2, -1, FUSE_DOCK_FLOAT);
 	fuse_div_begin(c, 0, 0, 1, 1, NULL); fuse_div_end(c);
-	fuse_dock_chrome(&d, c, 2);
+	fuse_dock_chrome(&d, c, 2, 0xFF171D25u, 0xFF232D39u, 0xFF354457u, 0xFFD5DDE6u, 0xFF718399u, 0);
 	fuse_dock_begin(&d, c, 2, NULL);
 	fuse_button(c, 0, 0, 20, 20, 1, 2);
 	expect(c->elements[c->element_count - 1].id == child_id, "child identity survives floating and emission order changes");
 	fuse_dock_end(c);
 	fuse_canvas_draw(c, &command_count);
+
+	/* Widget colors are consumed per call, without a retained palette or
+	 * changes to layout/input state. Focus is an outline, not only a fill. */
+	fuse_dock_focus_tabs(&d, 2);
+	before = d.layout; revision = d.revision; focused = d.focused;
+	fuse_canvas_clear(c);
+	fuse_dock_chrome(&d, c, 2, 0xFF010203u, 0xFF111213u, 0xFF212223u,
+		0xFF313233u, 0xFF414243u, 0xFF515253u);
+	FuseCmd *colors = fuse_canvas_draw(c, &command_count);
+	int seen = 0;
+	for (size_t k = 0; colors && k < command_count; k++) {
+		if (colors[k].type != FUSE_CMD_RECT) continue;
+		seen |= colors[k].rect.color == 0xFF010203u ? 1 :
+			colors[k].rect.color == 0xFF212223u ? 2 :
+			colors[k].rect.color == 0xFF313233u ? 4 :
+			colors[k].rect.color == 0xFF414243u ? 8 :
+			colors[k].rect.color == 0xFF515253u ? 16 : 0;
+	}
+	expect(seen == 31, "dock consumes caller background active text grip and focus colors");
+	expect(d.revision == revision && d.focused == focused && !memcmp(&before, &d.layout, sizeof(before)),
+		"dock color drawing preserves layout and input state");
+	fuse_canvas_clear(c);
+	fuse_dock_chrome(&d, c, 2, 0xFF616263u, 0xFF717273u, 0xFF818283u,
+		0xFF919293u, 0xFFA1A2A3u, 0);
+	colors = fuse_canvas_draw(c, &command_count);
+	seen = 0;
+	for (size_t k = 0; colors && k < command_count; k++)
+		if (colors[k].type == FUSE_CMD_RECT && colors[k].rect.color == 0xFF515253u) seen = 1;
+	expect(!seen, "dock does not retain previous focus color");
+	fuse_canvas_clear(c);
+	d.capture = 1; d.dragging = 1; d.node = fuse_dock_group(&d, 2);
+	d.window = 2; d.target = 0; d.side = FUSE_DOCK_CENTER;
+	fuse_dock_feedback(&d, c, 0xFFB1B2B3u);
+	colors = fuse_canvas_draw(c, &command_count);
+	seen = 0;
+	for (size_t k = 0; colors && k < command_count; k++)
+		if (colors[k].type == FUSE_CMD_RECT && colors[k].rect.color == 0xFFB1B2B3u) seen++;
+	expect(seen == 4, "dock feedback consumes caller color");
+	d.capture = d.dragging = 0;
 	free(memory);
 
 	/* Clamped floating geometry is the starting point, not off-host intent. */
@@ -265,7 +304,7 @@ test_dock_regressions(void)
 	memory = calloc(1, fuse_canvas_memory(64));
 	c = fuse_canvas_create(memory, fuse_canvas_memory(64));
 	fuse_canvas_resize(c, 40, 80);
-	fuse_dock_feedback(&d, c);
+	fuse_dock_feedback(&d, c, 0xFF77B9FFu);
 	fuse_canvas_draw(c, &command_count);
 	expect(command_count == 0, "impossible split does not advertise feedback");
 	free(memory);
@@ -336,7 +375,7 @@ test_dock_constrained_builder(FuseDock *d)
 					"empty content does not change builder state");
 			}
 			elements = c->element_count;
-			fuse_dock_chrome(d, c, window);
+			fuse_dock_chrome(d, c, window, 0xFF171D25u, 0xFF232D39u, 0xFF354457u, 0xFFD5DDE6u, 0xFF718399u, 0);
 			if (group.w <= 0 || group.h <= 0)
 				expect(c->element_count == elements, "empty group emits no chrome");
 			else
@@ -347,7 +386,7 @@ test_dock_constrained_builder(FuseDock *d)
 			d->capture = 1; d->dragging = 1; d->node = -1;
 			d->window = window; d->target = window; d->side = FUSE_DOCK_CENTER;
 			elements = c->element_count;
-			fuse_dock_feedback(d, c);
+			fuse_dock_feedback(d, c, 0xFF77B9FFu);
 			if (group.w <= 0 || group.h <= 0)
 				expect(c->element_count == elements, "empty target emits no feedback");
 			d->capture = 0; d->dragging = 0;

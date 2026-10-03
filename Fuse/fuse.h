@@ -40,10 +40,12 @@
 #define FUSE_H
 
 #define FUSE_MAJOR 0
-#define FUSE_MINOR 11
+#define FUSE_MINOR 13
 #define FUSE_PATCH 0
 
 /* CHANGE LOG
+ * 0.13.0 - docking widgets take per-call colors; rebuild/update their callers
+ * 0.12.0 - explicit FuseParams placement/capacity; failed builds cancel input
  * 0.11.0 - caller-backed docking and explicit command layers; rebuild consumers
  * 0.0.1 - @vasco - slider
  * 0.1.0 - @vasco - canvas memory / create; no malloc, no globals
@@ -98,7 +100,7 @@ typedef enum {
 
 typedef enum {
     FUSE_ERR_OK = 0,
-    FUSE_ERR_BUF_TOO_SMALL,   /* bufsize < fuse_canvas_memory(n) for any n, or unaligned memory */
+    FUSE_ERR_BUF_TOO_SMALL,   /* insufficient or unaligned backing */
     FUSE_ERR_OVERFLOW,        /* a widget/cmd would exceed max_elements or cmd capacity */
     FUSE_ERR_DUPLICATE_ID,    /* same id emitted twice in one generation */
     FUSE_ERR_UNBALANCED,      /* div_end with empty stack, or draw with open divs */
@@ -227,8 +229,29 @@ typedef struct FuseClass {
 
 typedef struct fuse_canvas_t *FuseCanvas; // Opaque
 
-size_t     fuse_canvas_memory(size_t max_elements); // Returns amount of memory required.
-FuseCanvas fuse_canvas_create(void *buf, size_t bufsize); // Creates the canvas and places it in the allocated memory region.
+/* Independent bounds: element capacity includes the implicit root; scopes
+ * count total stack slots including that root (32 permits 31 explicit scopes).
+ * max_windows is the dock registration bound, not another canvas registry.
+ * Params are copied; backing is borrowed, 8-byte aligned, and never freed.
+ * Sizing returns 0 and placement returns NULL for invalid/overflowing counts,
+ * misalignment or short backing, before modifying caller storage. */
+#define FUSE_WINDOWS_MAX 16
+typedef struct FuseParams {
+    size_t max_elements;
+    size_t max_windows;
+    size_t max_scopes;
+} FuseParams;
+
+size_t     fuse_memory(const FuseParams *params);
+FuseCanvas fuse_place_in_memory(void *buf, size_t bytes, const FuseParams *params);
+size_t     fuse_canvas_max_windows(FuseCanvas);
+/* Highest total stack depth in this build, reset to the root (1) on clear. */
+size_t     fuse_canvas_scope_peak(FuseCanvas);
+FuseError  fuse_canvas_error(FuseCanvas);
+/* Legacy helpers: 16 window registrations and min(max_elements,32) scopes.
+ * create infers the greatest fitting element capacity; no allocation/fallback. */
+size_t     fuse_canvas_memory(size_t max_elements);
+FuseCanvas fuse_canvas_create(void *buf, size_t bufsize);
 void       fuse_canvas_clear(FuseCanvas);
 /* Applies to subsequently built elements. Resets to 0 on clear. */
 void       fuse_canvas_layer(FuseCanvas, int16_t layer);
@@ -257,6 +280,9 @@ void       fuse_canvas_key(FuseCanvas, FuseKey key);
 void       fuse_focus(FuseCanvas, const char *name);
 bool       fuse_focused(FuseCanvas, const char *name);
 
+/* Exhaustion/unbalanced/duplicate construction fails the whole build: NULL,
+ * zero commands, canceled capture/focus/queued input, no synthesized release.
+ * Error is sticky through draw, cleared by the next canvas_clear. */
 FuseCmd   *fuse_canvas_draw(FuseCanvas, size_t *cmd_count);
 /* Valid until the next clear. Parallel to FUSE_CMD_TEXT slots. */
 const FuseFieldRun *fuse_canvas_fields(FuseCanvas, size_t *count);

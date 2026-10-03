@@ -3,7 +3,7 @@
 #define FUSE_DOCK_H
 #include "fuse.h"
 
-#define FUSE_DOCK_MAX 16
+#define FUSE_DOCK_MAX FUSE_WINDOWS_MAX
 #define FUSE_DOCK_NODES (2 * FUSE_DOCK_MAX - 1)
 #define FUSE_DOCK_TITLE 24.0f
 
@@ -72,6 +72,11 @@ int fuse_dock_import(FuseDock *, const FuseDockLayout *);
  * name with fuse_scope_enter in the same enclosing scope for focus/edit queries. */
 int fuse_dock_begin(FuseDock *, FuseCanvas, int window, const FuseClass *);
 void fuse_dock_end(FuseCanvas);
-void fuse_dock_chrome(FuseDock *, FuseCanvas, int window);
-void fuse_dock_feedback(FuseDock *, FuseCanvas);
+/* Presentation colors are per-call widget arguments, never retained.
+ * accent draws a 1px active-tab underline and a 2px keyboard-focus outline;
+ * pass zero to omit those decorations. Layout/input geometry is unchanged. */
+void fuse_dock_chrome(FuseDock *, FuseCanvas, int window,
+	uint32_t background, uint32_t inactive, uint32_t active, uint32_t text,
+	uint32_t grip, uint32_t accent);
+void fuse_dock_feedback(FuseDock *, FuseCanvas, uint32_t color);
 #endif

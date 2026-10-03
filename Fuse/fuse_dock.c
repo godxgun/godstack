@@ -709,7 +709,9 @@ void
 fuse_dock_end(FuseCanvas canvas) { fuse_div_end(canvas); }
 
 void
-fuse_dock_chrome(FuseDock *d, FuseCanvas canvas, int window)
+fuse_dock_chrome(FuseDock *d, FuseCanvas canvas, int window,
+	uint32_t background, uint32_t inactive, uint32_t active, uint32_t text,
+	uint32_t grip, uint32_t accent)
 {
 	FuseDockRect r;
 	FuseDockNode *n;
@@ -719,23 +721,32 @@ fuse_dock_chrome(FuseDock *d, FuseCanvas canvas, int window)
 	n = &d->layout.nodes[fuse_dock_group(d, window)];
 	floating = fuse_dock_float_root(d, fuse_dock_group(d, window)) >= 0;
 	fuse_div_begin(canvas, r.x, r.y, r.w, r.h, NULL);
-	fuse_rect(canvas, 0, 0, r.w, r.h, 0xFF171D25u);
+	fuse_rect(canvas, 0, 0, r.w, r.h, background);
 	width = fmaxf(1, (r.w - (floating ? fminf(24, r.w * 0.25f) : 0)) / n->count);
 	for (i = 0; i < n->count; i++) {
-		fuse_rect(canvas, i * width, 0, width - 1, FUSE_DOCK_TITLE, i == n->active ? 0xFF354457u : 0xFF232D39u);
+		fuse_rect(canvas, i * width, 0, width - 1, FUSE_DOCK_TITLE, i == n->active ? active : inactive);
 		fuse_div_begin(canvas, i * width, 0, width, FUSE_DOCK_TITLE, NULL);
-		fuse_text(canvas, 6, 8, 1, d->windows[n->tabs[i]].title, 0xFFD5DDE6u);
+		if (accent && i == n->active) {
+			fuse_rect(canvas, 0, FUSE_DOCK_TITLE - 1, width - 1, 1, accent);
+			if (d->tab_focus && d->focused == window) {
+				fuse_rect(canvas, 0, 0, width - 1, 2, accent);
+				fuse_rect(canvas, 0, 0, 2, FUSE_DOCK_TITLE, accent);
+				fuse_rect(canvas, width - 3, 0, 2, FUSE_DOCK_TITLE, accent);
+				fuse_rect(canvas, 0, FUSE_DOCK_TITLE - 2, width - 1, 2, accent);
+			}
+		}
+		fuse_text(canvas, 6, 8, 1, d->windows[n->tabs[i]].title, text);
 		fuse_div_end(canvas);
 	}
 	if (floating) {
-		fuse_text(canvas, r.w - 19, 8, 1, "::", 0xFFD5DDE6u);
-		fuse_rect(canvas, r.w - 10, r.h - 3, 8, 2, 0xFF718399u);
+		fuse_text(canvas, r.w - 19, 8, 1, "::", text);
+		fuse_rect(canvas, r.w - 10, r.h - 3, 8, 2, grip);
 	}
 	fuse_div_end(canvas);
 }
 
 void
-fuse_dock_feedback(FuseDock *d, FuseCanvas canvas)
+fuse_dock_feedback(FuseDock *d, FuseCanvas canvas, uint32_t color)
 {
 	FuseDockRect r;
 	int group;
@@ -753,8 +764,8 @@ fuse_dock_feedback(FuseDock *d, FuseCanvas canvas)
 		if (d->side == FUSE_DOCK_BOTTOM) r.y += r.h;
 	}
 	if (r.w <= 0 || r.h <= 0) return;
-	fuse_rect(canvas, r.x, r.y, r.w, 3, 0xFF77B9FFu);
-	fuse_rect(canvas, r.x, r.y + r.h - 3, r.w, 3, 0xFF77B9FFu);
-	fuse_rect(canvas, r.x, r.y, 3, r.h, 0xFF77B9FFu);
-	fuse_rect(canvas, r.x + r.w - 3, r.y, 3, r.h, 0xFF77B9FFu);
+	fuse_rect(canvas, r.x, r.y, r.w, 3, color);
+	fuse_rect(canvas, r.x, r.y + r.h - 3, r.w, 3, color);
+	fuse_rect(canvas, r.x, r.y, 3, r.h, color);
+	fuse_rect(canvas, r.x + r.w - 3, r.y, 3, r.h, color);
 }

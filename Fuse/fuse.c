@@ -133,20 +133,20 @@ struct fuse_canvas_t {
 
     FuseColGroup col_group[FUSE_COL_STACK];
 
-    size_t max_elements;
+    size_t max_elements, max_windows;
     size_t hash_cap, cmd_cap, screen_cap;
 
     FuseInp inp[FUSE_INP_MAX];
     FuseFieldRun fields[FUSE_FIELD_MAX];
     char inp_bytes[FUSE_INP_BYTES];
 
-    int input_enabled;
+    int input_enabled, input_canceled;
     int16_t layer, emit_layer;
     uint32_t layer_elements[64];
     int16_t layers[64];
     uint32_t layer_count;
     uint32_t element_count, cmd_count;
-    uint32_t screen_count;
+    uint32_t screen_count, scope_peak;
     uint32_t generation, capture_id, pending_id;
     uint32_t focus_id, focus_frame;
     uint32_t named_scope; /* 0 inherits the builder's div scope. */
@@ -180,7 +180,8 @@ struct fuse_canvas_t {
 
 static size_t fuse_internal_align(size_t n);
 static size_t fuse_internal_hash_cap(size_t n);
-static void fuse_internal_mem(FuseMem *m, size_t n);
+static int fuse_internal_mem_add(size_t *off, size_t count, size_t width);
+static int fuse_internal_mem(FuseMem *m, const FuseParams *params);
 static size_t fuse_internal_max_elements(size_t bufsize);
 static void fuse_internal_hash_keep_last(FuseCanvas c);
 static FuseHashItem *fuse_internal_hash_slot(FuseCanvas c, uint32_t id, int vacant_ok);
@@ -298,42 +299,48 @@ fuse_internal_align(size_t n)
 static size_t
 fuse_internal_hash_cap(size_t n)
 {
-    size_t cap;
-    cap = 8;
-    if (n > ((size_t)-1) / 2)
-        n = ((size_t)-1) / 2;
-    while (cap < n * 2)
-        cap *= 2;
-    return cap;
+	size_t cap = 8;
+	/* Validated element bounds keep doubling representable on 32-bit too. */
+	while (cap < n * 2)
+		cap *= 2;
+	return cap;
 }
 
-static void
-fuse_internal_mem(FuseMem *m, size_t n)
+static int
+fuse_internal_mem_add(size_t *off, size_t count, size_t width)
 {
-    size_t off;
-    FASSERT(m);
-    m->hash_cap = fuse_internal_hash_cap(n);
-    m->cmd_cap = n * FUSE_CMDS_PER_EL;
-    m->screen_cap = n;
+	size_t next;
+	if (count > (SIZE_MAX - *off) / width)
+		return 0;
+	next = *off + count * width;
+	if (next > SIZE_MAX - (FUSE_MEM_ALIGN - 1))
+		return 0;
+	*off = fuse_internal_align(next);
+	return 1;
+}
 
-    if (m->screen_cap > FUSE_SCREEN_MAX)
-        m->screen_cap = FUSE_SCREEN_MAX;
-
-    off = fuse_internal_align(sizeof (struct fuse_canvas_t));
-    m->hash_off = off;
-
-    off = fuse_internal_align(off + m->hash_cap * sizeof (FuseHashItem));
-    m->elements_off = off;
-
-    off = fuse_internal_align(off + n * sizeof (FuseElement));
-    m->screens_off = off;
-
-    off = fuse_internal_align(off + m->screen_cap * sizeof (FuseScreen));
-    m->cmds_off = off;
-
-    off = fuse_internal_align(off + m->cmd_cap * sizeof (FuseCmd));
-    m->total = off;
-
+static int
+fuse_internal_mem(FuseMem *m, const FuseParams *params)
+{
+	size_t off;
+	if (!m || !params || !params->max_elements || params->max_elements > UINT32_MAX / FUSE_CMDS_PER_EL ||
+		!params->max_windows || params->max_windows > FUSE_WINDOWS_MAX ||
+		!params->max_scopes || params->max_scopes > UINT32_MAX)
+		return 0;
+	m->hash_cap = fuse_internal_hash_cap(params->max_elements);
+	m->cmd_cap = params->max_elements * FUSE_CMDS_PER_EL;
+	m->screen_cap = params->max_scopes;
+	off = fuse_internal_align(sizeof(struct fuse_canvas_t));
+	m->hash_off = off;
+	if (!fuse_internal_mem_add(&off, m->hash_cap, sizeof(FuseHashItem))) return 0;
+	m->elements_off = off;
+	if (!fuse_internal_mem_add(&off, params->max_elements, sizeof(FuseElement))) return 0;
+	m->screens_off = off;
+	if (!fuse_internal_mem_add(&off, m->screen_cap, sizeof(FuseScreen))) return 0;
+	m->cmds_off = off;
+	if (!fuse_internal_mem_add(&off, m->cmd_cap, sizeof(FuseCmd))) return 0;
+	m->total = off;
+	return 1;
 }
 
 static size_t
@@ -345,13 +352,15 @@ fuse_internal_max_elements(size_t bufsize)
         return 0;
     lo = 1;
     hi = bufsize / 32;
+    if (hi > UINT32_MAX / FUSE_CMDS_PER_EL)
+        hi = UINT32_MAX / FUSE_CMDS_PER_EL;
     if (hi < 1)
         hi = 1;
     best = 0;
     while (lo <= hi) {
         mid = lo + (hi - lo) / 2;
-        fuse_internal_mem(&m, mid);
-        if (m.total <= bufsize) {
+        FuseParams params = {mid, FUSE_WINDOWS_MAX, mid < FUSE_SCREEN_MAX ? mid : FUSE_SCREEN_MAX};
+        if (fuse_internal_mem(&m, &params) && m.total <= bufsize) {
             best = mid;
             lo = mid + 1;
         } else {
@@ -462,8 +471,15 @@ fuse_internal_ok(FuseCanvas c)
 static void
 fuse_internal_fail(FuseCanvas c, FuseError err)
 {
-    if (c && c->error == FUSE_ERR_OK)
+    if (c && c->error == FUSE_ERR_OK) {
         c->error = err;
+        c->cmd_count = 0;
+        c->capture_id = c->focus_id = c->focus_frame = 0;
+        c->wheel_capture = 0;
+        c->pointer_edge = FUSE_EDGE_NONE;
+        c->input_canceled = c->pointer_state == FUSE_POINTER_PRESSED;
+        c->inp_n = c->inp_len = c->field_n = 0;
+    }
 }
 
 static void
@@ -483,7 +499,7 @@ fuse_internal_reset_frame(FuseCanvas c, int bump_gen)
     c->layer = c->emit_layer = 0;
     c->element_count = 1;
     c->cmd_count = 0;
-    c->screen_count = 1;
+    c->screen_count = c->scope_peak = 1;
     c->named_scope = 0;
     c->pending_id = 0;
     c->pending_name[0] = 0;
@@ -1980,42 +1996,68 @@ fuse_internal_debug(FuseCanvas c)
 }
 
 size_t
+fuse_memory(const FuseParams *params)
+{
+	FuseMem m;
+	return fuse_internal_mem(&m, params) ? m.total : 0;
+}
+
+FuseCanvas
+fuse_place_in_memory(void *buf, size_t bytes, const FuseParams *params)
+{
+	FuseMem m;
+	FuseCanvas c;
+	unsigned char *p = buf;
+	if (!buf || (uintptr_t)buf % FUSE_MEM_ALIGN || !fuse_internal_mem(&m, params) || bytes < m.total)
+		return NULL;
+	memset(p, 0, sizeof(struct fuse_canvas_t));
+	c = (FuseCanvas)p;
+	c->max_elements = params->max_elements;
+	c->max_windows = params->max_windows;
+	c->hash_cap = m.hash_cap;
+	c->cmd_cap = m.cmd_cap;
+	c->screen_cap = m.screen_cap;
+	c->hash = (FuseHashItem *)(p + m.hash_off);
+	c->elements = (FuseElement *)(p + m.elements_off);
+	c->screens = (FuseScreen *)(p + m.screens_off);
+	c->cmds = (FuseCmd *)(p + m.cmds_off);
+	memset(c->hash, 0, c->hash_cap * sizeof *c->hash);
+	fuse_internal_reset_frame(c, 0);
+	return c;
+}
+
+size_t
+fuse_canvas_max_windows(FuseCanvas c)
+{
+	return c ? c->max_windows : 0;
+}
+
+size_t
+fuse_canvas_scope_peak(FuseCanvas c)
+{
+	return c ? c->scope_peak : 0;
+}
+
+FuseError
+fuse_canvas_error(FuseCanvas c)
+{
+	return c ? c->error : FUSE_ERR_BUF_TOO_SMALL;
+}
+
+size_t
 fuse_canvas_memory(size_t max_elements)
 {
-    FuseMem m;
-    if (max_elements == 0)
-        return 0;
-    fuse_internal_mem(&m, max_elements);
-    return m.total;
+	FuseParams params = {max_elements, FUSE_WINDOWS_MAX,
+		max_elements < FUSE_SCREEN_MAX ? max_elements : FUSE_SCREEN_MAX};
+	return fuse_memory(&params);
 }
 
 FuseCanvas
 fuse_canvas_create(void *buf, size_t bufsize)
 {
-    FuseMem m;
-    FuseCanvas c;
-    unsigned char *bytes;
-    size_t n;
-    if (!buf)
-        return NULL;
-    n = fuse_internal_max_elements(bufsize);
-    if (n == 0)
-        return NULL;
-    fuse_internal_mem(&m, n);
-    bytes = buf;
-    memset(bytes, 0, sizeof (struct fuse_canvas_t));
-    c = (FuseCanvas)bytes;
-    c->max_elements = n;
-    c->hash_cap = m.hash_cap;
-    c->cmd_cap = m.cmd_cap;
-    c->screen_cap = m.screen_cap;
-    c->hash = (FuseHashItem *)(bytes + m.hash_off);
-    c->elements = (FuseElement *)(bytes + m.elements_off);
-    c->screens = (FuseScreen *)(bytes + m.screens_off);
-    c->cmds = (FuseCmd *)(bytes + m.cmds_off);
-    memset(c->hash, 0, c->hash_cap * sizeof *c->hash);
-    fuse_internal_reset_frame(c, 0);
-    return c;
+	size_t n = fuse_internal_max_elements(bufsize);
+	FuseParams params = {n, FUSE_WINDOWS_MAX, n < FUSE_SCREEN_MAX ? n : FUSE_SCREEN_MAX};
+	return fuse_place_in_memory(buf, bufsize, &params);
 }
 
 void
@@ -2061,6 +2103,11 @@ fuse_canvas_pointer(FuseCanvas c, FusePointerState pointer_state, float x, float
     else if (pointer_state == FUSE_POINTER_RELEASED && prev == FUSE_POINTER_PRESSED)
         c->pointer_edge = FUSE_EDGE_RELEASED;
     c->pointer_state = pointer_state;
+    if (c->input_canceled) {
+        c->pointer_edge = FUSE_EDGE_NONE;
+        if (pointer_state != FUSE_POINTER_PRESSED)
+            c->input_canceled = 0;
+    }
 }
 
 void
@@ -2086,7 +2133,7 @@ fuse_canvas_text(FuseCanvas c, const char *utf8)
     int n, i;
 
     FASSERT(c, "null canvas");
-    if (!c || !utf8 || !utf8[0])
+    if (!fuse_internal_ok(c) || !utf8 || !utf8[0])
         return;
     n = 0;
     while (utf8[n])
@@ -2109,7 +2156,7 @@ void
 fuse_canvas_key(FuseCanvas c, FuseKey key)
 {
     FASSERT(c, "null canvas");
-    if (!c || key == 0)
+    if (!fuse_internal_ok(c) || key == 0)
         return;
     if (c->inp_n >= FUSE_INP_MAX)
         return;
@@ -2144,7 +2191,7 @@ void
 fuse_focus(FuseCanvas c, const char *name)
 {
     FASSERT(c, "null canvas");
-    if (!c)
+    if (!fuse_internal_ok(c))
         return;
     if (!name || !name[0])
         c->focus_id = 0;
@@ -2170,6 +2217,8 @@ fuse_canvas_draw(FuseCanvas c, size_t *cmd_count)
     FASSERT(cmd_count, "null cmd_count");
     if (cmd_count)
         *cmd_count = 0;
+    if (!c)
+        return NULL;
     if (!fuse_internal_ok(c))
         goto done;
     if (c->screen_count != 1 || c->col_n != 0) {
@@ -2188,6 +2237,8 @@ fuse_canvas_draw(FuseCanvas c, size_t *cmd_count)
         goto done;
     if (c->debug)
         fuse_internal_debug(c);
+    if (!fuse_internal_ok(c))
+        goto done;
     if (cmd_count)
         *cmd_count = c->cmd_count;
 done:
