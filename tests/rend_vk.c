@@ -1,4 +1,4 @@
-/* Rend Vulkan depth lifetime regression. Requires Vulkan and validation layers.
+/* Rend backend-stub rejection and Vulkan depth lifetime regression. Requires Vulkan and validation layers.
  * Run from godstack with ./build rend test. No window is created.
  */
 #define _POSIX_C_SOURCE 200809L
@@ -27,6 +27,7 @@ static void test_memory_free(VkDevice device, VkDeviceMemory memory, const VkAll
 static VkResult test_memory_bind(VkDevice device, VkImage image, VkDeviceMemory memory, VkDeviceSize offset);
 static VkResult test_image_view_create(VkDevice device, const VkImageViewCreateInfo *info, const VkAllocationCallbacks *allocator, VkImageView *view);
 static VKAPI_ATTR VkBool32 VKAPI_CALL test_validation(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT types, const VkDebugUtilsMessengerCallbackDataEXT *data, void *user);
+static void test_backend_stubs(void);
 
 static TestMemory test_memory[TEST_MEMORY_MAX];
 static uint32_t test_memory_count;
@@ -115,6 +116,27 @@ test_validation(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMes
 	return VK_FALSE;
 }
 
+void
+test_backend_stubs(void)
+{
+	const RendBackendType backends[] = {REND_BACKEND_DIRECTX_12, REND_BACKEND_METAL_4};
+	RendRenderer head = rend_renderers_head;
+	uint32_t count = test_memory_count;
+	VkDeviceSize bytes = test_memory_bytes;
+	int initialized = rend_backend_vk_initialized;
+	size_t i;
+
+	for (i = 0; i < sizeof(backends) / sizeof(backends[0]); i++) {
+		assert(!rend_vtables[backends[i]].renderer_create);
+		assert(!rend_vtables[backends[i]].renderer_create_offscreen);
+		assert(!rend_renderer_create(NULL, backends[i], NULL, 0, NULL));
+		assert(!rend_renderer_create_offscreen(64, 64, REND_FORMAT_R8G8B8A8_UNORM, backends[i], NULL));
+		assert(rend_renderers_head == head);
+		assert(rend_backend_vk_initialized == initialized);
+		assert(test_memory_count == count && test_memory_bytes == bytes);
+	}
+}
+
 int
 main(void)
 {
@@ -133,11 +155,14 @@ main(void)
 	int i, j;
 
 	assert((peak_demo_ctx = peak_init_legacy()));
+	puts("rend_vk: rejecting deferred backends before/after Vulkan creation (eight expected warnings)");
+	test_backend_stubs();
 	renderer = rend_renderer_create_offscreen(64, 64, REND_FORMAT_R8G8B8A8_UNORM, REND_BACKEND_AUTO, NULL);
 	assert(renderer && renderer->backend == REND_BACKEND_VULKAN_14);
 	ctx = renderer->context;
 	assert(ctx->swap_depth.owned_memory);
 	assert(!vk_allocator);
+	test_backend_stubs();
 
 	debug = (VkDebugUtilsMessengerCreateInfoEXT) {
 		.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,

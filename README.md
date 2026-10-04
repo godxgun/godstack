@@ -12,9 +12,9 @@ Collection of modular and minimal libraries used by our software.
 | Name   | Version | Description                                |
 | ------ | ------- | ------------------------------------------ |
 | Poof   | 0.2.0   | Build system.                              |
-| Peak   | 0.11.1  | Platform library that automatically links the correct system libraries. |
-| Fuse   | 0.8.0   | Immediate-mode UI command buffer.          |
-| Rend   | 1.6.6   | Modern graphics API layer.                 |
+| Peak   | 0.12.0  | Platform library that automatically links the correct system libraries. |
+| Fuse   | 0.13.0  | Immediate-mode UI command buffer.          |
+| Rend   | 2.0.0   | Modern graphics API layer.                 |
 
 ## Utilities
 | Name   | Version | Description                                |
@@ -40,8 +40,13 @@ Collection of modular and minimal libraries used by our software.
 ```
 ./build             # demos + tests
 ./build test        # that, then run them headlessly
+./build package     # build package for github
 ./build peak        # Peak demos + tests/peak
 ./build peak test   # that, then run tests/peak
+./build rend2       # isolated Rend2 Vulkan core check
+./build rend2 test  # build and run it; no window required
+./build snake       # Rend2 snake demo
+./build snake test  # deterministic offscreen rendering/layout checks
 ```
 
 Rend demos take `--headless` (`--frames N`, `--ppm path`). Peak window tests need a display (Xvfb on Linux CI).

@@ -13,8 +13,9 @@
  * - Define PEAK_VULKAN to enable rendering. AUTO selects Vulkan; no software fallback.
  * - No OS window APIs in the command path.
  *
- * SUPPORTED BACKENDS:
- * - Vulkan 1.4
+ * BACKEND STATUS:
+ * - Vulkan 1.4 supported
+ * - DirectX 12 and Metal 4 are unavailable stubs; explicit selection fails.
  *
  * MACRO FLAGS:
  * - PEAK_VULKAN              Vulkan 1.4. peak.h sets WSI. Required to create renderers.
@@ -197,7 +198,9 @@ extern void rend_cmd_blit(RendRenderer renderer, RendTexture *src, RendTexture *
 
 enum RendBackendType_t {
     REND_BACKEND_AUTO = 0, 
-    REND_BACKEND_VULKAN_14, 
+    REND_BACKEND_VULKAN_14,
+	REND_BACKEND_DIRECTX_12, /* Unavailable stub; creation returns NULL. */
+	REND_BACKEND_METAL_4,    /* Unavailable stub; creation returns NULL. */
     REND_BACKEND_COUNT 
 };
 

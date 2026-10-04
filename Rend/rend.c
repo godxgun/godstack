@@ -27,6 +27,9 @@ bool rend_backend_vk_initialized = false;
 
 RendVTable rend_vtables[REND_BACKEND_COUNT] = {
     [REND_BACKEND_AUTO] = {0},
+	/* Deferred backends publish no callable entry points or contexts. */
+	[REND_BACKEND_DIRECTX_12] = {0},
+	[REND_BACKEND_METAL_4] = {0},
 #ifdef PEAK_VULKAN
     [REND_BACKEND_VULKAN_14] = {
             .renderer_create = rend_vk14_renderer_create,
@@ -641,10 +644,20 @@ rend_cmd_blit(RendRenderer renderer, RendTexture *src, RendTexture *dst, uint32_
 static bool
 rend__renderer_init(RendRenderer renderer, RendBackendType backend)
 {
-    if (backend != REND_BACKEND_AUTO && backend != REND_BACKEND_VULKAN_14) {
-        REND__WARN("Invalid backend type!");
-        return false;
-    }
+	switch (backend) {
+	case REND_BACKEND_AUTO:
+	case REND_BACKEND_VULKAN_14:
+		break;
+	case REND_BACKEND_DIRECTX_12:
+		REND__WARN("DirectX 12 backend is not implemented (deferred stub); no fallback.");
+		return 0;
+	case REND_BACKEND_METAL_4:
+		REND__WARN("Metal 4 backend is not implemented (deferred stub); no fallback.");
+		return 0;
+	default:
+		REND__WARN("Invalid backend type!");
+		return 0;
+	}
 #ifdef PEAK_VULKAN
     if (rend_vk_init()) {
         rend_backend_vk_initialized = true;
