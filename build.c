@@ -5,8 +5,8 @@
 #include <string.h>
 #include <time.h>
 
-static int build_rend_abi_test(void);
-static int build_rend2_test(void);
+static int build_rend_abi_demo(void);
+static int build_rend2_demo(void);
 static int build_snake(void);
 static int package_version(const char *header, const char *prefix, char version[64]);
 static int package_header(const char *src, const char *dst, const char *peak_header);
@@ -83,18 +83,18 @@ build_peak_native(const char *src, const char *out)
 }
 
 static bool
-build_peak_test(void)
+build_peak_demo(void)
 {
     Poof_CC cc = {0};
-
-    poof_mkdir("tests");
+    poof_mkdir("demos/peak");
     poof_cc_init(&cc, POOF_CC_GCC | POOF_CC_CLANG, POOF_TARGET_HOST);
     cc.debug_mode = true;
     cc.optimization = POOF_O0;
-    cc.output = "tests/peak";
-    poof_cmd_append(&cc.inputs, "tests/peak.c");
+    cc.output = "demos/peak/demo";
+    poof_cmd_append(&cc.inputs, "demos/peak/demo.c");
     poof_cmd_append(&cc.includes, ".", "Peak");
     poof_cmd_append(&cc.extra_flags, "-std=c99", "-Wall", "-Werror", "-Wno-deprecated-declarations");
+    add_peak_config(&cc);
     add_peak_link(&cc);
     return poof_cc_run(&cc);
 }
@@ -108,15 +108,16 @@ build_peak_demos(void)
 }
 
 static bool
-build_fuse_test(void)
+build_fuse_demo(void)
 {
     Poof_CC cc = {0};
+    poof_mkdir("demos/fuse");
     poof_cc_init(&cc, POOF_CC_GCC | POOF_CC_CLANG, POOF_TARGET_HOST);
     cc.debug_mode = true;
     cc.optimization = POOF_O0;
-    cc.output = "Fuse/fuse_test";
-    poof_cmd_append(&cc.inputs, "Fuse/fuse_test.c");
-    poof_cmd_append(&cc.includes, "Fuse");
+    cc.output = "demos/fuse/demo";
+    poof_cmd_append(&cc.inputs, "demos/fuse/demo.c");
+    poof_cmd_append(&cc.includes, ".", "Fuse");
     poof_cmd_append(&cc.defines, "FUSE_DEBUG");
     poof_cmd_append(&cc.libs, "m");
     poof_cmd_append(&cc.extra_flags, "-std=c99", "-Wall", "-Werror");
@@ -187,15 +188,16 @@ build_rend_demos(void)
 }
 
 static bool
-build_cast_test(void)
+build_cast_demo(void)
 {
     Poof_CC cc = {0};
+    poof_mkdir("demos/cast");
     poof_cc_init(&cc, POOF_CC_GCC | POOF_CC_CLANG, POOF_TARGET_HOST);
     cc.debug_mode = true;
     cc.optimization = POOF_O0;
-    cc.output = "Cast/cast_test";
-    poof_cmd_append(&cc.inputs, "Cast/cast_test.c");
-    poof_cmd_append(&cc.includes, "Cast");
+    cc.output = "demos/cast/demo";
+    poof_cmd_append(&cc.inputs, "demos/cast/demo.c");
+    poof_cmd_append(&cc.includes, ".", "Cast");
     poof_cmd_append(&cc.defines, "CAST_DEBUG");
     poof_cmd_append(&cc.extra_flags, "-std=c99", "-Wall", "-Werror");
     return poof_cc_run(&cc);
@@ -236,17 +238,17 @@ build_codeanalizer(void)
 }
 
 static bool
-build_rend_vk_test(void)
+build_rend_demo(void)
 {
     Poof_CC cc = {0};
 
-    poof_mkdir("tests");
+    poof_mkdir("demos/rend");
     poof_cc_init(&cc, POOF_CC_GCC | POOF_CC_CLANG, POOF_TARGET_HOST);
     cc.debug_mode = true;
     cc.optimization = POOF_O0;
-    cc.output = "tests/rend_vk";
-    poof_cmd_append(&cc.inputs, "tests/rend_vk.c");
-    poof_cmd_append(&cc.includes, ".", "Rend", "Peak");
+    cc.output = "demos/rend/demo";
+    poof_cmd_append(&cc.inputs, "demos/rend/demo.c");
+    poof_cmd_append(&cc.includes, ".", "Rend", "Peak", "Fuse", "Grit");
     poof_cmd_append(&cc.defines, "PEAK_VULKAN", "REND_DEBUG");
     poof_cmd_append(&cc.libs, "m");
     poof_cmd_append(&cc.extra_flags, "-std=c99", "-Wall", "-Werror");
@@ -256,7 +258,7 @@ build_rend_vk_test(void)
 }
 
 static int
-build_rend_abi_test(void)
+build_rend_abi_demo(void)
 {
 	const struct { const char *name, *entry, *stage; } shaders[] = {
 		{ "compute", "computeMain", "compute" },
@@ -279,7 +281,7 @@ build_rend_abi_test(void)
 
 		snprintf(artifact, sizeof(artifact), "bin/rend_abi.%s.spv", shaders[i].name);
 		snprintf(reflection, sizeof(reflection), "bin/rend_abi.%s.json", shaders[i].name);
-		poof_cmd_append(&cmd, "slangc", "tests/rend_abi.slang", "-target", "spirv", "-profile", "spirv_1_5",
+		poof_cmd_append(&cmd, "slangc", "demos/rend-abi/rend_abi.slang", "-target", "spirv", "-profile", "spirv_1_5",
 			"-emit-spirv-directly", "-fvk-use-entrypoint-name", "-fvk-use-c-layout", "-matrix-layout-row-major",
 			"-capability", "spvDescriptorHeapEXT", "-entry", shaders[i].entry, "-stage", shaders[i].stage,
 			"-reflection-json", reflection, "-o", artifact);
@@ -297,7 +299,7 @@ build_rend_abi_test(void)
 	cc.debug_mode = 1;
 	cc.optimization = POOF_O0;
 	cc.output = "bin/rend_abi_vk";
-	poof_cmd_append(&cc.inputs, "tests/rend_abi_vk.c");
+	poof_cmd_append(&cc.inputs, "demos/rend-abi/rend_abi_vk.c");
 	poof_cmd_append(&cc.extra_flags, "-std=c99", "-Wall", "-Wextra", "-Werror");
 	poof_cc_append_linux(&cc, "-Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=aligned_alloc,--wrap=posix_memalign");
 	add_peak_config(&cc);
@@ -310,60 +312,30 @@ run_one(Poof_Cmd *cmd)
     bool ok;
     ok = poof_cmd_run(cmd);
     poof_cmd_free(cmd);
+    *cmd = (Poof_Cmd){0};
     return ok;
 }
 
 static bool
-run_tests(void)
+run_demos(void)
 {
-    Poof_Cmd cmd;
-
-    cmd = (Poof_Cmd){0};
-    poof_cmd_append(&cmd, "./tests/peak");
-    if (!run_one(&cmd)) return false;
-
-    cmd = (Poof_Cmd){0};
-    poof_cmd_append(&cmd, "./Fuse/fuse_test");
-    if (!run_one(&cmd)) return false;
-
-    cmd = (Poof_Cmd){0};
-    poof_cmd_append(&cmd, "./Cast/cast_test");
-    if (!run_one(&cmd)) return false;
-
-    cmd = (Poof_Cmd){0};
-    poof_cmd_append(&cmd, "sh", "-c",
-        "./bin/cool_transpiler demos/doc-generator/view.cool | cmp -s - demos/doc-generator/view.cool.c");
-    if (!run_one(&cmd)) return false;
-
-    cmd = (Poof_Cmd){0};
-    poof_cmd_append(&cmd, "./tests/rend_vk");
-    if (!run_one(&cmd)) return false;
-
-    cmd = (Poof_Cmd){0};
-    poof_cmd_append(&cmd, "./demos/grit/demo");
-    if (!run_one(&cmd)) return false;
-
-    cmd = (Poof_Cmd){0};
+    Poof_Cmd cmd = {0};
+    const char *cpu[] = {"./demos/cast/demo", "./demos/fuse/demo", "./demos/grit/demo", "./demos/peak/demo"};
+    size_t i;
+    for (i = 0; i < sizeof(cpu) / sizeof(*cpu); ++i) {
+        poof_cmd_append(&cmd, cpu[i]);
+        if (!run_one(&cmd)) return false;
+    }
     poof_cmd_append(&cmd, "sh", "-c", "./demos/doc-generator/doc_generator Cool/cool.h >/dev/null");
     if (!run_one(&cmd)) return false;
-
-    cmd = (Poof_Cmd){0};
     poof_cmd_append(&cmd, "./demos/compute/rend_compute_demo", "--headless");
     if (!run_one(&cmd)) return false;
-
-    cmd = (Poof_Cmd){0};
     poof_cmd_append(&cmd, "./demos/teapot/rend_teapot", "--headless");
     if (!run_one(&cmd)) return false;
-
-    cmd = (Poof_Cmd){0};
     poof_cmd_append(&cmd, "./demos/snake/snake", "--headless");
     if (!run_one(&cmd)) return false;
-
-    cmd = (Poof_Cmd){0};
     poof_cmd_append(&cmd, "./demos/dashboard/dashboard", "--headless");
-    if (!run_one(&cmd)) return false;
-
-    return true;
+    return run_one(&cmd);
 }
 
 static int
@@ -412,16 +384,16 @@ build_snake(void)
 }
 
 static int
-build_rend2_test(void)
+build_rend2_demo(void)
 {
 	Poof_CC cc = {0};
 
-	poof_mkdir("bin");
+	poof_mkdir("demos/rend2");
 	poof_cc_init(&cc, POOF_CC_GCC | POOF_CC_CLANG, POOF_TARGET_HOST);
 	cc.debug_mode = true;
 	cc.optimization = POOF_O0;
-	cc.output = "bin/rend2_bootstrap";
-	poof_cmd_append(&cc.inputs, "tests/rend2_bootstrap.c");
+	cc.output = "demos/rend2/demo";
+	poof_cmd_append(&cc.inputs, "demos/rend2/demo.c");
 	poof_cmd_append(&cc.includes, ".", "Rend2");
 	poof_cmd_append(&cc.extra_flags, "-std=c99", "-Wall", "-Wextra", "-Werror");
 	add_peak_config(&cc);
@@ -565,122 +537,81 @@ build_package(void)
 int
 main(int argc, char **argv)
 {
-    int test;
-    int peak_only;
-    int rend_only;
-	int rend2_only;
-	int snake_only;
-	int rend_abi;
+    int run = 0, cpu = 0, peak = 0, rend = 0, rend2 = 0, snake = 0, abi = 0, tools = 0;
     int i;
-
     POOF_GO_REBUILD_URSELF(argc, argv);
-
-	for (i = 1; i < argc; i++) {
-		if (strcmp(argv[i], "package") != 0) continue;
-		if (argc != 2) {
-			fprintf(stderr, "usage: ./build package\n");
-			return 1;
-		}
-		return build_package() ? 0 : 1;
-	}
-
-    test = 0;
-    peak_only = 0;
-    rend_only = 0;
-	rend2_only = 0;
-	snake_only = 0;
-	rend_abi = 0;
-    for (i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "test") == 0)
-            test = 1;
-        if (strcmp(argv[i], "peak") == 0)
-            peak_only = 1;
-        if (strcmp(argv[i], "rend") == 0)
-            rend_only = 1;
-		if (strcmp(argv[i], "rend2") == 0)
-			rend2_only = 1;
-		if (strcmp(argv[i], "snake") == 0)
-			snake_only = 1;
-		if (strcmp(argv[i], "abi") == 0)
-			rend_abi = 1;
-        if (strcmp(argv[i], "tools") == 0) {
-            if (!build_codeanalizer()) return 1;
-            return 0;
+    for (i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "package")) continue;
+        if (argc != 2) {
+            fprintf(stderr, "usage: ./build package\n");
+            return 1;
+        }
+        return build_package() ? 0 : 1;
+    }
+    for (i = 1; i < argc; ++i) {
+        if (!strcmp(argv[i], "run") || !strcmp(argv[i], "test")) run = 1;
+        else if (!strcmp(argv[i], "cpu")) cpu = 1;
+        else if (!strcmp(argv[i], "peak")) peak = 1;
+        else if (!strcmp(argv[i], "rend")) rend = 1;
+        else if (!strcmp(argv[i], "rend2")) rend2 = 1;
+        else if (!strcmp(argv[i], "snake")) snake = 1;
+        else if (!strcmp(argv[i], "abi")) abi = 1;
+        else if (!strcmp(argv[i], "tools")) tools = 1;
+        else {
+            fprintf(stderr, "unknown build option: %s\n", argv[i]);
+            return 1;
         }
     }
-
-	if (snake_only) {
-		if (rend_only || rend2_only || peak_only || rend_abi) {
-			fprintf(stderr, "usage: ./build snake [test]\n");
-			return 1;
-		}
-		if (!build_snake()) return 1;
-		if (test) {
-			Poof_Cmd cmd = {0};
-			poof_cmd_append(&cmd, "python3", "tests/snake_render_test.py");
-			if (!run_one(&cmd)) return 1;
-		}
-		return 0;
-	}
-
-	if (rend2_only) {
-		if (rend_only || peak_only || rend_abi) {
-			fprintf(stderr, "usage: ./build rend2 [test]\n");
-			return 1;
-		}
-		if (!build_rend2_test()) return 1;
-		if (test) {
-			Poof_Cmd cmd = {0};
-			poof_cmd_append(&cmd, "./bin/rend2_bootstrap");
-			if (!run_one(&cmd)) return 1;
-		}
-		return 0;
-	}
-
-	if (rend_abi) {
-		if (!rend_only) {
-			fprintf(stderr, "usage: ./build rend abi [test]\n");
-			return 1;
-		}
-		if (!build_rend_abi_test()) return 1;
-		if (test) {
-			Poof_Cmd cmd = {0};
-			poof_cmd_append(&cmd, "python3", "tests/rend_abi_check.py");
-			if (!run_one(&cmd)) return 1;
-		}
-		return 0;
-	}
-
-    if (rend_only) {
-        if (!build_rend_vk_test()) return 1;
-        if (test) {
+    if (cpu + peak + rend + rend2 + snake + tools > 1 || (abi && !rend)) {
+        fprintf(stderr, "usage: ./build [cpu|peak|rend [abi]|rend2|snake|tools] [run]\n");
+        return 1;
+    }
+    if (tools) return build_codeanalizer() ? 0 : 1;
+    if (cpu || peak) {
+        if (peak && !build_peak_demos()) return 1;
+        if (!build_peak_demo()) return 1;
+        if (cpu && (!build_cast_demo() || !build_fuse_demo() || !build_grit_demo())) return 1;
+        if (run) {
             Poof_Cmd cmd = {0};
-            poof_cmd_append(&cmd, "./tests/rend_vk");
+            if (cpu) {
+                const char *bins[] = {"./demos/cast/demo", "./demos/fuse/demo", "./demos/grit/demo"};
+                for (i = 0; i < 3; ++i) { poof_cmd_append(&cmd, bins[i]); if (!run_one(&cmd)) return 1; }
+            }
+            poof_cmd_append(&cmd, "./demos/peak/demo");
             if (!run_one(&cmd)) return 1;
         }
         return 0;
     }
-
-    if (peak_only) {
-        if (!build_peak_demos()) return 1;
-        if (!build_peak_test()) return 1;
-        if (test) {
-            Poof_Cmd cmd = {0};
-            poof_cmd_append(&cmd, "./tests/peak");
-            if (!run_one(&cmd)) return 1;
-        }
+    if (snake) {
+        if (!build_snake()) return 1;
+        if (run) { Poof_Cmd cmd = {0}; poof_cmd_append(&cmd, "python3", "demos/snake/stress.py"); return run_one(&cmd) ? 0 : 1; }
         return 0;
     }
-
-    if (!build_peak_demos()) return 1;
-    if (!build_peak_test()) return 1;
-    if (!build_fuse_test()) return 1;
-    if (!build_grit_demo()) return 1;
-    if (!build_cool_demo()) return 1;
-    if (!build_rend_demos()) return 1;
-    if (!build_cast_test()) return 1;
-    if (!build_cool_transpiler()) return 1;
-    if (!build_rend_vk_test()) return 1;
-    if (test && !run_tests()) return 1;
+    if (rend2) {
+        if (!build_rend2_demo()) return 1;
+        if (run) { Poof_Cmd cmd = {0}; poof_cmd_append(&cmd, "./demos/rend2/demo"); return run_one(&cmd) ? 0 : 1; }
+        return 0;
+    }
+    if (rend && abi) {
+        if (!build_rend_abi_demo()) return 1;
+        if (run) { Poof_Cmd cmd = {0}; poof_cmd_append(&cmd, "python3", "demos/rend_abi.py"); return run_one(&cmd) ? 0 : 1; }
+        return 0;
+    }
+    if (rend) {
+        if (!build_rend_demo()) return 1;
+        if (run) { Poof_Cmd cmd = {0}; poof_cmd_append(&cmd, "./demos/rend/demo"); return run_one(&cmd) ? 0 : 1; }
+        return 0;
+    }
+    if (!build_peak_demos() || !build_peak_demo() || !build_cast_demo() || !build_fuse_demo() ||
+        !build_grit_demo() || !build_cool_demo() || !build_rend_demos() || !build_cool_transpiler() ||
+        !build_rend_demo() || !build_rend2_demo()) return 1;
+    if (run) {
+        if (!run_demos()) return 1;
+        Poof_Cmd cmd = {0};
+        poof_cmd_append(&cmd, "./demos/rend/demo");
+        if (!run_one(&cmd)) return 1;
+        poof_cmd_append(&cmd, "./demos/rend2/demo");
+        return run_one(&cmd) ? 0 : 1;
+    }
     return 0;
 }

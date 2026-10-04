@@ -9,7 +9,7 @@ import subprocess
 import sys
 import tempfile
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def main():
@@ -25,7 +25,7 @@ def main():
     elif sys.platform.startswith("linux"):
         libraries = ["-lvulkan", "-ldl", "-lpthread", "-lutil", "-lm", "-lz"]
     else:
-        raise SystemExit(f"Unsupported package test host: {sys.platform}")
+        raise SystemExit(f"Unsupported package demo host: {sys.platform}")
     build = ROOT / ("build.exe" if sys.platform == "win32" else "build")
     result = subprocess.run([str(build), "package"], cwd=ROOT, check=True,
                             text=True, stdout=subprocess.PIPE)
@@ -35,7 +35,7 @@ def main():
     ready = re.search(r"^Package ready: (.+)$", result.stdout, re.M)
     assert ready, "Build did not report a completed package"
     package = ROOT / ready.group(1).strip()
-    # Use the reported date to avoid crossing midnight between build and test.
+    # Use the reported date to avoid crossing midnight between build and consumption.
     date = package.name.removesuffix(f"-{commit}")
     datetime.date.fromisoformat(date)
     assert package.name == f"{date}-{commit}"

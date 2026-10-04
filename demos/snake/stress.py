@@ -12,7 +12,7 @@ import subprocess
 import sys
 import tempfile
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DEMOS = (ROOT / "demos/snake/snake",)
 
 
@@ -66,24 +66,7 @@ def invoke(demo, frames, ppm):
     return read_ppm(ppm)
 
 
-def check_shared_abi():
-    header = (ROOT / "demos/snake/snake_gpu.h").read_text()
-    shader = (ROOT / "demos/snake/shaders/snake.slang").read_text()
-    if '#include "../snake_gpu.h"' not in shader:
-        raise ValueError("Slang shader must consume the shared snake_gpu.h ABI")
-    expected_assertions = (
-        "snake_gpu_assert_vertex_size", "snake_gpu_assert_instance_size",
-        "snake_gpu_assert_root_matrix", "snake_gpu_assert_root_vertices",
-        "snake_gpu_assert_root_instances", "snake_gpu_assert_root_count",
-        "snake_gpu_assert_root_size",
-    )
-    for assertion in expected_assertions:
-        if assertion not in header:
-            raise ValueError(f"missing host ABI assertion: {assertion}")
-    for member in ("mvp", "vertices", "instances"):
-        if f"root.{member}" not in shader:
-            raise ValueError(f"Slang shader does not use root.{member}")
-
+def check_compiled_abi():
     expected = {"mvp": (0, 64), "vertices": (64, 8), "instances": (72, 8),
                 "instance_count": (80, 4), "reserved": (84, 4)}
     for stage in ("vertex", "fragment"):
@@ -121,7 +104,7 @@ def main():
         parser.error("--frames must be positive")
     if demo is None:
         raise RuntimeError(f"built snake demo is missing or not executable: {', '.join(map(str, candidates))}")
-    check_shared_abi()
+    check_compiled_abi()
     with tempfile.TemporaryDirectory(prefix="snake-render-") as directory:
         first = Path(directory) / "first.ppm"
         second = Path(directory) / "second.ppm"
@@ -142,9 +125,9 @@ def main():
                   if pixels[i] > 2 * pixels[i + 1] and pixels[i] > 2 * pixels[i + 2])
         if len(colors) < 10 or non_clear < 10000 or green < 100 or red < 100:
             raise ValueError(f"snake scene missing (colors={len(colors)}, non-clear={non_clear}, green={green}, red={red})")
-    print(f"snake_render_test: {width}x{height}, deterministic {args.frames}-frame PPM; "
+    print(f"snake stress: {width}x{height}, deterministic {args.frames}-frame PPM; "
           f"{len(colors)} colors, {non_clear} non-clear pixels")
-    print("snake_render_test: shared C/Slang root sizes, pointer widths, and offsets match generated reflection")
+    print("snake stress: shared C/Slang root sizes, pointer widths, and offsets match generated reflection")
     return 0
 
 
@@ -152,5 +135,5 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as error:
-        print(f"snake_render_test: {error}", file=sys.stderr)
+        print(f"snake stress: {error}", file=sys.stderr)
         sys.exit(1)

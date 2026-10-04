@@ -1,6 +1,6 @@
 /* Rend 2.0.0 native Vulkan shader/ABI feasibility; NOT the replacement renderer.
- * Explicit graphics-compute profile, selected device, fixed test-owned storage.
- * Run ./build rend abi test from godstack. Vulkan 1.4.357+ headers are required.
+ * Explicit graphics-compute profile, selected device, fixed demo-owned storage.
+ * Run ./build rend abi run from godstack. Vulkan 1.4.357+ headers are required.
  * Native/driver/loader/libc allocations are excluded from host-backing counts.
  * Copyright (c) 2026 Vasco Alves. MIT license, as in Rend/rend.h.
  */
@@ -147,10 +147,10 @@ static int abi_cleanup(AbiTest *test);
 static int abi_number(const char *text, uint32_t *number);
 
 static AbiTest abi_test;
-static uint32_t abi_create_step, abi_fail_step;
+static uint32_t abi_create_step;
 static uint32_t abi_backing_attempts;
 
-/* Link-time wrappers count direct test-owned backing calls, not allocations
+/* Link-time wrappers count direct demo-owned backing calls, not allocations
  * inside dynamically linked native drivers, loaders or libc. Never grow storage.
  */
 #ifdef __linux__
@@ -224,10 +224,7 @@ abi_created(VkResult result, const char *operation)
 	if (!abi_result(result, operation))
 		return 0;
 	abi_create_step++;
-	if (abi_fail_step && abi_create_step == abi_fail_step) {
-		fprintf(stderr, "rend_abi: injected failure after native acquisition %u: %s\n", abi_create_step, operation);
-		return 0;
-	}
+	(void)operation;
 	return 1;
 }
 
@@ -694,7 +691,7 @@ abi_pipeline_create(AbiTest *test)
 int
 abi_storage(AbiTest *test)
 {
-	uint64_t resource_offset, sampler_offset, resource_bytes, sampler_bytes, ignored, cursor;
+	uint64_t resource_offset, sampler_offset, resource_bytes, sampler_bytes, cursor;
 	uint32_t i, j;
 	VkDeviceAddress address;
 	VkBufferUsageFlags data = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
@@ -711,10 +708,7 @@ abi_storage(AbiTest *test)
 		return 0;
 	test->resource_bind = (VkBindHeapInfoEXT){ .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT, .heapRange = { test->buffers[2].gpu, resource_bytes }, .reservedRangeOffset = resource_offset, .reservedRangeSize = test->heaps.minResourceHeapReservedRange };
 	test->sampler_bind = (VkBindHeapInfoEXT){ .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT, .heapRange = { test->buffers[3].gpu, sampler_bytes }, .reservedRangeOffset = sampler_offset, .reservedRangeSize = test->heaps.minSamplerHeapReservedRange };
-	/* Specified checked-range regressions, including exhaustion/overflow. */
 	cursor = 0;
-	if (abi_address(&test->buffers[0], ABI_DATA_BYTES, 1, 1, &address) || abi_address(&test->buffers[0], UINT64_MAX, 8, 8, &address) || abi_address(&test->buffers[0], 1, 8, 8, &address) || abi_align(UINT64_MAX, 16, &ignored) || abi_reserve(&cursor, 8, 9, 8, &ignored))
-		return 0;
 	for (i = 0; i < ABI_FRAMES; i++) {
 		AbiFrame *frame = &test->frames[i];
 		cursor = i * ABI_FRAME_BYTES;
@@ -1158,7 +1152,7 @@ abi_cleanup(AbiTest *test)
 	int ok = 1;
 
 	if (test->device) {
-		/* Explicit shutdown drain only. Release a held test gate even when a
+		/* Explicit shutdown drain only. Release a held workload gate even when a
 		 * recording/submission fails partway through the pending-work proof.
 		 */
 		if (test->gate) {
@@ -1236,8 +1230,6 @@ main(int argc, char **argv)
 			list = 1;
 		} else if (!strcmp(argv[i], "--device") && i + 1 < argc) {
 			if (!abi_number(argv[++i], &device)) goto usage;
-		} else if (!strcmp(argv[i], "--fail-create") && i + 1 < argc) {
-			if (!abi_number(argv[++i], &abi_fail_step) || !abi_fail_step) goto usage;
 		} else if (!strcmp(argv[i], "--profile") && i + 1 < argc) {
 			i++;
 			if (strcmp(argv[i], "graphics-compute") && strcmp(argv[i], "full")) goto usage;
@@ -1261,23 +1253,15 @@ main(int argc, char **argv)
 	initialized = abi_now() - start;
 	if (!abi_work(&abi_test))
 		goto done;
-	printf("rend_abi: measurements: initialize %.3f ms; submits %.3f ms total; completion waits %.3f ms total; peak native GPU bytes %" PRIu64 "; native allocation attempts %u; native acquisition calls %u; retained test host capacity %zu bytes\n", initialized, abi_test.submit_ms, abi_test.wait_ms, abi_test.gpu_peak, abi_test.allocation_attempts, abi_create_step, sizeof(abi_test));
+	printf("rend_abi: measurements: initialize %.3f ms; submits %.3f ms total; completion waits %.3f ms total; peak native GPU bytes %" PRIu64 "; native allocation attempts %u; native acquisition calls %u; retained demo host capacity %zu bytes\n", initialized, abi_test.submit_ms, abi_test.wait_ms, abi_test.gpu_peak, abi_test.allocation_attempts, abi_create_step, sizeof(abi_test));
 	result = 1;
 	done:
 	if (!abi_cleanup(&abi_test))
 		return 1;
-	if (abi_fail_step) {
-		if (result || abi_create_step != abi_fail_step) {
-			fprintf(stderr, "rend_abi: requested acquisition failure was not reached\n");
-			return 1;
-		}
-		puts("rend_abi: injected partial initialization failure cleaned up");
-		return 0;
-	}
 	if (result && !list)
 		puts("rend_abi: Vulkan graphics-compute feasibility passed; NOT full Rend conformance");
 	return result ? 0 : 1;
 	usage:
-	fprintf(stderr, "usage: %s --layout | --list | --device INDEX --profile graphics-compute|full [--fail-create N]\n", argv[0]);
+	fprintf(stderr, "usage: %s --layout | --list | --device INDEX --profile graphics-compute|full\n", argv[0]);
 	return 2;
 }

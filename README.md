@@ -41,18 +41,23 @@ and static functions; no implementation macro or `.c` file is needed.
 ## Build
 
 ```
-./build             # demos + tests
-./build test        # that, then run them headlessly
+./build             # build demos, tools, and GPU artifacts
+./build run         # run CPU workloads and headless GPU demos (requires GPU)
+./build test        # backwards-compatible alias for demo runs, never a test suite
+./build cpu         # build CPU-only Cast/Fuse/Grit/Peak demos
+./build cpu run     # run CPU-only public-API workloads; no display or GPU
+./build peak run    # run Peak headless workload without opening a window
+./build rend run    # run offscreen Rend public-API workload
+./build rend2 run   # run Rend2 public-API workload
+./build rend abi run # repeat native Vulkan shader/ABI feasibility demo
 ./build package     # build package for github
-./build peak        # Peak demos + tests/peak
-./build peak test   # that, then run tests/peak
-./build rend2       # isolated Rend2 Vulkan core check
-./build rend2 test  # build and run it; no window required
-./build snake       # Rend2 snake demo
-./build snake test  # deterministic offscreen rendering/layout checks
+python3 demos/package/demo.py # consume a relocated package through public APIs
+./build tools       # build developer tools
+./build snake       # build Rend2 snake demo
+./build snake run   # repeated offscreen output and compiled shader reflection check
 ```
 
-Rend demos take `--headless` (`--frames N`, `--ppm path`). Peak window tests need a display (Xvfb on Linux CI).
+The default `run` workflow uses headless GPU demos and CPU workloads; it never launches interactive windows automatically. GPU workloads require suitable Vulkan hardware. `cpu` builds and runs Cast, Fuse, Grit, and Peak workloads without requiring a display or GPU at runtime. The Linux Peak demo uses Vulkan caller-backed placement and therefore still needs Vulkan development headers and loader linkage.
 
 ## Maturity & Versioning
 

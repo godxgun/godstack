@@ -26,44 +26,21 @@ jobs:
           printf '#include <vulkan/vulkan.h>\n#ifndef VK_API_VERSION_1_4\n#error Vulkan 1.4 headers required\n#endif\n' | gcc -x c -fsyntax-only -
       - name: build driver
         run: gcc -o build build.c
-      - name: package consumer test
-        run: python3 tests/package_test.py
+      - name: package consumer demo
+        run: python3 demos/package/demo.py
 
-  linux-x11:
+  linux-cpu:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc libx11-dev libwayland-dev libpulse-dev xvfb
-      - name: build
-        run: gcc -o build build.c && ./build peak
-      - name: test
-        run: xvfb-run -a ./tests/peak
-
-  linux-wayland:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc libx11-dev libwayland-dev libpulse-dev weston
-      - name: build
-        run: gcc -o build build.c && ./build peak
-      - name: test
-        run: |
-          export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/xdg-runtime}"
-          mkdir -p "$XDG_RUNTIME_DIR"
-          weston --backend=headless --socket=peak --idle-time=0 >/tmp/weston.log 2>&1 &
-          for i in $(seq 1 50); do
-            [ -S "$XDG_RUNTIME_DIR/peak" ] && break
-            sleep 0.1
-          done
-          export WAYLAND_DISPLAY=peak
-          unset DISPLAY
-          ./tests/peak
+          sudo apt-get install -y gcc libvulkan-dev libx11-dev libwayland-dev
+      - name: build driver
+        run: gcc -o build build.c
+      - name: public API demos
+        run: env -u DISPLAY -u WAYLAND_DISPLAY ./build cpu run
 
   macos:
     runs-on: macos-latest
@@ -75,12 +52,12 @@ jobs:
           echo "CPATH=$(brew --prefix vulkan-headers)/include" >> "$GITHUB_ENV"
           echo "LIBRARY_PATH=$(brew --prefix vulkan-loader)/lib" >> "$GITHUB_ENV"
           echo "DYLD_LIBRARY_PATH=$(brew --prefix vulkan-loader)/lib" >> "$GITHUB_ENV"
-      - name: build
-        run: cc -o build build.c && ./build peak
-      - name: package consumer test
-        run: python3 tests/package_test.py
-      - name: test
-        run: ./tests/peak
+      - name: build driver
+        run: cc -o build build.c
+      - name: public API demos
+        run: ./build cpu run
+      - name: package consumer demo
+        run: python3 demos/package/demo.py
 
   windows:
     runs-on: windows-latest
@@ -100,11 +77,11 @@ jobs:
             mingw-w64-x86_64-vulkan-headers
             mingw-w64-x86_64-vulkan-loader
             mingw-w64-x86_64-zlib
-      - name: build
-        run: gcc -o build build.c && ./build peak
-      - name: package consumer test
+      - name: build driver
+        run: gcc -o build build.c
+      - name: public API demos
+        run: ./build cpu run
+      - name: package consumer demo
         env:
           CC: gcc
-        run: python tests/package_test.py
-      - name: test
-        run: ./tests/peak
+        run: python demos/package/demo.py

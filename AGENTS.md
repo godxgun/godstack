@@ -1,4 +1,5 @@
 # Agent Contract
+- Unit tests are illegal, considered a crime. Instead run demos/ that stress test the public API.
 ## Files
 - Header is a black box.
 - Read `foo.h`. Call it.
@@ -10,10 +11,11 @@
 - Never dump a library `.c` to learn an API — read the header first.
 ## Build
 - `./build` in this directory (includes `Poof/poof.h`).
-- `./build test` builds then runs.
-- `./build peak` builds Peak demos + `tests/peak`.
-- `./build rend test` builds and runs `tests/rend_vk` (offscreen Vulkan depth lifetime; requires validation layers).
-- `tests/peak` is Peak window tests (needs a display).
+- `./build` builds demos, tools, and GPU artifacts; `./build run` runs CPU workloads and headless GPU demos (GPU required).
+- `./build test` is a backwards-compatible alias for demo runs, never a suite.
+- `./build cpu` / `./build cpu run` build/run Cast, Fuse, Grit, and Peak public-API workloads without display/GPU at runtime; Linux Peak placement still needs Vulkan headers/loader linkage.
+- `./build peak run`, `./build rend run`, and `./build rend2 run` run their corresponding stress demos.
+- `./build snake run` performs repeated offscreen output and compiled shader-reflection checks.
 
 
 # Coding Style

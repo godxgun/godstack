@@ -2,7 +2,7 @@
 build
 build.exe
 bin/
-package/
+/package/
 *.spv
 *.exe
 *.o
@@ -12,11 +12,16 @@ package/
 *.dll
 *.dylib
 
-# Generated test, demo, and tool executables.
+# Generated demo and tool executables (legacy output names retained for stale binaries).
 /Cast/cast_test
 /Fuse/fuse_test
 /tests/peak
 /tests/rend_vk
+/demos/cast/demo
+/demos/fuse/demo
+/demos/peak/demo
+/demos/rend/demo
+/demos/rend2/demo
 /demos/compute/rend_compute_demo
 /demos/dashboard/dashboard
 /demos/doc-generator/doc_generator

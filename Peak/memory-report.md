@@ -1,6 +1,6 @@
 # Direct backing-request reporting
 
-Peak's debug wrappers maintain static process-lifetime statistics. Include `peak.h` and `peak.c` normally; the headless reporting regression includes only `p_log.c`. These diagnostics are single-threaded, not a general concurrent allocator interceptor.
+Peak's debug wrappers maintain static process-lifetime statistics. Include `peak.h` and `peak.c` normally and exercise the public reporting wrappers without replacing their allocator or reading private counters. These diagnostics are single-threaded, not a general concurrent allocator interceptor.
 
 `peak_debug_memory_report()` prints both domains and known leaks, and returns the successful **non-driver backing-request count**. `peak_debug_memory_stats(domain)` returns a read-only snapshot. Neither operation resets counters. Coverage is only calls through instrumented wrappers, not process-wide malloc, libc/DSO internals, Vulkan device allocations, or Vulkan's internal host allocator.
 
@@ -21,17 +21,8 @@ Counter addition saturates at `UINT64_MAX`, marking `accounting_complete` false 
 
 Per-request formatting is disabled by default. Define `PEAK_DEBUG_MEMORY_TRACE=1` before the implementation to enable it; explicit report output remains available regardless of tracing.
 
-## Reporting regression
+## Public API workload
 
-From the Godstack root (outputs may be placed outside the checkout):
+Use `./build peak run` from the Godstack root for the Peak workload, or `./build cpu run` for all CPU demos. Peak runs eight caller-backed sessions and 2,048 local message deliveries, growing and retiring allocations in both reporting domains. It checks that direct live backing returns to its initial baseline, and prints the public process-lifetime report. No display or GPU is used at runtime; Linux placement still needs Vulkan headers and loader linkage.
 
-```sh
-cc -std=c99 -Wall -Wextra -Werror -g tests/peak_memory.c -o /tmp/peak_memory
-for mode in '' driver-exhaustion core-exhaustion overflow unknown report-output; do
-    /tmp/peak_memory $mode || exit
-done
-cc -std=c99 -Wall -Wextra -Werror -g -DTEST_REND_CUSTOM=1 tests/peak_memory.c -o /tmp/peak_memory_custom
-/tmp/peak_memory_custom
-```
-
-Repeat the first build/run with `-fsanitize=address,undefined -fno-omit-frame-pointer` and `ASAN_OPTIONS=detect_leaks=1`. Repeat with `-DPEAK_DEBUG_MEMORY_TRACE=1` to exercise enabled tracing. The harness injects deterministic failure, in-place and moved realloc, checks over 512 lifetime requests, both domains' exhaustion and opposite-domain unknown realloc, report labels and driver leak output, and macro double-counting/custom-allocator compatibility. Only the overflow scenario seeds internal counters, because executing 2^64 real requests is infeasible. No display, platform initialization or GPU is needed. This regression is a manual focused command, not added to the all-library build/test driver.
+This real workload does not inject allocator failures, seed private counters, force tracking-table exhaustion/saturation, or validate native clipboard transports. Those retired unit scenarios are not implied by a successful demo.

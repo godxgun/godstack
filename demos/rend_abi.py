@@ -1,25 +1,19 @@
 #!/usr/bin/env python3
-"""Check the native Rend feasibility client; not replacement/full conformance.
-
-Run from godstack after ./build rend abi. No new test framework/dependencies.
-Reflection is checked against the compiled C99 host, not copied offset constants.
-"""
+"""Validate compiled Rend shader layouts and repeat its native workload."""
 import argparse
 import json
 from pathlib import Path
-import re
 import subprocess
 import sys
-
 
 ROOT = Path(__file__).resolve().parent.parent
 CLIENT = ROOT / "bin/rend_abi_vk"
 STAGES = ("compute", "consume", "vertex", "fragment")
 
 
-def run(args, success=True):
+def run(args):
     process = subprocess.run(args, cwd=ROOT, text=True, capture_output=True, timeout=60)
-    if (process.returncode == 0) != success:
+    if process.returncode:
         raise RuntimeError(f"unexpected exit {process.returncode}: {' '.join(map(str, args))}\n"
                            f"{process.stdout}\n{process.stderr}")
     return process
@@ -59,7 +53,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--device", type=int, default=0, help="explicit device index; no fallback")
     parser.add_argument("--runs", type=int, default=3, help="native workload repetitions")
-    parser.add_argument("--layout-only", action="store_true", help="no GPU, compiled host/reflection only")
+    parser.add_argument("--layout-only", action="store_true", help="compiled host/shader layouts only; no GPU")
     args = parser.parse_args()
     if args.device < 0 or args.runs < 1:
         parser.error("device must be nonnegative and runs positive")
@@ -67,38 +61,15 @@ def main():
     for stage in STAGES:
         reflection = json.loads((ROOT / f"bin/rend_abi.{stage}.json").read_text())
         check_layout(host, reflection)
-        # Verify that the checker rejects a demonstrated ABI mismatch.
-        root = reflection["parameters"][0]["type"]["elementType"]
-        root["fields"][0]["binding"]["offset"] += 4
-        try:
-            check_layout(host, reflection)
-        except ValueError:
-            pass
-        else:
-            raise ValueError("layout mismatch was not rejected")
-    print("rend_abi: four compiled host/shader layouts match; mismatch rejection passed", flush=True)
+    print("rend_abi: four compiled host/shader layouts match", flush=True)
     if args.layout_only:
         return 0
     command = [str(CLIENT), "--device", str(args.device), "--profile", "graphics-compute"]
-    acquisitions = 0
     for _ in range(args.runs):
         process = run(command)
         print(process.stdout, end="", flush=True)
         print(process.stderr, end="", file=sys.stderr)
-        acquisitions = int(re.search(r"native acquisition calls (\d+)", process.stdout)[1])
-    for step in sorted({1, 3, 9, 16, 33, acquisitions}):
-        process = run(command + ["--fail-create", str(step)])
-        if "injected partial initialization failure cleaned up" not in process.stdout:
-            raise RuntimeError(f"failure injection {step} was not validated")
-        print(f"rend_abi: partial acquisition failure {step}: cleanup passed", flush=True)
-    process = run([str(CLIENT), "--device", str(2**32 - 1), "--profile", "graphics-compute"], success=False)
-    if "selected device" not in process.stderr or "unavailable" not in process.stderr:
-        raise RuntimeError("invalid device was not rejected explicitly")
-    process = run([str(CLIENT), "--device", str(args.device), "--profile", "full"], success=False)
-    if "full profile rejected" not in process.stderr:
-        raise RuntimeError("full profile was not rejected explicitly")
-    print("rend_abi: device/full-profile rejection passed; no silent fallback")
-    print("rend_abi: native feasibility checks passed; native D3D12/Metal/task-mesh/presentation NOT TESTED")
+    print("rend_abi: repeated native feasibility workload passed; native D3D12/Metal/task-mesh/presentation NOT TESTED")
     return 0
 
 
