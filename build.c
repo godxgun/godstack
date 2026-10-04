@@ -1,4 +1,4 @@
-#include "Poof/poof.c"
+#include "Poof/poof.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -554,6 +554,8 @@ build_package(void)
 		snprintf(dest, sizeof(dest), "%s/%s-%s.h", include, names[i], versions[i]);
 		if (!package_header(header, dest, peak_header)) return 0;
 	}
+	snprintf(dest, sizeof(dest), "%s/poof.h", include);
+	if (!poof_copy_file("Poof/poof.h", dest)) return 0;
 	snprintf(dest, sizeof(dest), "%s/LICENSE", root);
 	if (!poof_copy_file("LICENSE", dest)) return 0;
 	printf("Package ready: %s\n", root);

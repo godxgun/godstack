@@ -3,13 +3,13 @@
 - Header is a black box.
 - Read `foo.h`. Call it.
 - Do not open `foo.c` unless you are changing that library, or the header was used correctly and the process still dies.
-- Vendored by copy. `-I` the library directory. Include `foo.h`, then `foo.c`. That `.c` pulls the rest of the TU.
+- Vendored by copy. `-I` the library directory. Include `foo.h`, then `foo.c`. That `.c` pulls the rest of the TU. Poof is header-only: include `poof.h`, with no implementation macro.
 ## Navigation
 - `rg` first.
 - `read` with offset/limit.
 - Never dump a library `.c` to learn an API — read the header first.
 ## Build
-- `./build` in this directory (includes `Poof/poof.c`).
+- `./build` in this directory (includes `Poof/poof.h`).
 - `./build test` builds then runs.
 - `./build peak` builds Peak demos + `tests/peak`.
 - `./build rend test` builds and runs `tests/rend_vk` (offscreen Vulkan depth lifetime; requires validation layers).

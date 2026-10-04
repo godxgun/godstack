@@ -11,7 +11,7 @@ Collection of modular and minimal libraries used by our software.
 ## Core
 | Name   | Version | Description                                |
 | ------ | ------- | ------------------------------------------ |
-| Poof   | 0.2.0   | Build system.                              |
+| Poof   | 0.2.1   | Build system.                              |
 | Peak   | 0.12.0  | Platform library that automatically links the correct system libraries. |
 | Fuse   | 0.13.0  | Immediate-mode UI command buffer.          |
 | Rend   | 2.0.0   | Modern graphics API layer.                 |
@@ -34,6 +34,9 @@ Collection of modular and minimal libraries used by our software.
 2. -I the directory.
 3. Include foo.h.
 4. Include foo.c and it will pull other .c files as needed.
+
+Poof is header-only: include `poof.h` before libc headers. It uses `#pragma once`
+and static functions; no implementation macro or `.c` file is needed.
 
 ## Build
 

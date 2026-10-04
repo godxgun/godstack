@@ -48,7 +48,7 @@ def main():
                            header, re.M).group(1)
                  for part in ("MAJOR", "MINOR", "PATCH")]
         versions[name] = ".".join(parts)
-    expected_headers = {f"{n}-{v}.h" for n, v in versions.items()}
+    expected_headers = {f"{n}-{v}.h" for n, v in versions.items()} | {"poof.h"}
     expected_libraries = {f"{n}-{v}.o" for n, v in versions.items()}
     assert expected_headers <= {p.name for p in (package / "include").iterdir()}
     assert expected_libraries == {p.name for p in (package / "bin").iterdir()}
@@ -63,15 +63,21 @@ def main():
         else:
             assert obj[:2] in (b"\x64\x86", b"\x4c\x01", b"\x64\xaa")  # COFF
             assert int.from_bytes(obj[16:18], "little") == 0  # no optional header
+    assert (package / "include" / "poof.h").read_bytes() == (ROOT / "Poof" / "poof.h").read_bytes()
     assert (package / "LICENSE").is_file()
     with tempfile.TemporaryDirectory(prefix="godstack-package-") as tmp:
         relocated = Path(tmp) / "relocated"
         shutil.copytree(package, relocated)
         source = Path(tmp) / "consumer.c"
         source.write_text(
-            "".join(f'#include "{n}-{v}.h"\n' for n, v in versions.items())
+            '#include "poof.h"\n'
+            + "".join(f'#include "{n}-{v}.h"\n' for n, v in versions.items())
             + '''int main(void)
 {
+    Poof_Cmd cmd = {0};
+    poof_cmd_append(&cmd, "package-consumer");
+    if (cmd.count != 1) return 5;
+    poof_cmd_free(&cmd);
     TypeParams params;
     type_params_default(&params);
     if (!type_memory(&params)) return 1;
