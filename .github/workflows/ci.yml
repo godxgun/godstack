@@ -16,6 +16,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc python3 libvulkan-dev zlib1g-dev libx11-dev libwayland-dev libpulse-dev
+      - name: Vulkan 1.4 headers
+        run: |
+          git clone --depth 1 --branch vulkan-sdk-1.4.304.1 \
+            https://github.com/KhronosGroup/Vulkan-Headers.git "$RUNNER_TEMP/vulkan-headers"
+          echo "CPATH=$RUNNER_TEMP/vulkan-headers/include" >> "$GITHUB_ENV"
+      - name: verify Vulkan headers
+        run: |
+          printf '#include <vulkan/vulkan.h>\n#ifndef VK_API_VERSION_1_4\n#error Vulkan 1.4 headers required\n#endif\n' | gcc -x c -fsyntax-only -
       - name: build driver
         run: gcc -o build build.c
       - name: package consumer test
