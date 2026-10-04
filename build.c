@@ -309,32 +309,69 @@ build_rend_abi_demo(void)
 static bool
 run_one(Poof_Cmd *cmd)
 {
+#if defined(_WIN32)
+    Poof_Cmd wrapped = {0};
     bool ok;
-    ok = poof_cmd_run(cmd);
+    poof_cmd_append(&wrapped, "cmd.exe", "/c");
+    for (size_t i = 0; i < cmd->count; ++i)
+        poof_cmd_append(&wrapped, cmd->items[i]);
+    ok = poof_cmd_run(&wrapped);
+    poof_cmd_free(&wrapped);
     poof_cmd_free(cmd);
-    *cmd = (Poof_Cmd){0};
     return ok;
+#else
+    bool ok = poof_cmd_run(cmd);
+    poof_cmd_free(cmd);
+    return ok;
+#endif
+}
+
+static void
+append_demo(Poof_Cmd *cmd, const char *path)
+{
+#if defined(_WIN32)
+    char exe[256];
+    size_t length = strlen(path);
+    if (length + sizeof(".exe") > sizeof(exe)) {
+        fprintf(stderr, "demo executable path too long: %s\n", path);
+        exit(1);
+    }
+    memcpy(exe, path, length);
+    memcpy(exe + length, ".exe", sizeof(".exe"));
+    poof_cmd_append(cmd, exe);
+#else
+    poof_cmd_append(cmd, path);
+#endif
 }
 
 static bool
 run_demos(void)
 {
     Poof_Cmd cmd = {0};
-    const char *cpu[] = {"./demos/cast/demo", "./demos/fuse/demo", "./demos/grit/demo", "./demos/peak/demo"};
+    const char *cpu[] = {"demos/cast/demo", "demos/fuse/demo", "demos/grit/demo", "demos/peak/demo"};
     size_t i;
     for (i = 0; i < sizeof(cpu) / sizeof(*cpu); ++i) {
-        poof_cmd_append(&cmd, cpu[i]);
+        append_demo(&cmd, cpu[i]);
         if (!run_one(&cmd)) return false;
     }
-    poof_cmd_append(&cmd, "sh", "-c", "./demos/doc-generator/doc_generator Cool/cool.h >/dev/null");
+    append_demo(&cmd, "demos/doc-generator/doc_generator");
+#if defined(_WIN32)
+    poof_cmd_append(&cmd, "Cool/cool.h", ">", "NUL");
+#else
+    poof_cmd_append(&cmd, "Cool/cool.h", ">", "/dev/null");
+#endif
     if (!run_one(&cmd)) return false;
-    poof_cmd_append(&cmd, "./demos/compute/rend_compute_demo", "--headless");
+    append_demo(&cmd, "demos/compute/rend_compute_demo");
+    poof_cmd_append(&cmd, "--headless");
     if (!run_one(&cmd)) return false;
-    poof_cmd_append(&cmd, "./demos/teapot/rend_teapot", "--headless");
+    append_demo(&cmd, "demos/teapot/rend_teapot");
+    poof_cmd_append(&cmd, "--headless");
     if (!run_one(&cmd)) return false;
-    poof_cmd_append(&cmd, "./demos/snake/snake", "--headless");
+    append_demo(&cmd, "demos/snake/snake");
+    poof_cmd_append(&cmd, "--headless");
     if (!run_one(&cmd)) return false;
-    poof_cmd_append(&cmd, "./demos/dashboard/dashboard", "--headless");
+    append_demo(&cmd, "demos/dashboard/dashboard");
+    poof_cmd_append(&cmd, "--headless");
     return run_one(&cmd);
 }
 
@@ -567,6 +604,13 @@ main(int argc, char **argv)
         return 1;
     }
     if (tools) return build_codeanalizer() ? 0 : 1;
+#if defined(_WIN32)
+    /* Runtime demo dispatch depends on a POSIX-compatible command shell. */
+    if (run && (cpu || peak || rend || rend2 || snake || abi)) {
+        fprintf(stderr, "runtime demo execution currently requires a POSIX shell on Windows\n");
+        return 1;
+    }
+#endif
     if (cpu || peak) {
         if (peak && !build_peak_demos()) return 1;
         if (!build_peak_demo()) return 1;
@@ -574,10 +618,10 @@ main(int argc, char **argv)
         if (run) {
             Poof_Cmd cmd = {0};
             if (cpu) {
-                const char *bins[] = {"./demos/cast/demo", "./demos/fuse/demo", "./demos/grit/demo"};
-                for (i = 0; i < 3; ++i) { poof_cmd_append(&cmd, bins[i]); if (!run_one(&cmd)) return 1; }
+                const char *bins[] = {"demos/cast/demo", "demos/fuse/demo", "demos/grit/demo"};
+                for (i = 0; i < 3; ++i) { append_demo(&cmd, bins[i]); if (!run_one(&cmd)) return 1; }
             }
-            poof_cmd_append(&cmd, "./demos/peak/demo");
+            append_demo(&cmd, "demos/peak/demo");
             if (!run_one(&cmd)) return 1;
         }
         return 0;
@@ -589,7 +633,7 @@ main(int argc, char **argv)
     }
     if (rend2) {
         if (!build_rend2_demo()) return 1;
-        if (run) { Poof_Cmd cmd = {0}; poof_cmd_append(&cmd, "./demos/rend2/demo"); return run_one(&cmd) ? 0 : 1; }
+        if (run) { Poof_Cmd cmd = {0}; append_demo(&cmd, "demos/rend2/demo"); return run_one(&cmd) ? 0 : 1; }
         return 0;
     }
     if (rend && abi) {
@@ -599,7 +643,7 @@ main(int argc, char **argv)
     }
     if (rend) {
         if (!build_rend_demo()) return 1;
-        if (run) { Poof_Cmd cmd = {0}; poof_cmd_append(&cmd, "./demos/rend/demo"); return run_one(&cmd) ? 0 : 1; }
+        if (run) { Poof_Cmd cmd = {0}; append_demo(&cmd, "demos/rend/demo"); return run_one(&cmd) ? 0 : 1; }
         return 0;
     }
     if (!build_peak_demos() || !build_peak_demo() || !build_cast_demo() || !build_fuse_demo() ||
@@ -608,9 +652,9 @@ main(int argc, char **argv)
     if (run) {
         if (!run_demos()) return 1;
         Poof_Cmd cmd = {0};
-        poof_cmd_append(&cmd, "./demos/rend/demo");
+        append_demo(&cmd, "demos/rend/demo");
         if (!run_one(&cmd)) return 1;
-        poof_cmd_append(&cmd, "./demos/rend2/demo");
+        append_demo(&cmd, "demos/rend2/demo");
         return run_one(&cmd) ? 0 : 1;
     }
     return 0;
