@@ -8,6 +8,19 @@ permissions:
   contents: read
 
 jobs:
+  linux-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc python3 libvulkan-dev zlib1g-dev libx11-dev libwayland-dev libpulse-dev
+      - name: build driver
+        run: gcc -o build build.c
+      - name: package consumer test
+        run: python3 tests/package_test.py
+
   linux-x11:
     runs-on: ubuntu-latest
     steps:
@@ -48,8 +61,16 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+      - name: package deps
+        run: |
+          brew install vulkan-headers vulkan-loader
+          echo "CPATH=$(brew --prefix vulkan-headers)/include" >> "$GITHUB_ENV"
+          echo "LIBRARY_PATH=$(brew --prefix vulkan-loader)/lib" >> "$GITHUB_ENV"
+          echo "DYLD_LIBRARY_PATH=$(brew --prefix vulkan-loader)/lib" >> "$GITHUB_ENV"
       - name: build
         run: cc -o build build.c && ./build peak
+      - name: package consumer test
+        run: python3 tests/package_test.py
       - name: test
         run: ./tests/peak
 
@@ -64,8 +85,18 @@ jobs:
         with:
           msystem: MINGW64
           update: true
-          install: mingw-w64-x86_64-gcc
+          install: >-
+            git
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-python
+            mingw-w64-x86_64-vulkan-headers
+            mingw-w64-x86_64-vulkan-loader
+            mingw-w64-x86_64-zlib
       - name: build
         run: gcc -o build build.c && ./build peak
+      - name: package consumer test
+        env:
+          CC: gcc
+        run: python tests/package_test.py
       - name: test
         run: ./tests/peak
