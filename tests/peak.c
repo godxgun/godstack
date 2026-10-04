@@ -97,7 +97,8 @@ test_fs(void)
 void
 test_mirror(void)
 {
-	size_t pg;
+	const size_t pages[] = {1, 2, 3, 16};
+	size_t pg, size, i;
 	char *p;
 
 	printf("mirror\n");
@@ -105,14 +106,22 @@ test_mirror(void)
 	expect(pg >= 4096 && (pg & (pg - 1)) == 0, "page size");
 	expect(peak_mirror_map(0) == NULL, "map 0");
 	expect(peak_mirror_map(pg - 1) == NULL, "unaligned");
-	p = peak_mirror_map(pg);
-	expect(p != NULL, "map");
-	if (p) {
+	for (i = 0; i < sizeof(pages) / sizeof(pages[0]); i++) {
+		size = pg * pages[i];
+		printf("  size %zu\n", size);
+		p = peak_mirror_map(size);
+		expect(p != NULL, "map");
+		if (!p)
+			continue;
 		p[0] = 42;
-		expect(p[pg] == 42, "wrap");
-		p[pg] = 7;
+		expect(p[size] == 42, "wrap");
+		p[size] = 7;
 		expect(p[0] == 7, "wrap back");
-		peak_mirror_unmap(p, pg);
+		p[size - 1] = 19;
+		expect(p[size * 2 - 1] == 19, "wrap last byte");
+		p[size * 2 - 1] = 23;
+		expect(p[size - 1] == 23, "wrap last byte back");
+		peak_mirror_unmap(p, size);
 	}
 }
 
@@ -178,26 +187,72 @@ test_pty(void)
 void
 test_sock(void)
 {
-	char dir[256];
-	char path[300];
-	PEAK_HANDLE listen, a, b;
-	char buf[8];
-	int n;
+	char dir[256], path[300], path2[300], buf[8];
+	PEAK_HANDLE listen, listen2, a, b, a2, b2;
+	int n, i;
 
 	printf("sock\n");
-	expect(peak_runtime_dir(dir, sizeof dir, "peak-test") == 1, "runtime dir");
+	n = peak_runtime_dir(dir, sizeof dir, "peak-test");
+	expect(n == 1, "runtime dir");
+	if (!n)
+		return;
 	snprintf(path, sizeof path, "%s/s", dir);
+	snprintf(path2, sizeof path2, "%s/s2", dir);
 	listen = peak_sock_listen(path);
+	listen2 = peak_sock_listen(path2);
 	expect(listen != PEAK_HANDLE_INVALID, "listen");
+	expect(listen2 != PEAK_HANDLE_INVALID, "second listen");
+	expect(peak_sock_accept(PEAK_HANDLE_INVALID) == PEAK_HANDLE_INVALID, "invalid accept");
+	expect(peak_sock_accept(listen) == PEAK_HANDLE_INVALID, "empty accept");
+	expect(peak_wait(NULL, &listen, 1, 0) == 0, "listener empty poll");
+	expect(peak_wait(NULL, &listen, 1, 1) == 0, "listener empty timeout");
+	for (i = 0; i < 3; i++) {
+		b = peak_sock_connect(path);
+		b2 = peak_sock_connect(path2);
+		expect(b != PEAK_HANDLE_INVALID, "connect");
+		expect(b2 != PEAK_HANDLE_INVALID, "second connect");
+		expect(peak_wait(NULL, &listen, 1, 0) == 1, "listener ready poll");
+		expect(peak_wait(NULL, &listen2, 1, 100) == 1, "second listener ready wait");
+		a = peak_sock_accept(listen);
+		a2 = peak_sock_accept(listen2);
+		expect(a != PEAK_HANDLE_INVALID, "accept");
+		expect(a2 != PEAK_HANDLE_INVALID, "second accept");
+		expect(peak_sock_accept(listen) == PEAK_HANDLE_INVALID, "empty accept after connection");
+		if (i == 2) {
+			peak_fd_close(listen);
+			peak_fd_close(listen2);
+		}
+		expect(peak_fd_write(b, "hi", 2) == 2, "write");
+		n = peak_fd_read(a, buf, sizeof buf);
+		expect(n == 2 && buf[0] == 'h' && buf[1] == 'i', "read");
+		expect(peak_fd_write(a2, "ok", 2) == 2, "second server write");
+		n = peak_fd_read(b2, buf, sizeof buf);
+		expect(n == 2 && buf[0] == 'o' && buf[1] == 'k', "second client read");
+		peak_fd_close(a);
+		peak_fd_close(b);
+		peak_fd_close(a2);
+		peak_fd_close(b2);
+	}
+	listen = peak_sock_listen(path);
+	expect(listen != PEAK_HANDLE_INVALID, "relisten after close");
 	b = peak_sock_connect(path);
-	expect(b != PEAK_HANDLE_INVALID, "connect");
+	expect(b != PEAK_HANDLE_INVALID, "connect then abandon");
+	peak_fd_close(b);
 	a = peak_sock_accept(listen);
-	expect(a != PEAK_HANDLE_INVALID, "accept");
-	expect(peak_fd_write(b, "hi", 2) > 0, "write");
-	n = peak_fd_read(a, buf, sizeof buf);
-	expect(n == 2 && buf[0] == 'h' && buf[1] == 'i', "read");
+	if (a != PEAK_HANDLE_INVALID)
+		peak_fd_close(a);
+	b = peak_sock_connect(path);
+	expect(b != PEAK_HANDLE_INVALID, "connect after abandoned client");
+	a = peak_sock_accept(listen);
+	expect(a != PEAK_HANDLE_INVALID, "accept after abandoned client");
 	peak_fd_close(a);
 	peak_fd_close(b);
+	b = peak_sock_connect(path);
+	expect(b != PEAK_HANDLE_INVALID, "connect before listener close");
+	peak_fd_close(listen);
+	peak_fd_close(b);
+	listen = peak_sock_listen(path);
+	expect(listen != PEAK_HANDLE_INVALID, "relisten after pending close");
 	peak_fd_close(listen);
 	expect(peak_fd_read(PEAK_HANDLE_INVALID, buf, 1) == 0, "invalid read");
 }

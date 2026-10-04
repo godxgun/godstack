@@ -9,12 +9,31 @@
 typedef HANDLE HPCON;
 #endif
 
+#ifndef MEM_RESERVE_PLACEHOLDER
+#define MEM_RESERVE_PLACEHOLDER 0x00040000
+#endif
+#ifndef MEM_REPLACE_PLACEHOLDER
+#define MEM_REPLACE_PLACEHOLDER 0x00004000
+#endif
+#ifndef MEM_PRESERVE_PLACEHOLDER
+#define MEM_PRESERVE_PLACEHOLDER 0x00000002
+#endif
+
 #define PEAK_PROC_MAX 32
 #define PEAK_WAIT_SLICE 1
 
 typedef HRESULT (WINAPI *PeakCreatePseudoConsole)(COORD, HANDLE, HANDLE, DWORD, HPCON *);
 typedef HRESULT (WINAPI *PeakResizePseudoConsole)(HPCON, COORD);
 typedef void (WINAPI *PeakClosePseudoConsole)(HPCON);
+typedef void *(WINAPI *PeakVirtualAlloc2)(HANDLE, void *, SIZE_T, ULONG, ULONG, void *, ULONG);
+typedef void *(WINAPI *PeakMapViewOfFile3)(HANDLE, HANDLE, void *, ULONG64, SIZE_T, ULONG, ULONG, void *, ULONG);
+
+typedef struct PeakSockRec {
+	HANDLE listen;
+	HANDLE pipe;
+	char name[MAX_PATH];
+	struct PeakSockRec *next;
+} PeakSockRec;
 
 typedef struct PeakProcRec {
 	HANDLE read;
@@ -29,7 +48,7 @@ static PeakCreatePseudoConsole peak_create_pc;
 static PeakResizePseudoConsole peak_resize_pc;
 static PeakClosePseudoConsole peak_close_pc;
 static int peak_conpty_tried;
-static char peak_pipe_name[MAX_PATH];
+static PeakSockRec *peak_sock_listeners;
 static int peak_stdout_saved = -1;
 
 static PeakProc peak_internal_proc_fail(void);
@@ -41,6 +60,9 @@ static int peak_internal_join_argv(char *out, size_t cap, const char *file, cons
 static HANDLE peak_internal_write_handle(PEAK_HANDLE fd);
 static int peak_internal_pipe_ready(HANDLE h);
 static void peak_internal_pipe_name(const char *path, char *out, size_t cap);
+static PeakSockRec *peak_internal_sock_find(HANDLE h);
+static HANDLE peak_internal_sock_pipe(const char *name, int first);
+static int peak_internal_sock_ready(PeakSockRec *r);
 static size_t peak_internal_io_n(size_t n);
 
 static PeakProc
@@ -160,9 +182,12 @@ static int
 peak_internal_pipe_ready(HANDLE h)
 {
 	DWORD avail, flags;
+	PeakSockRec *r;
 
 	if (!h || h == INVALID_HANDLE_VALUE)
 		return 0;
+	if ((r = peak_internal_sock_find(h)))
+		return peak_internal_sock_ready(r);
 	if (PeekNamedPipe(h, NULL, 0, NULL, &avail, NULL))
 		return avail > 0;
 	if (GetNamedPipeHandleStateA(h, &flags, NULL, NULL, NULL, NULL, 0))
@@ -191,6 +216,55 @@ peak_internal_pipe_name(const char *path, char *out, size_t cap)
 		out[n++] = c;
 	}
 	out[n] = 0;
+}
+
+static PeakSockRec *
+peak_internal_sock_find(HANDLE h)
+{
+	PeakSockRec *r;
+
+	for (r = peak_sock_listeners; r; r = r->next) {
+		if (r->listen == h)
+			return r;
+	}
+	return NULL;
+}
+
+static HANDLE
+peak_internal_sock_pipe(const char *name, int first)
+{
+	HANDLE h;
+	DWORD err;
+
+	h = CreateNamedPipeA(name, PIPE_ACCESS_DUPLEX | (first ? FILE_FLAG_FIRST_PIPE_INSTANCE : 0),
+		PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_NOWAIT, PIPE_UNLIMITED_INSTANCES,
+		4096, 4096, 0, NULL);
+	if (h == INVALID_HANDLE_VALUE)
+		return h;
+	/* In NOWAIT mode the first successful call only makes the pipe available. */
+	if (!ConnectNamedPipe(h, NULL)) {
+		err = GetLastError();
+		if (err != ERROR_PIPE_LISTENING && err != ERROR_PIPE_CONNECTED) {
+			CloseHandle(h);
+			return INVALID_HANDLE_VALUE;
+		}
+	}
+	return h;
+}
+
+static int
+peak_internal_sock_ready(PeakSockRec *r)
+{
+	DWORD err;
+
+	if (ConnectNamedPipe(r->pipe, NULL))
+		return 0;
+	err = GetLastError();
+	if (err == ERROR_PIPE_CONNECTED)
+		return 1;
+	if (err == ERROR_NO_DATA && DisconnectNamedPipe(r->pipe))
+		ConnectNamedPipe(r->pipe, NULL);
+	return 0;
 }
 
 PeakProc
@@ -407,40 +481,44 @@ peak_runtime_dir(char *buf, size_t cap, const char *app)
 PEAK_HANDLE
 peak_sock_listen(const char *path)
 {
-	HANDLE h;
+	PeakSockRec *r;
 
-	peak_internal_pipe_name(path, peak_pipe_name, sizeof peak_pipe_name);
-	if (!peak_pipe_name[0])
+	if (!(r = calloc(1, sizeof(*r))))
 		return PEAK_HANDLE_INVALID;
-	h = CreateNamedPipeA(peak_pipe_name, PIPE_ACCESS_DUPLEX,
-		PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_NOWAIT, PIPE_UNLIMITED_INSTANCES,
-		4096, 4096, 0, NULL);
-	if (h == INVALID_HANDLE_VALUE)
-		return PEAK_HANDLE_INVALID;
-	return h;
+	peak_internal_pipe_name(path, r->name, sizeof r->name);
+	if (!r->name[0])
+		goto fail;
+	/* A stable identity lets accepted pipes outlive or be closed before the listener. */
+	if (!(r->listen = CreateEventA(NULL, TRUE, FALSE, NULL)))
+		goto fail;
+	r->pipe = peak_internal_sock_pipe(r->name, 1);
+	if (r->pipe == INVALID_HANDLE_VALUE) {
+		CloseHandle(r->listen);
+		goto fail;
+	}
+	r->next = peak_sock_listeners;
+	peak_sock_listeners = r;
+	return r->listen;
+fail:
+	free(r);
+	return PEAK_HANDLE_INVALID;
 }
 
 PEAK_HANDLE
 peak_sock_accept(PEAK_HANDLE listen_fd)
 {
-	HANDLE h;
-	DWORD err;
+	PeakSockRec *r;
+	HANDLE accepted, next;
 
-	(void)listen_fd;
-	if (!peak_pipe_name[0])
+	r = peak_internal_sock_find((HANDLE)listen_fd);
+	if (!r || !peak_internal_sock_ready(r))
 		return PEAK_HANDLE_INVALID;
-	h = CreateNamedPipeA(peak_pipe_name, PIPE_ACCESS_DUPLEX,
-		PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_NOWAIT, PIPE_UNLIMITED_INSTANCES,
-		4096, 4096, 0, NULL);
-	if (h == INVALID_HANDLE_VALUE)
+	next = peak_internal_sock_pipe(r->name, 0);
+	if (next == INVALID_HANDLE_VALUE)
 		return PEAK_HANDLE_INVALID;
-	if (ConnectNamedPipe(h, NULL))
-		return h;
-	err = GetLastError();
-	if (err == ERROR_PIPE_CONNECTED)
-		return h;
-	CloseHandle(h);
-	return PEAK_HANDLE_INVALID;
+	accepted = r->pipe;
+	r->pipe = next;
+	return accepted;
 }
 
 PEAK_HANDLE
@@ -597,9 +675,19 @@ void
 peak_fd_close(PEAK_HANDLE fd)
 {
 	PeakProcRec *r;
+	PeakSockRec *sock, **link;
 
 	if (fd == PEAK_HANDLE_INVALID)
 		return;
+	for (link = &peak_sock_listeners; (sock = *link); link = &sock->next) {
+		if (sock->listen == (HANDLE)fd) {
+			*link = sock->next;
+			CloseHandle(sock->pipe);
+			CloseHandle(sock->listen);
+			free(sock);
+			return;
+		}
+	}
 	r = peak_internal_proc_find((HANDLE)fd);
 	if (r) {
 		if (r->read)
@@ -735,6 +823,10 @@ void *
 peak_mirror_map(size_t size)
 {
 	HANDLE map;
+	HMODULE kernel;
+	PeakVirtualAlloc2 alloc2;
+	PeakMapViewOfFile3 view3;
+	SYSTEM_INFO si;
 	void *base;
 	void *a, *b;
 	int i;
@@ -746,6 +838,36 @@ peak_mirror_map(size_t size)
 	map = CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, (DWORD)size, NULL);
 	if (!map)
 		return NULL;
+	kernel = GetModuleHandleA("kernelbase.dll");
+	alloc2 = kernel ? (PeakVirtualAlloc2)(void *)GetProcAddress(kernel, "VirtualAlloc2") : NULL;
+	view3 = kernel ? (PeakMapViewOfFile3)(void *)GetProcAddress(kernel, "MapViewOfFile3") : NULL;
+	if (alloc2 && view3) {
+		base = alloc2(GetCurrentProcess(), NULL, size * 2, MEM_RESERVE | MEM_RESERVE_PLACEHOLDER, PAGE_NOACCESS, NULL, 0);
+		if (!base)
+			goto fail;
+		if (!VirtualFree(base, size, MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER)) {
+			VirtualFree(base, 0, MEM_RELEASE);
+			goto fail;
+		}
+		a = view3(map, GetCurrentProcess(), base, 0, size, MEM_REPLACE_PLACEHOLDER, PAGE_READWRITE, NULL, 0);
+		if (!a) {
+			VirtualFree(base, 0, MEM_RELEASE);
+			VirtualFree((char *)base + size, 0, MEM_RELEASE);
+			goto fail;
+		}
+		b = view3(map, GetCurrentProcess(), (char *)base + size, 0, size, MEM_REPLACE_PLACEHOLDER, PAGE_READWRITE, NULL, 0);
+		if (!b) {
+			UnmapViewOfFile(a);
+			VirtualFree((char *)base + size, 0, MEM_RELEASE);
+			goto fail;
+		}
+		CloseHandle(map);
+		return base;
+	}
+	/* Legacy views require allocation-granularity aligned addresses, not just pages. */
+	GetSystemInfo(&si);
+	if (!si.dwAllocationGranularity || size % si.dwAllocationGranularity)
+		goto fail;
 	for (i = 0; i < 16; i++) {
 		base = VirtualAlloc(NULL, size * 2, MEM_RESERVE, PAGE_NOACCESS);
 		if (!base)
@@ -761,6 +883,7 @@ peak_mirror_map(size_t size)
 		}
 		UnmapViewOfFile(a);
 	}
+fail:
 	CloseHandle(map);
 	return NULL;
 }
