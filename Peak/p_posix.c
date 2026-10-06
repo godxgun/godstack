@@ -45,8 +45,6 @@ static PeakProcRec peak_procs[PEAK_PROC_MAX];
 
 static int peak_internal_nb(int fd);
 static PeakProc peak_internal_proc_fail(void);
-static void peak_internal_put_size(uint32_t cols, uint32_t rows);
-static void peak_internal_winch(int pid);
 static int peak_internal_memfd(void);
 static size_t peak_internal_io_n(size_t n);
 static PeakProcRec *peak_internal_proc_find(int fd);
@@ -55,7 +53,6 @@ static void peak_internal_proc_clear(PeakProcRec *r);
 static void peak_internal_proc_bind(int out, int tty);
 static int peak_internal_read(int fd, void *buf, size_t n);
 static void peak_internal_tty_no_opost(int fd);
-static int peak_internal_fast_so(char *dst, size_t cap);
 static int peak_internal_status_code(int status);
 static void peak_internal_sigchld(int sig);
 static void peak_internal_sigusr1(int sig);
@@ -90,31 +87,6 @@ peak_internal_proc_fail(void)
 	p.fd = PEAK_HANDLE_INVALID;
 	p.pid = 0;
 	return p;
-}
-
-static void
-peak_internal_put_size(uint32_t cols, uint32_t rows)
-{
-	char col[16];
-	char row[16];
-
-	if (!cols)
-		cols = 80;
-	if (!rows)
-		rows = 24;
-	snprintf(col, sizeof col, "%u", cols);
-	snprintf(row, sizeof row, "%u", rows);
-	setenv("COLUMNS", col, 1);
-	setenv("LINES", row, 1);
-}
-
-static void
-peak_internal_winch(int pid)
-{
-	if (pid <= 0)
-		return;
-	kill(pid, SIGWINCH);
-	kill(-pid, SIGWINCH);
 }
 
 static int
@@ -271,34 +243,6 @@ peak_internal_sigusr1(int sig)
 	errno = saved;
 }
 
-static int
-peak_internal_fast_so(char *dst, size_t cap)
-{
-	char exe[4096];
-	char *slash;
-#ifdef __APPLE__
-	uint32_t n;
-
-	n = sizeof exe;
-	if (_NSGetExecutablePath(exe, &n) != 0)
-		return 0;
-#else
-	ssize_t n;
-
-	n = readlink("/proc/self/exe", exe, sizeof exe - 1);
-	if (n <= 0)
-		return 0;
-	exe[n] = 0;
-#endif
-	slash = strrchr(exe, '/');
-	if (!slash)
-		return 0;
-	slash[1] = 0;
-	if (snprintf(dst, cap, "%svt-fast.so", exe) >= (int)cap)
-		return 0;
-	return access(dst, R_OK) == 0;
-}
-
 PeakProc
 peak_pty_spawn(const char *file, const char **argv, uint32_t cols, uint32_t rows, uint32_t xpixel, uint32_t ypixel)
 {
@@ -340,103 +284,6 @@ peak_pty_spawn(const char *file, const char **argv, uint32_t cols, uint32_t rows
 	p.pid = pid;
 	(void)peak_pipe_set_capacity(p.fd, (size_t)1 << 20);
 	return p;
-}
-
-PeakProc
-peak_pipe_spawn(const char *file, const char **argv, uint32_t cols, uint32_t rows)
-{
-	PeakProc p;
-	PeakProcRec *rec;
-	struct winsize ws;
-	int master, slave;
-	int out[2];
-	int pid;
-
-	if (!file || !argv)
-		return peak_internal_proc_fail();
-	peak_internal_put_size(cols, rows);
-	rec = peak_internal_proc_slot();
-	if (!rec)
-		return peak_internal_proc_fail();
-	memset(&ws, 0, sizeof ws);
-	ws.ws_row = (unsigned short)rows;
-	ws.ws_col = (unsigned short)cols;
-	if (openpty(&master, &slave, NULL, NULL, &ws) < 0)
-		return peak_internal_proc_fail();
-	peak_internal_tty_no_opost(slave);
-	if (pipe(out) < 0) {
-		close(master);
-		close(slave);
-		return peak_internal_proc_fail();
-	}
-	(void)peak_pipe_set_capacity(out[0], (size_t)1 << 20);
-	(void)peak_pipe_set_capacity(out[1], (size_t)1 << 20);
-	pid = fork();
-	if (pid < 0) {
-		close(master);
-		close(slave);
-		close(out[0]);
-		close(out[1]);
-		return peak_internal_proc_fail();
-	}
-	if (pid == 0) {
-		char so[4096];
-		char num[32];
-
-		close(master);
-		close(out[0]);
-		setsid();
-		if (ioctl(slave, TIOCSCTTY, NULL) < 0)
-			_Exit(1);
-		dup2(slave, STDIN_FILENO);
-		dup2(out[1], STDOUT_FILENO);
-		dup2(slave, STDERR_FILENO);
-		fcntl(slave, F_SETFD, 0);
-		fcntl(out[1], F_SETFD, 0);
-		snprintf(num, sizeof num, "%d", slave);
-		setenv("PEAK_FAST_TTY", num, 1);
-		snprintf(num, sizeof num, "%d", out[1]);
-		setenv("PEAK_FAST_PIPE", num, 1);
-		if (peak_internal_fast_so(so, sizeof so)) {
-#ifdef __APPLE__
-			setenv("DYLD_INSERT_LIBRARIES", so, 1);
-			setenv("DYLD_FORCE_FLAT_NAMESPACE", "1", 1);
-#else
-			{
-				const char *old;
-
-				old = getenv("LD_PRELOAD");
-				if (old && old[0]) {
-					char preload[8192];
-
-					snprintf(preload, sizeof preload, "%s:%s", so, old);
-					setenv("LD_PRELOAD", preload, 1);
-				} else
-					setenv("LD_PRELOAD", so, 1);
-			}
-#endif
-		}
-		execvp(file, (char *const *)argv);
-		_Exit(127);
-	}
-	close(slave);
-	close(out[1]);
-	rec->out = peak_internal_nb(out[0]);
-	rec->tty = peak_internal_nb(master);
-	rec->used = 1;
-	p.fd = rec->out;
-	p.pid = pid;
-	return p;
-}
-
-void
-peak_pipe_resize(PeakProc *p, uint32_t cols, uint32_t rows)
-{
-	if (!p)
-		return;
-	peak_internal_put_size(cols, rows);
-	peak_pty_resize(p, cols, rows, 0, 0);
-	peak_internal_winch(p->pid);
 }
 
 void
