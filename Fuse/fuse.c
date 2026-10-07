@@ -1,8 +1,7 @@
-/* fuse.c - immediate-mode UI command buffer
- * 0.0.1 - @vasco - canvas, screen stack, button, slider, class layout
- */
+#pragma  once
 
 #include <assert.h>
+#include <math.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -35,6 +34,15 @@
 #define FUSE_EL_TEXT 128
 #define FUSE_EL_IMAGE 256
 #define FUSE_EL_SPACE 512
+#define FUSE_EL_FIELD 1024
+#define FUSE_EL_RADIAL 2048
+#define FUSE_EL_ID_SCOPE 4096
+#define FUSE_PI 3.14159265358979323846f
+#define FUSE_FIELD_MAX 8
+#define FUSE_INP_MAX 32
+#define FUSE_INP_BYTES 512
+#define FUSE_INP_KEY 1
+#define FUSE_INP_TEXT 2
 #define FUSE_SIZING_INHERIT 0x0F
 #define FUSE_COL_MAX 8
 #define FUSE_COL_STACK 8
@@ -99,6 +107,13 @@ typedef struct FuseColGroup {
     uint32_t col[FUSE_COL_MAX];
 } FuseColGroup;
 
+typedef struct FuseInp {
+    uint8_t kind;
+    uint8_t key;
+    uint16_t n;
+    uint16_t off;
+} FuseInp;
+
 typedef struct FuseMem {
     size_t total;
     size_t hash_off;
@@ -111,44 +126,72 @@ typedef struct FuseMem {
 } FuseMem;
 
 struct fuse_canvas_t {
-    size_t max_elements;
-    size_t hash_cap, cmd_cap, screen_cap;
     FuseElement *elements;
-    uint32_t element_count, cmd_count;
     FuseScreen *screens;
-    uint32_t screen_count;
     FuseCmd *cmds;
     FuseHashItem *hash;
+
+    FuseColGroup col_group[FUSE_COL_STACK];
+
+    size_t max_elements, max_windows;
+    size_t hash_cap, cmd_cap, screen_cap;
+
+    FuseInp inp[FUSE_INP_MAX];
+    FuseFieldRun fields[FUSE_FIELD_MAX];
+    char inp_bytes[FUSE_INP_BYTES];
+
+    int input_enabled, input_canceled;
+    int16_t layer, emit_layer;
+    uint32_t layer_elements[64];
+    int16_t layers[64];
+    uint32_t layer_count;
+    uint32_t element_count, cmd_count;
+    uint32_t screen_count, scope_peak;
     uint32_t generation, capture_id, pending_id;
-    uint8_t pending_sizing, pending_w_sizing, pending_h_sizing;
+    uint32_t focus_id, focus_frame;
+    uint32_t named_scope; /* 0 inherits the builder's div scope. */
+
     float width, height, pointer_x, pointer_y;
     float wheel_x, wheel_y;
     float clip[FUSE_CLIP_MAX][4];
-    uint32_t wheel_capture, clip_n;
-    int pointer_state, pointer_edge;
-    FuseError error;
     float debug_scroll;
+
+    uint32_t wheel_capture, clip_n;
+    int32_t pointer_state, pointer_edge;
+
     uint32_t debug_selected;
     uint32_t debug_total;
+
+    FuseError error;
+
     char pending_name[FUSE_NAME_MAX];
     char names[FUSE_NAME_SLOTS][FUSE_NAME_MAX];
+
     uint8_t debug;
     uint8_t name_n;
     uint8_t col_n;
-    FuseColGroup col_group[FUSE_COL_STACK];
+    uint8_t pending_sizing;
+    uint8_t pending_w_sizing;
+    uint8_t pending_h_sizing;
+    uint16_t inp_n;
+    uint16_t inp_len;
+    uint8_t field_n;
 };
 
 static size_t fuse_internal_align(size_t n);
 static size_t fuse_internal_hash_cap(size_t n);
-static void fuse_internal_mem(FuseMem *m, size_t n);
+static int fuse_internal_mem_add(size_t *off, size_t count, size_t width);
+static int fuse_internal_mem(FuseMem *m, const FuseParams *params);
 static size_t fuse_internal_max_elements(size_t bufsize);
 static void fuse_internal_hash_keep_last(FuseCanvas c);
 static FuseHashItem *fuse_internal_hash_slot(FuseCanvas c, uint32_t id, int vacant_ok);
 static uint32_t fuse_internal_hash_str(const char *s);
 static uint32_t fuse_internal_hash_mix(uint32_t a, uint32_t b);
+static uint32_t fuse_internal_scoped_id(FuseCanvas c, uint32_t id);
 static int fuse_internal_ok(FuseCanvas c);
 static void fuse_internal_fail(FuseCanvas c, FuseError err);
 static void fuse_internal_reset_frame(FuseCanvas c, int bump_gen);
+static int16_t fuse_internal_layer(FuseCanvas c, uint32_t index);
 static uint32_t fuse_internal_take_id(FuseCanvas c, uint32_t parent_id, uint32_t sibling);
 static uint32_t fuse_internal_add_element(FuseCanvas c, uint32_t parent, uint32_t id, float x, float y, float w, float h, uint16_t flags);
 static uint32_t fuse_internal_open_el(FuseCanvas c, float x, float y, float w, float h, uint16_t flags);
@@ -175,6 +218,7 @@ static int fuse_internal_rect_visible(FuseCanvas c, float x, float y, float w, f
 static FuseCmd *fuse_internal_emit(FuseCanvas c, uint8_t type, uint32_t id);
 static void fuse_internal_emit_rect(FuseCanvas c, uint32_t id, float x, float y, float w, float h, uint32_t color);
 static void fuse_internal_emit_clip(FuseCanvas c, uint8_t type, float x, float y, float w, float h);
+static void fuse_internal_emit_radial(FuseCanvas c, const FuseElement *el, float x, float y);
 static void fuse_internal_emit_tree(FuseCanvas c, uint32_t index, float ox, float oy);
 static void fuse_internal_emit_children(FuseCanvas c, FuseElement *el, float ox, float oy);
 static uint32_t fuse_internal_open_maybe_anon(FuseCanvas c, float x, float y, float w, float h, uint16_t flags);
@@ -187,6 +231,12 @@ static void fuse_internal_clip_push(FuseCanvas c, float x, float y, float w, flo
 static void fuse_internal_clip_pop(FuseCanvas c);
 static void fuse_internal_emit_scrollbar(FuseCanvas c, FuseElement *el, float cx, float cy);
 static uint64_t fuse_internal_glyph(int c);
+static void fuse_input_clear(FuseCanvas c);
+static int fuse_utf8_prev(const char *s, int i);
+static int fuse_utf8_next(const char *s, int i);
+static int fuse_text_insert(char *buf, int cap, int *caret, const char *s, int n);
+static int fuse_textbox_apply(FuseCanvas c, char *buf, int cap, int *caret,
+    int (*allow)(unsigned char ch, void *user), void *user);
 static void fuse_copy_n(char *dst, int cap, const char *src);
 static void fuse_name_index(char *dst, const char *src, int index);
 static int fuse_debug_over_panel(FuseCanvas c);
@@ -249,35 +299,48 @@ fuse_internal_align(size_t n)
 static size_t
 fuse_internal_hash_cap(size_t n)
 {
-    size_t cap;
-    cap = 8;
-    if (n > ((size_t)-1) / 2)
-        n = ((size_t)-1) / 2;
-    while (cap < n * 2)
-        cap *= 2;
-    return cap;
+	size_t cap = 8;
+	/* Validated element bounds keep doubling representable on 32-bit too. */
+	while (cap < n * 2)
+		cap *= 2;
+	return cap;
 }
 
-static void
-fuse_internal_mem(FuseMem *m, size_t n)
+static int
+fuse_internal_mem_add(size_t *off, size_t count, size_t width)
 {
-    size_t off;
-    FASSERT(m);
-    m->hash_cap = fuse_internal_hash_cap(n);
-    m->cmd_cap = n * FUSE_CMDS_PER_EL;
-    m->screen_cap = n;
-    if (m->screen_cap > FUSE_SCREEN_MAX)
-        m->screen_cap = FUSE_SCREEN_MAX;
-    off = fuse_internal_align(sizeof (struct fuse_canvas_t));
-    m->hash_off = off;
-    off = fuse_internal_align(off + m->hash_cap * sizeof (FuseHashItem));
-    m->elements_off = off;
-    off = fuse_internal_align(off + n * sizeof (FuseElement));
-    m->screens_off = off;
-    off = fuse_internal_align(off + m->screen_cap * sizeof (FuseScreen));
-    m->cmds_off = off;
-    off = fuse_internal_align(off + m->cmd_cap * sizeof (FuseCmd));
-    m->total = off;
+	size_t next;
+	if (count > (SIZE_MAX - *off) / width)
+		return 0;
+	next = *off + count * width;
+	if (next > SIZE_MAX - (FUSE_MEM_ALIGN - 1))
+		return 0;
+	*off = fuse_internal_align(next);
+	return 1;
+}
+
+static int
+fuse_internal_mem(FuseMem *m, const FuseParams *params)
+{
+	size_t off;
+	if (!m || !params || !params->max_elements || params->max_elements > UINT32_MAX / FUSE_CMDS_PER_EL ||
+		!params->max_windows || params->max_windows > FUSE_WINDOWS_MAX ||
+		!params->max_scopes || params->max_scopes > UINT32_MAX)
+		return 0;
+	m->hash_cap = fuse_internal_hash_cap(params->max_elements);
+	m->cmd_cap = params->max_elements * FUSE_CMDS_PER_EL;
+	m->screen_cap = params->max_scopes;
+	off = fuse_internal_align(sizeof(struct fuse_canvas_t));
+	m->hash_off = off;
+	if (!fuse_internal_mem_add(&off, m->hash_cap, sizeof(FuseHashItem))) return 0;
+	m->elements_off = off;
+	if (!fuse_internal_mem_add(&off, params->max_elements, sizeof(FuseElement))) return 0;
+	m->screens_off = off;
+	if (!fuse_internal_mem_add(&off, m->screen_cap, sizeof(FuseScreen))) return 0;
+	m->cmds_off = off;
+	if (!fuse_internal_mem_add(&off, m->cmd_cap, sizeof(FuseCmd))) return 0;
+	m->total = off;
+	return 1;
 }
 
 static size_t
@@ -289,13 +352,15 @@ fuse_internal_max_elements(size_t bufsize)
         return 0;
     lo = 1;
     hi = bufsize / 32;
+    if (hi > UINT32_MAX / FUSE_CMDS_PER_EL)
+        hi = UINT32_MAX / FUSE_CMDS_PER_EL;
     if (hi < 1)
         hi = 1;
     best = 0;
     while (lo <= hi) {
         mid = lo + (hi - lo) / 2;
-        fuse_internal_mem(&m, mid);
-        if (m.total <= bufsize) {
+        FuseParams params = {mid, FUSE_WINDOWS_MAX, mid < FUSE_SCREEN_MAX ? mid : FUSE_SCREEN_MAX};
+        if (fuse_internal_mem(&m, &params) && m.total <= bufsize) {
             best = mid;
             lo = mid + 1;
         } else {
@@ -380,6 +445,23 @@ fuse_internal_hash_mix(uint32_t a, uint32_t b)
     return h;
 }
 
+/* Nearest explicitly scoped div; ordinary nested layout does not change IDs. */
+static uint32_t
+fuse_internal_scoped_id(FuseCanvas c, uint32_t id)
+{
+    uint32_t i;
+    FuseElement *el;
+
+    if (c->named_scope)
+        return fuse_internal_hash_mix(c->named_scope, id);
+    for (i = c->screen_count; i > 1; i--) {
+        el = &c->elements[c->screens[i - 1].element];
+        if (el->flags & FUSE_EL_ID_SCOPE)
+            return fuse_internal_hash_mix(el->id, id);
+    }
+    return id;
+}
+
 static int
 fuse_internal_ok(FuseCanvas c)
 {
@@ -389,8 +471,15 @@ fuse_internal_ok(FuseCanvas c)
 static void
 fuse_internal_fail(FuseCanvas c, FuseError err)
 {
-    if (c && c->error == FUSE_ERR_OK)
+    if (c && c->error == FUSE_ERR_OK) {
         c->error = err;
+        c->cmd_count = 0;
+        c->capture_id = c->focus_id = c->focus_frame = 0;
+        c->wheel_capture = 0;
+        c->pointer_edge = FUSE_EDGE_NONE;
+        c->input_canceled = c->pointer_state == FUSE_POINTER_PRESSED;
+        c->inp_n = c->inp_len = c->field_n = 0;
+    }
 }
 
 static void
@@ -405,9 +494,13 @@ fuse_internal_reset_frame(FuseCanvas c, int bump_gen)
             fuse_internal_hash_keep_last(c);
         }
     }
+    c->input_enabled = 1;
+    c->layer_count = 0;
+    c->layer = c->emit_layer = 0;
     c->element_count = 1;
     c->cmd_count = 0;
-    c->screen_count = 1;
+    c->screen_count = c->scope_peak = 1;
+    c->named_scope = 0;
     c->pending_id = 0;
     c->pending_name[0] = 0;
     c->pending_sizing = 0;
@@ -418,6 +511,8 @@ fuse_internal_reset_frame(FuseCanvas c, int bump_gen)
     c->elements[0].w = c->width;
     c->elements[0].h = c->height;
     c->screens[0].element = 0;
+    c->focus_frame = c->focus_id;
+    c->field_n = 0;
 }
 
 static uint32_t
@@ -505,6 +600,7 @@ static int
 fuse_internal_geom_hit(FuseCanvas c, uint32_t id)
 {
     FuseHashItem *item;
+    if (!c->input_enabled) return 0;
     item = fuse_internal_last_box(c, id);
     if (!item)
         return 0;
@@ -1154,7 +1250,7 @@ fuse_internal_emit(FuseCanvas c, uint8_t type, uint32_t id)
     memset(cmd, 0, sizeof *cmd);
     cmd->type = type;
     cmd->id = id;
-    cmd->z = 0;
+    cmd->z = c->emit_layer;
     return cmd;
 }
 
@@ -1200,6 +1296,38 @@ fuse_internal_emit_children(FuseCanvas c, FuseElement *el, float ox, float oy)
 }
 
 static void
+fuse_internal_emit_radial(FuseCanvas c, const FuseElement *el, float x, float y)
+{
+    int slice, step, half, count = (int)el->child_count;
+    int steps = (64 + count - 1) / count;
+    float span = 2.0f * FUSE_PI / count;
+    float inner = el->nob_pos, outer = el->w * 0.5f;
+    float a, b, ix0, iy0, ix1, iy1, ox0, oy0, ox1, oy1;
+    FuseCmd *cmd;
+
+    x += outer;
+    y += outer;
+    for (slice = 0; slice < count; slice++) {
+        for (step = 0; step < steps; step++) {
+            a = (slice - 0.5f + (float)step / steps) * span;
+            b = (slice - 0.5f + (float)(step + 1) / steps) * span;
+            ix0 = x + inner * cosf(a); iy0 = y + inner * sinf(a);
+            ix1 = x + inner * cosf(b); iy1 = y + inner * sinf(b);
+            ox0 = x + outer * cosf(a); oy0 = y + outer * sinf(a);
+            ox1 = x + outer * cosf(b); oy1 = y + outer * sinf(b);
+            for (half = 0; half < 2; half++) {
+                if (!(cmd = fuse_internal_emit(c, FUSE_CMD_TRIANGLE, el->id)))
+                    return;
+                cmd->triangle = half ?
+                    (FuseCmdTriangle){ix0, iy0, ox1, oy1, ix1, iy1, 0} :
+                    (FuseCmdTriangle){ix0, iy0, ox0, oy0, ox1, oy1, 0};
+                cmd->triangle.color = slice == (int)el->scroll ? el->color_alt : el->color;
+            }
+        }
+    }
+}
+
+static void
 fuse_internal_emit_tree(FuseCanvas c, uint32_t index, float ox, float oy)
 {
     FuseElement *el;
@@ -1207,6 +1335,7 @@ fuse_internal_emit_tree(FuseCanvas c, uint32_t index, float ox, float oy)
     float cx, cy, nob_w, nob_x;
     float bx, by, bw, bh;
     el = &c->elements[index];
+    c->emit_layer = fuse_internal_layer(c, index);
     cx = ox + el->x;
     cy = oy + el->y;
     if (el->id != 0) {
@@ -1249,6 +1378,7 @@ fuse_internal_emit_tree(FuseCanvas c, uint32_t index, float ox, float oy)
                 coy -= el->scroll;
         }
         fuse_internal_emit_children(c, el, cox, coy);
+        c->emit_layer = fuse_internal_layer(c, index);
         if (el->flags & FUSE_EL_SCROLL)
             fuse_internal_emit_scrollbar(c, el, cx, cy);
         fuse_internal_emit_clip(c, FUSE_CMD_CLIP_END, cx, cy, el->w, el->h);
@@ -1257,6 +1387,10 @@ fuse_internal_emit_tree(FuseCanvas c, uint32_t index, float ox, float oy)
     }
     if (el->flags & FUSE_EL_TEXT) {
         fuse_internal_emit_children(c, el, cx, cy);
+        return;
+    }
+    if (el->flags & FUSE_EL_RADIAL) {
+        fuse_internal_emit_radial(c, el, cx, cy);
         return;
     }
     if (el->flags & FUSE_EL_IMAGE) {
@@ -1270,6 +1404,34 @@ fuse_internal_emit_tree(FuseCanvas c, uint32_t index, float ox, float oy)
         cmd->image.w = el->w;
         cmd->image.h = el->h;
         cmd->image.handle = el->color;
+        return;
+    }
+    if (el->flags & FUSE_EL_FIELD) {
+        FuseCmd *cmd;
+        float ix, iw;
+        uint32_t slot;
+
+        fuse_internal_emit_rect(c, el->id, cx, cy, el->w, el->h, el->color);
+        slot = el->last_child;
+        if (slot == 0 || slot > c->field_n)
+            return;
+        slot--;
+        ix = cx + el->scroll;
+        iw = el->w - el->scroll - el->nob_pos;
+        if (iw < 1.0f)
+            iw = 1.0f;
+        fuse_internal_emit_clip(c, FUSE_CMD_CLIP_START, ix, cy, iw, el->h);
+        fuse_internal_clip_push(c, ix, cy, iw, el->h);
+        cmd = fuse_internal_emit(c, FUSE_CMD_TEXT, el->id);
+        if (cmd) {
+            cmd->text.x = ix;
+            cmd->text.y = cy;
+            cmd->text.w = iw;
+            cmd->text.h = el->h;
+            cmd->text.slot = slot;
+        }
+        fuse_internal_emit_clip(c, FUSE_CMD_CLIP_END, ix, cy, iw, el->h);
+        fuse_internal_clip_pop(c);
         return;
     }
     if (el->flags & FUSE_EL_BUTTON) {
@@ -1427,7 +1589,7 @@ fuse_debug_fit(FuseCanvas c)
 static int
 fuse_debug_show(const FuseElement *el)
 {
-    if (el->flags & (FUSE_EL_DIV | FUSE_EL_BUTTON | FUSE_EL_SLIDER | FUSE_EL_TEXT | FUSE_EL_IMAGE | FUSE_EL_SPACE))
+    if (el->flags & (FUSE_EL_DIV | FUSE_EL_BUTTON | FUSE_EL_SLIDER | FUSE_EL_TEXT | FUSE_EL_IMAGE | FUSE_EL_SPACE | FUSE_EL_FIELD))
         return 1;
     if ((el->flags & FUSE_EL_RECT) && el->id != 0)
         return 1;
@@ -1439,7 +1601,9 @@ fuse_debug_kind(const FuseElement *el, char *dst)
 {
     const char *s;
 
-    if (el->flags & FUSE_EL_IMAGE)
+    if (el->flags & FUSE_EL_FIELD)
+        s = "field";
+    else if (el->flags & FUSE_EL_IMAGE)
         s = "img";
     else if (el->flags & FUSE_EL_SPACE)
         s = "spc";
@@ -1832,50 +1996,68 @@ fuse_internal_debug(FuseCanvas c)
 }
 
 size_t
-fuse_canvas_memory(size_t max_elements)
+fuse_memory(const FuseParams *params)
 {
-    FuseMem m;
-    if (max_elements == 0)
-        return 0;
-    fuse_internal_mem(&m, max_elements);
-    return m.total;
+	FuseMem m;
+	return fuse_internal_mem(&m, params) ? m.total : 0;
 }
 
 FuseCanvas
-fuse_canvas_create(void *buf, size_t bufsize)
+fuse_place_in_memory(void *buf, size_t bytes, const FuseParams *params)
 {
-    FuseMem m;
-    FuseCanvas c;
-    unsigned char *bytes;
-    size_t n;
-    if (!buf)
-        return NULL;
-    n = fuse_internal_max_elements(bufsize);
-    if (n == 0)
-        return NULL;
-    fuse_internal_mem(&m, n);
-    bytes = buf;
-    memset(bytes, 0, sizeof (struct fuse_canvas_t));
-    c = (FuseCanvas)bytes;
-    c->max_elements = n;
-    c->hash_cap = m.hash_cap;
-    c->cmd_cap = m.cmd_cap;
-    c->screen_cap = m.screen_cap;
-    c->hash = (FuseHashItem *)(bytes + m.hash_off);
-    c->elements = (FuseElement *)(bytes + m.elements_off);
-    c->screens = (FuseScreen *)(bytes + m.screens_off);
-    c->cmds = (FuseCmd *)(bytes + m.cmds_off);
-    memset(c->hash, 0, c->hash_cap * sizeof *c->hash);
-    fuse_internal_reset_frame(c, 0);
-    return c;
+	FuseMem m;
+	FuseCanvas c;
+	unsigned char *p = buf;
+	if (!buf || (uintptr_t)buf % FUSE_MEM_ALIGN || !fuse_internal_mem(&m, params) || bytes < m.total)
+		return NULL;
+	memset(p, 0, sizeof(struct fuse_canvas_t));
+	c = (FuseCanvas)p;
+	c->max_elements = params->max_elements;
+	c->max_windows = params->max_windows;
+	c->hash_cap = m.hash_cap;
+	c->cmd_cap = m.cmd_cap;
+	c->screen_cap = m.screen_cap;
+	c->hash = (FuseHashItem *)(p + m.hash_off);
+	c->elements = (FuseElement *)(p + m.elements_off);
+	c->screens = (FuseScreen *)(p + m.screens_off);
+	c->cmds = (FuseCmd *)(p + m.cmds_off);
+	memset(c->hash, 0, c->hash_cap * sizeof *c->hash);
+	fuse_internal_reset_frame(c, 0);
+	return c;
+}
+
+size_t
+fuse_canvas_max_windows(FuseCanvas c)
+{
+	return c ? c->max_windows : 0;
+}
+
+size_t
+fuse_canvas_scope_peak(FuseCanvas c)
+{
+	return c ? c->scope_peak : 0;
 }
 
 FuseError
 fuse_canvas_error(FuseCanvas c)
 {
-    if (!c)
-        return FUSE_ERR_BUF_TOO_SMALL;
-    return c->error;
+	return c ? c->error : FUSE_ERR_BUF_TOO_SMALL;
+}
+
+size_t
+fuse_canvas_memory(size_t max_elements)
+{
+	FuseParams params = {max_elements, FUSE_WINDOWS_MAX,
+		max_elements < FUSE_SCREEN_MAX ? max_elements : FUSE_SCREEN_MAX};
+	return fuse_memory(&params);
+}
+
+FuseCanvas
+fuse_canvas_create(void *buf, size_t bufsize)
+{
+	size_t n = fuse_internal_max_elements(bufsize);
+	FuseParams params = {n, FUSE_WINDOWS_MAX, n < FUSE_SCREEN_MAX ? n : FUSE_SCREEN_MAX};
+	return fuse_place_in_memory(buf, bufsize, &params);
 }
 
 void
@@ -1921,6 +2103,11 @@ fuse_canvas_pointer(FuseCanvas c, FusePointerState pointer_state, float x, float
     else if (pointer_state == FUSE_POINTER_RELEASED && prev == FUSE_POINTER_PRESSED)
         c->pointer_edge = FUSE_EDGE_RELEASED;
     c->pointer_state = pointer_state;
+    if (c->input_canceled) {
+        c->pointer_edge = FUSE_EDGE_NONE;
+        if (pointer_state != FUSE_POINTER_PRESSED)
+            c->input_canceled = 0;
+    }
 }
 
 void
@@ -1933,6 +2120,96 @@ fuse_canvas_wheel(FuseCanvas c, float dx, float dy)
     c->wheel_y += dy;
 }
 
+static void
+fuse_input_clear(FuseCanvas c)
+{
+    c->inp_n = 0;
+    c->inp_len = 0;
+}
+
+void
+fuse_canvas_text(FuseCanvas c, const char *utf8)
+{
+    int n, i;
+
+    FASSERT(c, "null canvas");
+    if (!fuse_internal_ok(c) || !utf8 || !utf8[0])
+        return;
+    n = 0;
+    while (utf8[n])
+        n++;
+    if (c->inp_n >= FUSE_INP_MAX)
+        return;
+    if ((int)c->inp_len + n > FUSE_INP_BYTES)
+        return;
+    c->inp[c->inp_n].kind = FUSE_INP_TEXT;
+    c->inp[c->inp_n].key = 0;
+    c->inp[c->inp_n].n = (uint16_t)n;
+    c->inp[c->inp_n].off = c->inp_len;
+    for (i = 0; i < n; i++)
+        c->inp_bytes[c->inp_len + (uint16_t)i] = utf8[i];
+    c->inp_len = (uint16_t)(c->inp_len + n);
+    c->inp_n++;
+}
+
+void
+fuse_canvas_key(FuseCanvas c, FuseKey key)
+{
+    FASSERT(c, "null canvas");
+    if (!fuse_internal_ok(c) || key == 0)
+        return;
+    if (c->inp_n >= FUSE_INP_MAX)
+        return;
+    c->inp[c->inp_n].kind = FUSE_INP_KEY;
+    c->inp[c->inp_n].key = (uint8_t)key;
+    c->inp[c->inp_n].n = 0;
+    c->inp[c->inp_n].off = 0;
+    c->inp_n++;
+}
+
+uint32_t
+fuse_scope_enter(FuseCanvas c, const char *name)
+{
+    uint32_t previous;
+    FASSERT(c && name, "null scope");
+    if (!c || !name)
+        return 0;
+    previous = c->named_scope;
+    c->named_scope = fuse_internal_scoped_id(c, fuse_internal_hash_str(name));
+    return previous;
+}
+
+void
+fuse_scope_restore(FuseCanvas c, uint32_t previous)
+{
+    FASSERT(c, "null canvas");
+    if (c)
+        c->named_scope = previous;
+}
+
+void
+fuse_focus(FuseCanvas c, const char *name)
+{
+    FASSERT(c, "null canvas");
+    if (!fuse_internal_ok(c))
+        return;
+    if (!name || !name[0])
+        c->focus_id = 0;
+    else
+        c->focus_id = fuse_internal_scoped_id(c, fuse_internal_hash_str(name));
+    c->focus_frame = c->focus_id;
+}
+
+bool
+fuse_focused(FuseCanvas c, const char *name)
+{
+    FASSERT(c, "null canvas");
+    FASSERT(name, "null focus name");
+    if (!c || !name || !name[0] || c->focus_id == 0)
+        return false;
+    return c->focus_id == fuse_internal_scoped_id(c, fuse_internal_hash_str(name));
+}
+
 FuseCmd *
 fuse_canvas_draw(FuseCanvas c, size_t *cmd_count)
 {
@@ -1940,6 +2217,8 @@ fuse_canvas_draw(FuseCanvas c, size_t *cmd_count)
     FASSERT(cmd_count, "null cmd_count");
     if (cmd_count)
         *cmd_count = 0;
+    if (!c)
+        return NULL;
     if (!fuse_internal_ok(c))
         goto done;
     if (c->screen_count != 1 || c->col_n != 0) {
@@ -1958,12 +2237,15 @@ fuse_canvas_draw(FuseCanvas c, size_t *cmd_count)
         goto done;
     if (c->debug)
         fuse_internal_debug(c);
+    if (!fuse_internal_ok(c))
+        goto done;
     if (cmd_count)
         *cmd_count = c->cmd_count;
 done:
     c->wheel_x = 0.0f;
     c->wheel_y = 0.0f;
     c->wheel_capture = 0;
+    fuse_input_clear(c);
     if (!fuse_internal_ok(c))
         return NULL;
     return c->cmds;
@@ -2030,6 +2312,19 @@ fuse_div_begin_scroll(FuseCanvas c, float x, float y, float w, float h, const Fu
     id = c->elements[index].id;
     if (fuse_internal_geom_hit(c, id) && !fuse_debug_over_panel(c))
         c->wheel_capture = id;
+}
+
+void
+fuse_div_scope(FuseCanvas c)
+{
+    FASSERT(c, "null canvas");
+    if (!fuse_internal_ok(c))
+        return;
+    if (c->screen_count <= 1) {
+        fuse_internal_fail(c, FUSE_ERR_UNBALANCED);
+        return;
+    }
+    c->elements[c->screens[c->screen_count - 1].element].flags |= FUSE_EL_ID_SCOPE;
 }
 
 void
@@ -2187,7 +2482,7 @@ fuse_id(FuseCanvas c, const char *name)
     FASSERT(name, "null id name");
     if (!fuse_internal_ok(c))
         return;
-    c->pending_id = fuse_internal_hash_str(name);
+    c->pending_id = fuse_internal_scoped_id(c, fuse_internal_hash_str(name));
     fuse_copy_n(c->pending_name, FUSE_NAME_MAX, name);
 }
 
@@ -2198,7 +2493,8 @@ fuse_idi(FuseCanvas c, const char *name, int index)
     FASSERT(name, "null id name");
     if (!fuse_internal_ok(c))
         return;
-    c->pending_id = fuse_internal_hash_mix(fuse_internal_hash_str(name), (uint32_t)index);
+    c->pending_id = fuse_internal_scoped_id(c,
+        fuse_internal_hash_mix(fuse_internal_hash_str(name), (uint32_t)index));
     fuse_name_index(c->pending_name, name, index);
 }
 
@@ -2209,7 +2505,8 @@ fuse_element_is_hovered(FuseCanvas c, const char *name)
     FASSERT(name, "null hover name");
     if (!fuse_internal_ok(c) || !name)
         return false;
-    return fuse_internal_last_hit(c, fuse_internal_hash_str(name)) ? true : false;
+    return fuse_internal_last_hit(c,
+        fuse_internal_scoped_id(c, fuse_internal_hash_str(name))) ? true : false;
 }
 
 bool
@@ -2252,7 +2549,7 @@ fuse_slider(FuseCanvas c, float x, float y, float w, float h, uint32_t track, ui
     } else if (c->capture_id == 0 && hit && c->pointer_edge == FUSE_EDGE_PRESSED) {
         c->capture_id = id;
     }
-    if (c->capture_id == id) {
+    if (c->input_enabled && c->capture_id == id) {
         item = fuse_internal_last_box(c, id);
         if (item && item->w > 0.0f)
             *nob_pos = fuse_internal_clamp01((c->pointer_x - item->x) / item->w);
@@ -2261,6 +2558,242 @@ fuse_slider(FuseCanvas c, float x, float y, float w, float h, uint32_t track, ui
     c->elements[index].color = track;
     c->elements[index].color_alt = nob;
     c->elements[index].nob_pos = *nob_pos;
+}
+
+static int
+fuse_utf8_prev(const char *s, int i)
+{
+    if (!s || i <= 0)
+        return 0;
+    i--;
+    while (i > 0 && ((unsigned char)s[i] & 0xC0) == 0x80)
+        i--;
+    return i;
+}
+
+static int
+fuse_utf8_next(const char *s, int i)
+{
+    int len;
+
+    len = 0;
+    if (!s)
+        return 0;
+    while (s[len])
+        len++;
+    if (i < 0 || i >= len)
+        return len;
+    i++;
+    while (i < len && ((unsigned char)s[i] & 0xC0) == 0x80)
+        i++;
+    return i;
+}
+
+static int
+fuse_text_len(const char *s)
+{
+    int n;
+
+    n = 0;
+    if (!s)
+        return 0;
+    while (s[n])
+        n++;
+    return n;
+}
+
+static int
+fuse_text_insert(char *buf, int cap, int *caret, const char *s, int n)
+{
+    int len;
+
+    if (!buf || !caret || !s || n <= 0 || cap < 2)
+        return 0;
+    len = fuse_text_len(buf);
+    if (*caret < 0 || *caret > len)
+        *caret = len;
+    if (len + n >= cap)
+        n = cap - 1 - len;
+    if (n <= 0)
+        return 0;
+    memmove(buf + *caret + n, buf + *caret, (size_t)(len - *caret + 1));
+    memcpy(buf + *caret, s, (size_t)n);
+    *caret += n;
+    return 1;
+}
+
+static int
+fuse_byte_ok(int (*allow)(unsigned char ch, void *user), void *user, unsigned char ch)
+{
+    if (allow)
+        return allow(ch, user) ? 1 : 0;
+    return ch >= 32 && ch < 127;
+}
+
+static int
+fuse_textbox_apply(FuseCanvas c, char *buf, int cap, int *caret,
+    int (*allow)(unsigned char ch, void *user), void *user)
+{
+    int changed;
+    uint16_t i;
+
+    changed = 0;
+    if (!c || !buf || !caret)
+        return 0;
+    for (i = 0; i < c->inp_n; i++) {
+        FuseInp *ev;
+        int len;
+
+        ev = &c->inp[i];
+        len = fuse_text_len(buf);
+        if (*caret < 0 || *caret > len)
+            *caret = len;
+        if (ev->kind == FUSE_INP_KEY) {
+            if (ev->key == FUSE_KEY_BACKSPACE) {
+                int prev;
+
+                prev = fuse_utf8_prev(buf, *caret);
+                if (prev != *caret) {
+                    memmove(buf + prev, buf + *caret, (size_t)(len - *caret + 1));
+                    *caret = prev;
+                    changed = 1;
+                }
+            } else if (ev->key == FUSE_KEY_DELETE) {
+                int next;
+
+                next = fuse_utf8_next(buf, *caret);
+                if (next != *caret) {
+                    memmove(buf + *caret, buf + next, (size_t)(len - next + 1));
+                    changed = 1;
+                }
+            } else if (ev->key == FUSE_KEY_LEFT) {
+                *caret = fuse_utf8_prev(buf, *caret);
+            } else if (ev->key == FUSE_KEY_RIGHT) {
+                *caret = fuse_utf8_next(buf, *caret);
+            } else if (ev->key == FUSE_KEY_HOME) {
+                *caret = 0;
+            } else if (ev->key == FUSE_KEY_END) {
+                *caret = len;
+            }
+        } else if (ev->kind == FUSE_INP_TEXT && ev->n > 0) {
+            char clean[64];
+            int o, k;
+
+            o = 0;
+            for (k = 0; k < (int)ev->n && o + 1 < (int)sizeof clean; k++) {
+                unsigned char ch;
+
+                ch = (unsigned char)c->inp_bytes[ev->off + (uint16_t)k];
+                if (!fuse_byte_ok(allow, user, ch))
+                    continue;
+                clean[o++] = (char)ch;
+            }
+            if (o > 0 && fuse_text_insert(buf, cap, caret, clean, o))
+                changed = 1;
+        }
+    }
+    fuse_input_clear(c);
+    return changed;
+}
+
+bool
+fuse_textbox(FuseCanvas c, float x, float y, float w, float h, float pad_l, float pad_r,
+    char *buf, int cap, int *caret, const char *placeholder, float size,
+    uint32_t fill, uint32_t hovered, uint32_t ink, uint32_t ghost, int caret_on,
+    int (*allow)(unsigned char ch, void *user), void *user)
+{
+    uint32_t index, id;
+    int hit;
+    int changed;
+    int len;
+
+    FASSERT(c, "null canvas");
+    FASSERT(buf, "null textbox buf");
+    FASSERT(caret, "null textbox caret");
+    changed = 0;
+    if (!fuse_internal_ok(c) || !buf || !caret || cap < 2)
+        return false;
+    index = fuse_internal_open_el(c, x, y, w, h, FUSE_EL_FIELD);
+    if (!fuse_internal_ok(c))
+        return false;
+    id = c->elements[index].id;
+    hit = fuse_internal_last_hit(c, id);
+    if (id == c->focus_frame && id != 0)
+        changed = fuse_textbox_apply(c, buf, cap, caret, allow, user);
+    len = fuse_text_len(buf);
+    if (hit && c->pointer_edge == FUSE_EDGE_RELEASED && c->capture_id == 0) {
+        c->focus_id = id;
+        if (*caret < 0 || *caret > len)
+            *caret = len;
+        *caret = len;
+    } else if (id == c->focus_id && (*caret < 0 || *caret > len)) {
+        *caret = len;
+    }
+    if (c->field_n >= FUSE_FIELD_MAX) {
+        fuse_internal_fail(c, FUSE_ERR_OVERFLOW);
+        return changed ? true : false;
+    }
+    {
+        FuseFieldRun *run;
+        int slot;
+        float pl, pr;
+
+        slot = (int)c->field_n;
+        c->field_n++;
+        run = &c->fields[slot];
+        memset(run, 0, sizeof *run);
+        run->str = buf;
+        run->color = ink;
+        run->caret_color = ink;
+        run->size = size > 0.0f ? size : 16.0f;
+        run->caret = -1;
+        if (!buf[0] && placeholder && placeholder[0]) {
+            run->str = placeholder;
+            run->color = ghost;
+        }
+        if (id != 0 && id == c->focus_id && caret_on)
+            run->caret = *caret;
+        pl = (float)fuse_px_i(pad_l);
+        pr = (float)fuse_px_i(pad_r);
+        if (pl < 0.0f)
+            pl = 0.0f;
+        if (pr < 0.0f)
+            pr = 0.0f;
+        c->elements[index].color = hit ? hovered : fill;
+        c->elements[index].color_alt = ink;
+        /* Pads live in scroll/nob_pos. last_child is the run slot plus one.
+         * A field has no child elements, so those slots are free. */
+        c->elements[index].scroll = pl;
+        c->elements[index].nob_pos = pr;
+        c->elements[index].last_child = (uint32_t)slot + 1;
+    }
+    return changed ? true : false;
+}
+
+const FuseFieldRun *
+fuse_canvas_fields(FuseCanvas c, size_t *count)
+{
+    if (count)
+        *count = c ? c->field_n : 0;
+    if (!c)
+        return NULL;
+    return c->fields;
+}
+
+bool
+fuse_textbox_edit(FuseCanvas c, const char *name, char *buf, int cap, int *caret,
+    int (*allow)(unsigned char ch, void *user), void *user)
+{
+    uint32_t id;
+
+    FASSERT(c, "null canvas");
+    FASSERT(name, "null textbox name");
+    if (!c || !name || !name[0] || !buf || !caret || cap < 2)
+        return false;
+    id = fuse_internal_scoped_id(c, fuse_internal_hash_str(name));
+    if (id == 0 || id != c->focus_frame)
+        return false;
+    return fuse_textbox_apply(c, buf, cap, caret, allow, user) ? true : false;
 }
 
 static float
@@ -2330,6 +2863,58 @@ fuse_rect(FuseCanvas c, float x, float y, float w, float h, uint32_t color)
     if (!fuse_internal_ok(c))
         return;
     c->elements[index].color = color;
+}
+
+int
+fuse_radial_pick(float cx, float cy, float inner, float outer, int count, float px, float py)
+{
+    float dx, dy, radius, angle, span;
+    int slice;
+
+    if (count < 1 || count > 8 || !isfinite(cx) || !isfinite(cy) ||
+        !isfinite(inner) || !isfinite(outer) || !isfinite(px) || !isfinite(py) ||
+        inner < 0.0f || outer <= inner)
+        return -1;
+    dx = px - cx;
+    dy = py - cy;
+    radius = hypotf(dx, dy);
+    if (!(radius > inner && radius < outer))
+        return -1;
+    span = 2.0f * FUSE_PI / count;
+    angle = atan2f(dy, dx) + span * 0.5f;
+    if (angle < 0.0f)
+        angle += 2.0f * FUSE_PI;
+    slice = (int)(angle / span);
+    return slice >= count ? 0 : slice;
+}
+
+int
+fuse_radial(FuseCanvas c, float cx, float cy, float inner, float outer, int count,
+    float px, float py, uint32_t idle, uint32_t hovered)
+{
+    uint32_t index;
+    FuseElement *el;
+    int pick = fuse_radial_pick(cx, cy, inner, outer, count, px, py);
+
+    if (!fuse_internal_ok(c) || count < 1 || count > 8 ||
+        !isfinite(cx) || !isfinite(cy) || !isfinite(inner) || !isfinite(outer) ||
+        inner < 0.0f || outer <= inner)
+        return -1;
+    index = fuse_internal_open_maybe_anon(c, cx - outer, cy - outer,
+        outer * 2.0f, outer * 2.0f, FUSE_EL_RADIAL);
+    if (!fuse_internal_ok(c))
+        return -1;
+    el = &c->elements[index];
+    /* Preserve unsnapped geometry. These slots are unused by this leaf:
+     * nob_pos = inner radius, scroll = hover, child_count = slice count. */
+    el->x = cx - outer; el->y = cy - outer;
+    el->w = el->h = outer * 2.0f;
+    el->nob_pos = inner;
+    el->scroll = (float)pick;
+    el->child_count = (uint32_t)count;
+    el->color = idle;
+    el->color_alt = hovered;
+    return pick;
 }
 
 void
@@ -2498,4 +3083,55 @@ fuse_button_text(FuseCanvas c, char *text, float x, float y, float w, float h, u
     fuse_text(c, (float)(((int)(w - tw)) / 2), (float)(((int)(h - 7.0f * s)) / 2), s, text, 0xFF000000u);
     c->screen_count--;
     return clicked;
+}
+
+void
+fuse_canvas_layer(FuseCanvas c, int16_t layer)
+{
+	if (!c) return;
+	if (c->layer_count && c->layer_elements[c->layer_count - 1] == c->element_count) {
+		c->layers[c->layer_count - 1] = layer;
+		return;
+	}
+	if (c->layer_count == 64) {
+		fuse_internal_fail(c, FUSE_ERR_OVERFLOW);
+		return;
+	}
+	c->layer_elements[c->layer_count] = c->element_count;
+	c->layers[c->layer_count++] = layer;
+}
+
+void
+fuse_window_begin(FuseCanvas c, char *name, float x, float y, float w, float h, const FuseClass *cls)
+{
+	fuse_id(c, name);
+	fuse_div_begin(c, x, y, w, h, cls);
+}
+
+void
+fuse_window_begin_scroll(FuseCanvas c, float x, float y, float w, float h, const FuseClass *cls, float *scroll)
+{
+	fuse_div_begin_scroll(c, x, y, w, h, cls, scroll);
+}
+
+void
+fuse_window_end(FuseCanvas c)
+{
+	fuse_div_end(c);
+}
+
+void
+fuse_canvas_input_enabled(FuseCanvas c, int enabled)
+{
+	if (c) c->input_enabled = enabled != 0;
+}
+
+int16_t
+fuse_internal_layer(FuseCanvas c, uint32_t index)
+{
+	uint32_t i;
+	int16_t layer = 0;
+	for (i = 0; i < c->layer_count && c->layer_elements[i] <= index; i++)
+		layer = c->layers[i];
+	return layer;
 }

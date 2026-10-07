@@ -1,12 +1,10 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "../Peak/peak.h"
-#include "../Rend/rend.h"
 #include "../Cast/cast.h"
 #include "../Cast/cast.c"
 #define PEAK_IMPLEMENTATION
 #include "../Peak/peak.h"
-#include "../Rend/rend.c"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -206,8 +204,6 @@ typedef struct {
 	int fitted;
 	uint32_t *pix;
 	uint32_t pw, ph;
-	RendTexture canvas;
-	int have_tex;
 	int dragging;
 	int drag_node;
 	float drag_mx, drag_my;
@@ -253,7 +249,6 @@ static void draw_line(App *app, int x0, int y0, int x1, int y1, uint32_t c);
 static void draw_ortho(App *app, float x0, float y0, float x1, float y1, uint32_t c);
 static void draw_char(App *app, int x, int y, char ch, uint32_t c, int scale);
 static void draw_text(App *app, int x, int y, const char *s, uint32_t c, int scale);
-static int ensure_canvas(App *app, RendRenderer renderer, uint32_t w, uint32_t h);
 static void draw_graph(App *app, float W, float H, const char *status);
 
 int
@@ -1067,39 +1062,6 @@ draw_text(App *app, int x, int y, const char *s, uint32_t c, int scale)
 	}
 }
 
-int
-ensure_canvas(App *app, RendRenderer renderer, uint32_t w, uint32_t h)
-{
-	size_t bytes;
-
-	if (w < 1)
-		w = 1;
-	if (h < 1)
-		h = 1;
-	if (app->have_tex && app->pw == w && app->ph == h && app->pix)
-		return 1;
-	if (app->have_tex) {
-		rend_texture_destroy(renderer, &app->canvas);
-		app->have_tex = 0;
-	}
-	free(app->pix);
-	app->pix = NULL;
-	bytes = (size_t)w * (size_t)h * 4u;
-	app->pix = malloc(bytes);
-	if (!app->pix)
-		return 0;
-	app->canvas = rend_texture_create(renderer, w, h, 1, 1, 1, REND_FORMAT_R8G8B8A8_UNORM);
-	if (!app->canvas.handle) {
-		free(app->pix);
-		app->pix = NULL;
-		return 0;
-	}
-	app->pw = w;
-	app->ph = h;
-	app->have_tex = 1;
-	return 1;
-}
-
 void
 draw_graph(App *app, float W, float H, const char *status)
 {
@@ -1183,9 +1145,8 @@ main(int argc, char **argv)
 {
 	App app;
 	PeakWindow win;
-	RendBindingInfo bind;
-	RendRenderer renderer;
-	RendTexture *color;
+	PeakCtx *peak_ctx;
+	size_t back_width, back_height;
 	PeakEvent ev;
 	int i, running, hit;
 	uint32_t width, height;
@@ -1225,29 +1186,20 @@ main(int argc, char **argv)
 	    app.nroots, app.nroots == 1 ? "" : "s", app.ntree, app.nfuncs);
 	PINFO("%s", status);
 
-	if (!peak_init()) {
-		PFATAL("peak_init failed");
+	if (!(peak_ctx = peak_init_legacy())) {
+		PFATAL("peak_init_legacy failed");
 		return 1;
 	}
 	width = 1280;
 	height = 720;
-	win = peak_window_open("codeanalizer", width, height, 0);
+	win = peak_window_open(peak_ctx, "codeanalizer", width, height, 0);
 	if (!win.running) {
 		PFATAL("window_open failed");
-		peak_quit();
+		peak_quit(peak_ctx);
 		return 1;
 	}
 	width = win.width;
 	height = win.height;
-
-	memset(&bind, 0, sizeof bind);
-	renderer = rend_renderer_create(&win, REND_BACKEND_CPU, NULL, true, &bind);
-	if (!renderer) {
-		PFATAL("renderer_create failed");
-		peak_window_close(&win);
-		peak_quit();
-		return 1;
-	}
 
 	mx = 0;
 	my = 0;
@@ -1322,29 +1274,17 @@ main(int argc, char **argv)
 			}
 		}
 
-		if (!ensure_canvas(&app, renderer, width, height)) {
-			PFATAL("canvas alloc failed");
-			break;
-		}
-		draw_graph(&app, (float)width, (float)height, status);
-		rend_texture_copy_data(renderer, &app.canvas, app.pix,
-		    (size_t)app.pw * (size_t)app.ph * 4u);
-
-		if (rend_renderer_frame_begin(renderer)) {
-			color = rend_renderer_color_target(renderer);
-			if (color)
-				rend_cmd_blit(renderer, &app.canvas, color, 0, 0, app.pw, app.ph, 0, 0, width, height);
-			rend_renderer_frame_end(renderer, NULL);
+		app.pix = peak_window_backbuffer(&win, &back_width, &back_height);
+		if (app.pix && back_width && back_height) {
+			app.pw = (uint32_t)back_width;
+			app.ph = (uint32_t)back_height;
+			draw_graph(&app, (float)app.pw, (float)app.ph, status);
+			peak_window_present(&win);
 		}
 		peak_wait(&win, NULL, 0, 16);
 	}
 
-	if (app.have_tex)
-		rend_texture_destroy(renderer, &app.canvas);
-	free(app.pix);
-	rend_renderer_destroy(renderer);
 	peak_window_close(&win);
-	peak_quit();
-	rend_quit();
+	peak_quit(peak_ctx);
 	return 0;
 }

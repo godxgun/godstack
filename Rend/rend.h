@@ -6,21 +6,22 @@
  * DESCRIPTION:
  * - Send data to the GPU.
  * - Peak owns the window.
- * - Caller owns SPIR-V or C entries.
+ * - Caller owns SPIR-V shader bytes.
  *
  * SURVIVOR:
- * - One header. Backends rend_vk14.c and rend_cpu.c. Dispatch is RendVTable in rend.c.
- * - Vulkan is compile-optional. CPU is not. AUTO falls back. No OS window APIs here.
- * - Do not delete CPU to tidy Vulkan. Do not put PEAK_WIN32 / X11 in the command path.
+ * - One header. Vulkan backend rend_vk14.c. Dispatch is RendVTable in rend.c.
+ * - Define PEAK_VULKAN to enable rendering. AUTO selects Vulkan; no software fallback.
+ * - No OS window APIs in the command path.
  *
- * SUPPORTED BACKENDS:
- * - Vulkan 1.4
- * - CPU Software Raster
+ * BACKEND STATUS:
+ * - Vulkan 1.4 supported
+ * - DirectX 12 and Metal 4 are unavailable stubs; explicit selection fails.
  *
  * MACRO FLAGS:
- * - PEAK_VULKAN              Vulkan 1.4. peak.h sets WSI. Not auto-defined. Omit for CPU-only.
+ * - PEAK_VULKAN              Vulkan 1.4. peak.h sets WSI. Required to create renderers.
  * - REND_DEBUG               Asserts and Peak debug log.
- * - REND_DEBUG_MEMORY        Debug malloc (internal).
+ * - REND_DEBUG_MEMORY        Explicit Peak driver-domain host backing diagnostics.
+ *                            Without it, preserve consumer allocator macros.
  * - REND_VK_ARENA_GROW       Device-memory page grow (default 2). 1 = fit the alloc.
  * - REND_VK_ARENA_MIN        Device-memory page floor in bytes. 0 / unset = granularity*10.
  * - REND_VK_SWAPCHAIN_EXTRA  Images above minImageCount (default 2).
@@ -61,9 +62,9 @@
 #ifndef _REND_H_
 #define _REND_H_
 
-#define REND_MAJOR 1  // breaking API changes
-#define REND_MINOR 6  // non-breaking features
-#define REND_PATCH 11  // non-breaking patches and bug fixes
+#define REND_MAJOR 2  // breaking API changes
+#define REND_MINOR 0  // non-breaking features
+#define REND_PATCH 0  // non-breaking patches and bug fixes
 
 #ifndef REND_VK_ARENA_GROW
 #define REND_VK_ARENA_GROW 2
@@ -72,11 +73,11 @@
 #define REND_VK_SWAPCHAIN_EXTRA 2
 #endif
 
-/* Do not auto-define PEAK_VULKAN: a CPU-only compile must not pull WSI. */
+/* Do not auto-define PEAK_VULKAN: callers choose whether to compile Vulkan. */
 #if defined(REND_DEBUG) && !defined(P_LOG_DEBUG_ENABLED)
 #define P_LOG_DEBUG_ENABLED 1
 #endif
-#include "peak.h"
+#include "../Peak/peak.h"
 
 typedef struct rend_renderer_t* RendRenderer; // renderer target handle
 typedef struct rend_pipeline_t* RendPipeline; // represents a baked shader + gpu pipeline state (blend mode, depth, vertex format)
@@ -88,7 +89,6 @@ typedef struct RendTexture RendTexture;
 
 /* Typedef enums as 16 bit unsigned integers */
 typedef uint16_t RendBackendType;
-typedef uint16_t RendLifetime;
 typedef uint16_t RendFormat;
 typedef uint16_t RendTopology;
 typedef uint16_t RendCullMode;
@@ -171,8 +171,7 @@ extern void         rend_texture_copy_buffer(RendRenderer renderer, RendTexture 
 extern void         rend_texture_read(RendRenderer renderer, RendTexture *texture, void *dst, size_t size); // Copy texture to host. Tight-packed texels. Outside a frame and pass. MUST be width x height x sizeof format.
 
 /* Create, Configure, and Destroy Rendering Pipelines */
-extern RendPipeline rend_pipeline_create_graphics_spirv(RendRenderer renderer, uint8_t *vertex_bytes, size_t vertex_size, uint8_t *frag_bytes, size_t frag_size, const RendVertexBinding *vertex_bindings, uint32_t vertex_binding_count, const RendVertexAttributes *vertex_attributes, uint32_t vertex_attribute_count, const RendPushConstantInfo *push_constants, uint32_t push_constant_count,  RendPolygonMode polygon_mode, RendCullMode cull_mode, RendTopology topology, RendFormat color_format, bool depth_test_enable); // Create a pipeline for a renderer using a configuration handle. CPU returns NULL.
-extern RendPipeline rend_pipeline_create_graphics_c(RendRenderer renderer, void *vertex, size_t vertex_size, void *frag, size_t frag_size, const RendVertexBinding *vertex_bindings, uint32_t vertex_binding_count, const RendVertexAttributes *vertex_attributes, uint32_t vertex_attribute_count, const RendPushConstantInfo *push_constants, uint32_t push_constant_count,  RendPolygonMode polygon_mode, RendCullMode cull_mode, RendTopology topology, RendFormat color_format, bool depth_test_enable); // CPU raster. size 0: RendCpuVertFn / RendCpuFragFn. size >0: C bytes (no JIT; NULL).
+extern RendPipeline rend_pipeline_create_graphics_spirv(RendRenderer renderer, uint8_t *vertex_bytes, size_t vertex_size, uint8_t *frag_bytes, size_t frag_size, const RendVertexBinding *vertex_bindings, uint32_t vertex_binding_count, const RendVertexAttributes *vertex_attributes, uint32_t vertex_attribute_count, const RendPushConstantInfo *push_constants, uint32_t push_constant_count,  RendPolygonMode polygon_mode, RendCullMode cull_mode, RendTopology topology, RendFormat color_format, bool depth_test_enable); // Create a pipeline for a renderer using a configuration handle.
 extern RendPipeline rend_pipeline_create_graphics_bindless_spirv(RendRenderer renderer, uint8_t *vertex_bytes, size_t vertex_size, uint8_t *frag_bytes, size_t frag_size, const RendPushConstantInfo *push_constants, uint32_t push_constant_count,  RendPolygonMode polygon_mode, RendCullMode cull_mode, RendTopology topology, RendFormat color_format, bool depth_test_enable); // Create a pipeline for a renderer using a configuration handle.
 extern RendPipeline rend_pipeline_create_meshlet_spirv(RendRenderer renderer, uint8_t *meshlet_bytes, size_t meshlet_size, uint8_t *frag_bytes, size_t frag_size, const RendPushConstantInfo *push_constants, uint32_t push_constant_count, RendPolygonMode polygon_mode, RendCullMode cull_mode, bool depth_test_enable); // Creates a meshlet rendering pipeline.
 extern RendPipeline rend_pipeline_create_compute_spirv(RendRenderer renderer, const uint8_t *compute_bytes, size_t compute_size, const RendPushConstantInfo *push_constants, uint32_t push_constant_count); // Create a compute pipeline.
@@ -180,6 +179,11 @@ extern void         rend_pipeline_set_blend(RendPipeline pipeline, bool blend);
 
 /* Commands */
 extern void rend_cmd_render_begin(RendRenderer renderer, float r, float g, float b, float a); // Pass on color_target(). Clear to RGBA.
+/* Resume the acquired default color after a completed pass/blit in this frame.
+ * Inside a frame, outside a pass. Loads color, clears depth, transitions the
+ * color target from transfer destination when needed. End with render_end.
+ * Never loads a previous frame or a target from a failed acquire. */
+extern void rend_cmd_render_begin_preserve(RendRenderer renderer);
 extern void rend_cmd_render_begin_texture(RendRenderer renderer, RendTexture *texture); // Pass on a caller texture (not the borrowed color_target unless you mean to).
 extern void rend_cmd_render_end(RendRenderer renderer); // End render pass.
 extern void rend_cmd_render_end_texture(RendRenderer renderer, RendTexture *texture); // End pass on a caller texture. Ready to sample.
@@ -195,14 +199,10 @@ extern void rend_cmd_blit(RendRenderer renderer, RendTexture *src, RendTexture *
 
 enum RendBackendType_t {
     REND_BACKEND_AUTO = 0, 
-    REND_BACKEND_VULKAN_14, 
-    REND_BACKEND_CPU,
+    REND_BACKEND_VULKAN_14,
+	REND_BACKEND_DIRECTX_12, /* Unavailable stub; creation returns NULL. */
+	REND_BACKEND_METAL_4,    /* Unavailable stub; creation returns NULL. */
     REND_BACKEND_COUNT 
-};
-
-enum RendLifetime_t {
-    REND_LIFETIME_FRAME = 0,
-    REND_LIFETIME_PERMANENT
 };
 
 enum RendTopology_t {
@@ -263,34 +263,6 @@ enum RendFormat_t {
 
     REND_FORMAT_COUNT
 };
-
-#define REND_CPU_VARYING_FLOATS 12
-#define REND_CPU_VARYING_FLATS 4
-
-typedef struct RendCpuVarying {
-    float position[4];
-    float data[REND_CPU_VARYING_FLOATS];
-    uint32_t flat[REND_CPU_VARYING_FLATS];
-} RendCpuVarying;
-
-typedef struct RendCpuVertArgs {
-    uint32_t vertex_id;
-    uint32_t instance_id;
-    const void *attributes; /* location * 16 bytes */
-    const void *push;
-} RendCpuVertArgs;
-
-typedef float (*RendCpuSampleFn)(uint32_t binding, float u, float v, void *sample_ctx);
-
-typedef struct RendCpuFragArgs {
-    const RendCpuVarying *v;
-    const void *push;
-    RendCpuSampleFn sample;
-    void *sample_ctx;
-} RendCpuFragArgs;
-
-typedef void (*RendCpuVertFn)(RendCpuVarying *out, const RendCpuVertArgs *in);
-typedef void (*RendCpuFragFn)(float rgba[4], const RendCpuFragArgs *in);
 
 static size_t rend_format_size[REND_FORMAT_COUNT] = {
     [REND_FORMAT_UNDEFINED]            = 0,
@@ -378,6 +350,7 @@ enum RendBufferType_t {
  * 1.0.0 - @vasco -  finished API release
  * 1.0.1 - @vasco - render pass that targets textures 
  * 1.0.2 - @vasco - Peak instead of Podium
+ * 1.0.4 - preserving default-color pass after transfer blits
  * 1.0.3 - @vasco - frame_begin no longer sticks in_frame or burns timeline on OUT_OF_DATE
  * 1.0.4 - @vasco - vulkan backend collapsed; renderer create fails cleanly
  * 1.0.5 - @vasco - vulkan host linear arena
@@ -408,6 +381,7 @@ enum RendBufferType_t {
  * 1.6.9 - @vasco - LINEAR mag/min sampler; CLAMP_TO_EDGE
  * 1.6.10 - @vasco - texture_destroy uses ctx without REND_DEBUG
  * 1.6.11 - @vasco - device score: vulkan 1.3 floor, implicit transfer queues (AMD)
+ * 2.0.0 - Vulkan default host allocator; reclaimable depth memory; remove CPU backend and unused frame lifetime
  */
 
 /*

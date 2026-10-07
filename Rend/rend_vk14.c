@@ -1,6 +1,6 @@
 /*
  * Vulkan 1.4 backend. Per-renderer context is RendVk14Context.
- * Instance, allocator, device, and version-agnostic Vulkan helpers: rend_vk_internal.c.
+ * Instance, device, and version-agnostic Vulkan helpers: rend_vk_internal.c.
  *
  * * 1.0.3 - @vasco - backend functions take RendContextHandle
  * * 1.0.7 - @vasco - resize: oldSwapchain recreate, surface extent, present OUT_OF_DATE
@@ -31,7 +31,6 @@
 #define REND_MAX_FRAMES_IN_FLIGHT 4 /* quadruple buffering! */
 
 #define REND_VK_MAX_PIPELINES 100
-#define REND_VK_STALE_DEPTH_MAX 8
 
 typedef struct {
 	VkSwapchainKHR handle;
@@ -61,7 +60,7 @@ typedef struct RendVkPipeline {
 
 /*
  * per renderer context, separate from global vk_ variables
- * such as the instance, the allocator, the devices etc...
+ * such as the instance and device.
  */
 typedef struct RendVk14Context {
 	PeakWindow *window;
@@ -74,8 +73,7 @@ typedef struct RendVk14Context {
 	VkCommandPool upload_command_pool;
 	VkCommandPool graphics_command_pool;
 
-	RendVkArenaAllocator arena_persistent; /* magical arena allocator for every type of memory */
-	RendVkArenaAllocator arena_frame;
+	RendVkArenaAllocator arena_persistent; /* renderer-lifetime buffer and color memory */
 
 	uint64_t frame;
 	uint64_t frame_index;
@@ -92,8 +90,9 @@ typedef struct RendVk14Context {
 
 	RendVkImage swap_depth;
 	RendVkImage tex_depth;
-	RendVkImage stale_depth[REND_VK_STALE_DEPTH_MAX];
+	RendVkImage *stale_depth; /* replaced during recording; retire after device idle */
 	uint32_t stale_depth_count;
+	uint32_t stale_depth_capacity;
 
 	bool vsync;
 	bool in_frame;
@@ -169,18 +168,10 @@ rend_vk14_renderer_create(PeakWindow *window, RendBindingInfo *bind_info, bool v
 		}
 	}
 
-	/* we must create arena before swapchain */
 	ctx->arena_persistent = rend_vk_arena_create(
 			vk_device.logical_device,
 			vk_device.physical_device,
-			vk_device.properties.limits,
-			vk_allocator);
-
-	ctx->arena_frame = rend_vk_arena_create(
-			vk_device.logical_device,
-			vk_device.physical_device,
-			vk_device.properties.limits,
-			vk_allocator);
+			vk_device.properties.limits);
 
 	/* create swapchain */
 	if (!rend_vk14_swapchain_create(ctx, &ctx->swapchain, VK_NULL_HANDLE)) {
@@ -241,14 +232,7 @@ rend_vk14_renderer_create_offscreen(uint32_t width, uint32_t height, RendFormat 
 	ctx->arena_persistent = rend_vk_arena_create(
 			vk_device.logical_device,
 			vk_device.physical_device,
-			vk_device.properties.limits,
-			vk_allocator);
-
-	ctx->arena_frame = rend_vk_arena_create(
-			vk_device.logical_device,
-			vk_device.physical_device,
-			vk_device.properties.limits,
-			vk_allocator);
+			vk_device.properties.limits);
 
 	if (!rend_vk14_offscreen_create(ctx, width, height, format)) {
 		PERROR("Failed to create offscreen target!");
@@ -502,7 +486,6 @@ rend_vk14_renderer_destroy(RendContextHandle handle)
 	}
 
 	rend_vk_arena_destroy(&ctx->arena_persistent);
-	rend_vk_arena_destroy(&ctx->arena_frame);
 	rend_vk14_color_targets_free(ctx);
 
 	if (ctx->offscreen) {
@@ -846,8 +829,6 @@ rend_vk14_renderer_frame_end(RendContextHandle handle, float *delta)
 		ctx->has_frame_time = true;
 		*delta = dt;
 	}
-
-	rend_vk_arena_clear_all(&ctx->arena_frame);
 }
 
 static inline void
@@ -930,6 +911,23 @@ rend_vk14_renderer_render_pass_begin(RendContextHandle handle, float r, float g,
 }
 
 void
+rend_vk14_renderer_render_pass_begin_preserve(RendContextHandle handle)
+{
+	RendVk14Context *ctx = (RendVk14Context *)handle;
+	RendTexture *color = rend_vk14_color_target_at(ctx);
+
+	RASSERT(ctx->in_frame && color, "No acquired color target.");
+	if (!ctx->in_frame || !color)
+		return;
+	rend_vk_texture_transition_layout(handle, ctx->frame_resources[ctx->frame_index].command_buffer,
+		color, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	rend_vk14_depth_barrier_img(&ctx->swap_depth, ctx->frame_resources[ctx->frame_index].command_buffer);
+	rend_vk14__renderer_render_pass_begin_internal(handle, 0, 0, 0, 0,
+		color->view, (uint64_t)ctx->swap_depth.view, 0, 0,
+		color->width, color->height, VK_ATTACHMENT_LOAD_OP_LOAD);
+}
+
+void
 rend_vk14_renderer_render_pass_begin_texture(RendContextHandle handle, RendTexture *texture)
 {
 	RendVk14Context *ctx = (RendVk14Context *)handle;
@@ -1002,7 +1000,7 @@ rend_vk14_descriptor_write_buffer(RendContextHandle handle, RendBuffer ubo, uint
 }
 
 RendBuffer
-rend_vk14_buffer_create_lifetime(RendContextHandle handle, size_t size, RendBufferType type, bool gpu, int lifetime)
+rend_vk14_buffer_create(RendContextHandle handle, size_t size, RendBufferType type, bool gpu)
 {
 	RendVk14Context *ctx = (RendVk14Context *)handle;
 	int32_t index = (gpu) ? vk_device.device_index : vk_device.host_index;
@@ -1036,8 +1034,7 @@ rend_vk14_buffer_create_lifetime(RendContextHandle handle, size_t size, RendBuff
 
 	RASSERT((mem_reqs.memoryTypeBits & (1u << index)) && "Buffer incompatible with chosen memory type!");
 
-	RendVkArenaAllocator *arena = (lifetime == REND_LIFETIME_FRAME) ? &ctx->arena_frame : &ctx->arena_persistent;
-	RendMemory vk_memory = rend_vk_arena_alloc(arena, mem_reqs.size, mem_reqs.alignment, index);
+	RendMemory vk_memory = rend_vk_arena_alloc(&ctx->arena_persistent, mem_reqs.size, mem_reqs.alignment, index);
 
 	if (vkBindBufferMemory(vk_device.logical_device, (VkBuffer)buffer.handle, (VkDeviceMemory)vk_memory.device_memory, vk_memory.offset) != VK_SUCCESS) {
 		REND__CRASH("Failed to bind VkBuffer memory!");
@@ -1858,9 +1855,9 @@ static bool
 rend_vk14_depth_ensure_img(RendVk14Context *ctx, RendVkImage *slot, uint32_t w, uint32_t h)
 {
 	RendVkImage img;
-	RendMemory mem;
+	VkMemoryDedicatedAllocateInfo dedicated;
+	VkMemoryAllocateInfo alloc;
 	uint32_t mem_type;
-	uint32_t heap;
 
 	RASSERT(ctx && slot && "No context provided.");
 	if (w < 1)
@@ -1869,6 +1866,17 @@ rend_vk14_depth_ensure_img(RendVk14Context *ctx, RendVkImage *slot, uint32_t w, 
 		h = 1;
 	if (slot->handle && slot->width == w && slot->height == h)
 		return true;
+
+	/* Recorded commands can still reference every previous depth image. */
+	if (slot->handle && ctx->in_frame && ctx->stale_depth_count == ctx->stale_depth_capacity) {
+		uint32_t capacity = ctx->stale_depth_capacity ? ctx->stale_depth_capacity * 2 : 8;
+		RendVkImage *stale = rrealloc(ctx->stale_depth, capacity * sizeof(*stale));
+
+		if (!stale)
+			return false;
+		ctx->stale_depth = stale;
+		ctx->stale_depth_capacity = capacity;
+	}
 
 	if (!rend_vk_device_detect_depth_format(&vk_device)) {
 		vk_device.depth_format = VK_FORMAT_UNDEFINED;
@@ -1892,21 +1900,35 @@ rend_vk14_depth_ensure_img(RendVk14Context *ctx, RendVkImage *slot, uint32_t w, 
 	}
 
 	mem_type = rend_vk_image_required_memory_type(&img);
-	heap = rend_vk_get_heap_index(mem_type, vk_device.device_index);
-	mem = rend_vk_arena_alloc(&ctx->arena_persistent, img.requirements.size, img.requirements.alignment, heap);
-	rend_vk_image_bind_memory(&img, &mem);
+	dedicated = (VkMemoryDedicatedAllocateInfo) {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO,
+		.image = img.handle,
+	};
+	alloc = (VkMemoryAllocateInfo) {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+		.pNext = &dedicated,
+		.allocationSize = img.requirements.size,
+		.memoryTypeIndex = rend_vk_get_heap_index(mem_type, vk_device.device_index),
+	};
+	if (vkAllocateMemory(vk_device.logical_device, &alloc, vk_allocator, &img.owned_memory) != VK_SUCCESS) {
+		PERROR("Failed to allocate depth memory.");
+		goto fail;
+	}
+	if (vkBindImageMemory(vk_device.logical_device, img.handle, img.owned_memory, 0) != VK_SUCCESS) {
+		PERROR("Failed to bind depth memory.");
+		goto fail;
+	}
 	rend_vk_image_view_create(&img, VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_DEPTH_BIT);
 	if (!img.view) {
 		PERROR("Failed to create depth view.");
-		rend_vk_image_destroy(&img);
-		return false;
+		goto fail;
 	}
 
 	if (slot->handle) {
-		if (ctx->stale_depth_count < REND_VK_STALE_DEPTH_MAX) {
+		if (ctx->in_frame) {
 			ctx->stale_depth[ctx->stale_depth_count++] = *slot;
 		} else {
-			PERROR("Depth image grow limit; destroying in-use depth.");
+			vkDeviceWaitIdle(vk_device.logical_device);
 			rend_vk_image_destroy(slot);
 		}
 	}
@@ -1915,6 +1937,10 @@ rend_vk14_depth_ensure_img(RendVk14Context *ctx, RendVkImage *slot, uint32_t w, 
 	if (ctx->in_frame)
 		rend_vk14_depth_barrier_img(slot, ctx->frame_resources[ctx->frame_index].command_buffer);
 	return true;
+
+fail:
+	rend_vk_image_destroy(&img);
+	return false;
 }
 
 static void
@@ -1925,6 +1951,9 @@ rend_vk14_depth_destroy(RendVk14Context *ctx)
 	rend_vk14_depth_flush_stale(ctx);
 	rend_vk_image_destroy(&ctx->swap_depth);
 	rend_vk_image_destroy(&ctx->tex_depth);
+	rfree(ctx->stale_depth);
+	ctx->stale_depth = NULL;
+	ctx->stale_depth_capacity = 0;
 }
 
 static VkExtent2D

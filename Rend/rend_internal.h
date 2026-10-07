@@ -13,14 +13,16 @@
 #define RASSERT(...) ((void)0)
 #endif
 
+/* Explicit opt-in preserves custom allocators in other consumers.
+ * These calls bypass global malloc/free macros, hence exactly one event. */
 #if defined(REND_DEBUG_MEMORY)
-#define rmalloc(size)  peak_debug_malloc_impl((size), __FILE__, __LINE__, __func__)
-#define rrealloc(ptr, size) peak_debug_realloc_impl((ptr), (size), __FILE__, __LINE__, __func__)
-#define rfree(ptr)     peak_debug_free_impl((ptr), __FILE__, __LINE__, __func__)
+#define rmalloc(size) peak_debug_malloc_domain_impl((size), PEAK_MEMORY_DRIVER, __FILE__, __LINE__, __func__)
+#define rrealloc(ptr, size) peak_debug_realloc_domain_impl((ptr), (size), PEAK_MEMORY_DRIVER, __FILE__, __LINE__, __func__)
+#define rfree(ptr) peak_debug_free_domain_impl((ptr), PEAK_MEMORY_DRIVER, __FILE__, __LINE__, __func__)
 #else
 #define rmalloc malloc
 #define rrealloc(ptr, size) realloc((ptr), (size))
-#define rfree   free
+#define rfree free
 #endif
 
 #define REND_TODO \
@@ -45,7 +47,6 @@ enum RendPipelineType {
     REND__PIPELINE_GRAPHICS,
     REND__PIPELINE_COMPUTE,
     REND__PIPELINE_MESH,
-    REND__PIPELINE_GRAPHICS_C,
 };
 
 typedef struct rend_pipeline_config_t {
@@ -81,7 +82,7 @@ typedef struct {
     void (*descriptor_write_buffer)(RendContextHandle handle, RendBuffer ubo, uint32_t binding, uint32_t slot, uint32_t offset, uint32_t size, bool is_ubo);
     void (*descriptor_write_texture)(RendContextHandle handle, RendTexture *texture, uint32_t binding, uint32_t slot);
 
-    RendBuffer   (*buffer_create_lifetime)(RendContextHandle handle, size_t size, RendBufferType type, bool gpu, int lifetime);
+    RendBuffer   (*buffer_create)(RendContextHandle handle, size_t size, RendBufferType type, bool gpu);
     void         (*buffer_destroy)(RendBuffer *buffer);
     void         (*buffer_copy)(RendContextHandle handle, RendBuffer *dest, size_t dest_offset, RendBuffer *src, size_t src_offset, size_t bytes);
     
@@ -104,6 +105,7 @@ typedef struct {
     void (*pipeline_set_blend)(RendPipeline, bool);
 
     void (*renderer_render_pass_begin)(RendContextHandle handle, float r, float g, float b, float a);
+    void (*renderer_render_pass_begin_preserve)(RendContextHandle);
     void (*renderer_render_pass_begin_texture)(RendContextHandle, RendTexture*);
     void (*renderer_render_pass_end)(RendContextHandle handle);
     void (*renderer_render_pass_end_texture)(RendContextHandle handle, RendTexture*);

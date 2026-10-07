@@ -12,6 +12,8 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+static PeakCtx *peak_demo_ctx;
+
 static uint8_t *
 load_spv(const char *a, const char *b, unsigned long *size)
 {
@@ -34,12 +36,12 @@ int main(int argc, char **argv) {
     headless = headless_parse(argc, argv, &frames, &ppm);
 
     if (!headless) {
-        if (!peak_init()) {
+        if (!(peak_demo_ctx = peak_init_legacy())) {
             PFATAL("Failed to init Peak!");
             return 1;
         }
 
-        win = peak_window_open("teapot", width, height, 0);
+        win = peak_window_open(peak_demo_ctx, "teapot", width, height, 0);
         if (!win.running) {
             PFATAL("Failed to open a window!");
             return 1;
@@ -61,7 +63,7 @@ int main(int argc, char **argv) {
         PFATAL("Failed to create renderer!");
         if (!headless) {
             peak_window_close(&win);
-            peak_quit();
+            peak_quit(peak_demo_ctx);
         }
         return 1;
     }
@@ -267,7 +269,7 @@ int main(int argc, char **argv) {
 
     if (!headless) {
         peak_window_close(&win);
-        peak_quit();
+        peak_quit(peak_demo_ctx);
     }
     rend_quit();
 

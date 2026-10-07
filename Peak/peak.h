@@ -30,7 +30,7 @@
  * - Linux: X11 and Wayland development headers; link -ldl, and -pthread
  *   unless PEAK_NO_AUDIO. X11, Wayland, xkbcommon, and PulseAudio libraries
  *   are loaded at runtime; no direct link to those libraries is required.
- *   Used xdg-shell protocol metadata is bundled below.
+ *   Used Wayland protocol metadata is bundled below.
  * - Win32: Windows SDK; user32, gdi32, winmm are loaded at runtime.
  * - macOS: compile the implementation as Objective-C; link AppKit,
  *   AudioToolbox, CoreGraphics, and QuartzCore frameworks.
@@ -47,11 +47,14 @@
  * MACRO FLAGS (you define):
  * - PEAK_IMPLEMENTATION emit implementation in exactly one translation unit.
  * - PEAK_VULKAN         Vulkan WSI. Sets VK_USE_PLATFORM_*.
- * - PEAK_NO_AUDIO       Linux audio off. start returns 0. no pthread / pulse.
+ * - PEAK_NO_AUDIO       audio off. start returns 0. no pthread / pulse.
+ * - PEAK_NO_GAMEPAD     Linux joystick polling off; window pointer input only.
  * - P_LOG_WARN_ENABLED  default 1. PWARN.
  * - P_LOG_INFO_ENABLED  default 1. PINFO.
  * - P_LOG_DEBUG_ENABLED default 0. PDEBUG.
  * - P_LOG_TRACE_ENABLED default 0. PTRACE.
+ * - PEAK_DEBUG_MEMORY_TRACE default 0. Per-request diagnostic output.
+ * - PEAK_MAX_ALLOCS      default 512 live entries per memory domain.
  *
  * DEFINED:
  * - PEAK_WEB                wasm / emscripten
@@ -128,13 +131,20 @@
  * 0.10.8 - @vasco - wayland compositor keymap via libxkbcommon (layout, group, compose)
  * 0.10.9 - @vasco - peak_env_get; SIGUSR1 wakeup fd
  * 0.10.10 - @vasco - peak_pipe_capacity / peak_pipe_set_capacity
- * 1.0.0 - @vasco - self-contained peak.h; opt-in PEAK_IMPLEMENTATION
+ * 0.11.2 - @vasco - focus/expose events; set_class; set_opacity
+ * 0.11.3 - @vasco - wayland fractional scale, cursor shape, primary, alpha, wheel
+ * 0.11.4 - @vasco - pty spawn keeps OPOST|ONLCR; child COLUMNS and LINES
+ * 0.11.5 - @vasco - Delete is treated as a key
+ * 0.11.6 - @vasco - aligned_alloc and aligned_free are now macros
+ * 0.12.0 - @vasco - opaque runtime context; bounded caller-backed Linux Vulkan host storage
+ * 1.0.0 - @vasco - self-contained peak.h; opt-in PEAK_IMPLEMENTATION; no fast pipes
  */
 
 #include <assert.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <stdlib.h>
 
 #if !defined(__cplusplus)
 #if !( \
@@ -209,8 +219,25 @@ typedef int PEAK_HANDLE;
 // █ █ █ █  █
 // █ █ █ █  ██
 
-PEAK int  peak_init(void);
-PEAK void peak_quit(void);
+typedef struct PeakParams {
+    size_t max_windows;
+    size_t clipboard_capacity;
+    size_t transfer_capacity;
+} PeakParams;
+
+typedef struct PeakCtx PeakCtx;
+
+/* Linux Vulkan borrowed backing: 16-byte aligned, retained through quit.
+ * max_windows: 1..8; explicit byte capacities must be positive (NULL params:
+ * one window and 1 MiB defaults). Positive capacities are real limits; impossible
+ * sizing/conversion profiles return zero/NULL. One active runtime, lazy display.
+ * Failed initialization may modify backing. Quit(NULL), repeated/stale quit
+ * are harmless. A context pointer expires at quit; do not use it after reuse.
+ * Other hosts use explicit legacy initialization (not caller-backed). */
+PEAK size_t     peak_memory(const PeakParams *params);
+PEAK PeakCtx   *peak_place_in_memory_and_init(void *buf, size_t size, const PeakParams *params);
+PEAK PeakCtx   *peak_init_legacy(void);
+PEAK void       peak_quit(PeakCtx *ctx);
 
 //                  █
 // ███ █ █ ███ ███ ███
@@ -293,8 +320,8 @@ typedef enum {
 } PeakKeyCode;
 
 typedef enum {
-    PEAK_CLIP_CLIPBOARD = 0,
-    PEAK_CLIP_PRIMARY,
+    PEAK_CLIP_CLIPBOARD = 0, /* Ctrl-C/V, OSC 52 */
+    PEAK_CLIP_PRIMARY,       /* mouse select, middle paste */
 } PeakClip;
 
 typedef enum {
@@ -309,6 +336,8 @@ typedef enum {
     PEAK_EVENT_CLIP,
     PEAK_EVENT_TEXT,
     PEAK_EVENT_DROP,
+    PEAK_EVENT_FOCUS,
+    PEAK_EVENT_EXPOSE,
     PEAK_EVENT_LAST
 } PeakEventType;
 
@@ -336,6 +365,7 @@ typedef struct {
         struct { PeakClip which; size_t n; } clip;
         struct { size_t n; } text;
         struct { size_t n; } drop;
+        struct { int on; } focus; /* 1 gained, 0 lost */
     };
 } PeakEvent;
 
@@ -356,6 +386,8 @@ typedef struct peak_window_internal_t {
 } PeakWindowInternal;
 
 typedef struct PeakWindow {
+    PeakCtx *ctx;
+    uint64_t generation; /* private lifetime token; do not modify */
     PeakWindowInternal internal;
     int (*tick)(struct PeakWindow *win, void *userdata);
     void *userdata;
@@ -367,7 +399,7 @@ typedef struct PeakWindow {
     int running;
 } PeakWindow;
 
-PEAK PeakWindow peak_window_open(const char *name, uint32_t width, uint32_t height, uint32_t flags);
+PEAK PeakWindow peak_window_open(PeakCtx *ctx, const char *name, uint32_t width, uint32_t height, uint32_t flags);
 PEAK void       peak_window_close(PeakWindow *window);
 PEAK void       peak_window_run(PeakWindow *win, int (*peak_tick)(PeakWindow *win, void *userdata), void *userdata); /* hijack main loop (web) */
 PEAK int        peak_window_epoll(PeakWindow *win, PeakEvent *ev);
@@ -377,9 +409,13 @@ PEAK uint32_t  *peak_window_backbuffer(PeakWindow *win, size_t *width, size_t *h
 PEAK void       peak_window_clear(PeakWindow *win, float r, float g, float b, float a);
 PEAK void       peak_window_present(PeakWindow *win);
 PEAK void       peak_window_set_title(PeakWindow *win, const char *name);
+PEAK void       peak_window_set_class(PeakWindow *win, const char *name); /* WM_CLASS / app_id */
+PEAK void       peak_window_set_opacity(PeakWindow *win, uint8_t alpha); /* 0..255; no-op if the OS has none */
 PEAK void       peak_window_set_size(PeakWindow *win, uint32_t width, uint32_t height);
 PEAK void       peak_window_fullscreen(PeakWindow *win, int on);
 PEAK void       peak_window_cursor(PeakWindow *win, int on); /* 1 show, 0 hide */
+/* 0 default, 1 text, 2 hand, 3 wait, 4 crosshair, 5 not-allowed, 6 help */
+PEAK void       peak_window_cursor_shape(PeakWindow *win, int shape);
 PEAK void       peak_window_pointer_relative(PeakWindow *win, int on); /* 1 deltas, 0 absolute */
 PEAK float      peak_window_scale(PeakWindow *win); /* framebuffer / window; 1.0 if unknown */
 
@@ -415,8 +451,17 @@ PEAK void     peak_sleep_ns(int64_t ns);
 PEAK int   peak_file_exists(const char *path);
 PEAK void *peak_file_alloc(const char *path, unsigned long *buf_size);
 PEAK int   peak_file_write(const char *path, const void *buf, size_t n); /* create/overwrite */
-PEAK void *peak_aligned_alloc(size_t size, size_t alignment); /* power-of-two; 0 on fail */
-PEAK void  peak_aligned_free(void *p);
+
+/* Macros remain replaceable by backing-request instrumentation. The helper
+ * preserves C99 support and accepts sizes that are not alignment multiples. */
+PEAK void *peak_aligned_alloc_impl(size_t size, size_t alignment);
+#define peak_aligned_alloc(size, alignment) peak_aligned_alloc_impl((size), (alignment))
+#if defined(PEAK_WIN32)
+#include <malloc.h>
+#   define peak_aligned_free(p) do { if (p) _aligned_free(p); } while (0)
+#else
+#   define peak_aligned_free(p) do { if (p) free(p); } while (0)
+#endif
 
 PEAK int peak_pid(void);
 PEAK int peak_env_set(const char *name, const char *value); /* NULL unsets */
@@ -534,16 +579,20 @@ PEAK int          peak_vulkan_create_surface(PeakWindow *win, void *instance, co
 //          █
 //          █
 
-/* UTF-8 clipboard. Cap 1 MiB. win NULL: process-local slot. PRIMARY aliases
+/* Window-only methods validate their owned context. Linux additionally validates
+ * native allocation/slot lifetimes, rejecting copied handles after close/reuse.
+ * Other legacy hosts require exclusive window-handle ownership: do not retain
+ * copies after close or quit; stale-copy validation is not provided there.
+ * UTF-8 clipboard. Configured clipboard cap. win NULL: context-local slot. PRIMARY aliases
  * CLIPBOARD on Win32/macOS/web. request completes as PEAK_EVENT_CLIP; take copies. */
-PEAK int peak_clip_set(PeakWindow *win, PeakClip which, const char *utf8, size_t n);
-PEAK int peak_clip_request(PeakWindow *win, PeakClip which);
-PEAK int peak_clip_take(PeakWindow *win, char *dst, size_t cap, size_t *n);
+PEAK int peak_clip_set(PeakCtx *ctx, PeakWindow *win, PeakClip which, const char *utf8, size_t n);
+PEAK int peak_clip_request(PeakCtx *ctx, PeakWindow *win, PeakClip which);
+PEAK int peak_clip_take(PeakCtx *ctx, PeakWindow *win, char *dst, size_t cap, size_t *n);
 
-/* UTF-8 text / drop path. Cap 1 MiB. Completes as PEAK_EVENT_TEXT / DROP; take copies. */
-PEAK int peak_text_take(PeakWindow *win, char *dst, size_t cap, size_t *n);
-PEAK int peak_drop_take(PeakWindow *win, char *dst, size_t cap, size_t *n);
-PEAK int peak_drop_drag(PeakWindow *win, const char *utf8, size_t n); /* start OS drag; 0 if none */
+/* UTF-8 text / drop path. Configured transfer cap. Completes as PEAK_EVENT_TEXT / DROP; take copies. */
+PEAK int peak_text_take(PeakCtx *ctx, PeakWindow *win, char *dst, size_t cap, size_t *n);
+PEAK int peak_drop_take(PeakCtx *ctx, PeakWindow *win, char *dst, size_t cap, size_t *n);
+PEAK int peak_drop_drag(PeakCtx *ctx, PeakWindow *win, const char *utf8, size_t n); /* start OS drag; 0 if none */
 
 //   █     █
 //   █     █
@@ -604,9 +653,51 @@ typedef enum PeakLogLevel {
 
 PEAK void  peak_log_printf(PeakLogLevel level, const char *src, ...);
 PEAK void *peak_debug_malloc_impl(size_t size, const char *file, int line, const char *func);
+PEAK void *peak_debug_calloc_impl(size_t count, size_t size, const char *file, int line, const char *func);
 PEAK void  peak_debug_free_impl(void *ptr, const char *file, int line, const char *func);
 PEAK void *peak_debug_realloc_impl(void *ptr, size_t size, const char *file, int line, const char *func);
-PEAK void  peak_debug_memory_report(void);
+/* Direct instrumented backing calls only, not libc/DSO or Vulkan internals.
+ * Single-threaded diagnostics; counters persist for the process lifetime.
+ * Each domain has independent fixed live-pointer capacity (512 by default).
+ * Exhaustion leaves request counters valid, but live/release evidence incomplete;
+ * live_blocks/live_bytes/peak_bytes are not exact when tracking is incomplete.
+ * Unknown-pointer operations invalidate BOTH domains' accounting: original
+ * ownership is unknowable. Request counts remain useful but uncertified.
+ * Overflow saturates counters and clears accounting_complete. No reset API.
+ * PEAK_DEBUG_MEMORY_TRACE (default 0) enables per-request output.
+ */
+typedef enum {
+	PEAK_MEMORY_NON_DRIVER = 0,
+	PEAK_MEMORY_DRIVER,
+	PEAK_MEMORY_DOMAIN_COUNT
+} PeakMemoryDomain;
+
+typedef struct {
+	uint64_t allocation_requests; /* successful malloc/calloc/nonzero realloc */
+	uint64_t failed_requests;
+	uint64_t realloc_requests; /* includes NULL, failure and zero-size release */
+	uint64_t released_blocks;
+	uint64_t live_blocks;
+	uint64_t live_bytes;
+	uint64_t peak_bytes; /* requested live bytes, not allocator resident bytes */
+	uint64_t domain_errors;
+	uint64_t unknown_operations;
+	int tracking_complete;
+	int accounting_complete;
+} PeakMemoryStats;
+
+PEAK void *peak_debug_malloc_domain_impl(size_t size, PeakMemoryDomain domain, const char *file, int line, const char *func);
+PEAK void *peak_debug_calloc_domain_impl(size_t count, size_t size, PeakMemoryDomain domain, const char *file, int line, const char *func);
+PEAK void *peak_debug_realloc_domain_impl(void *ptr, size_t size, PeakMemoryDomain domain, const char *file, int line, const char *func);
+PEAK void  peak_debug_free_domain_impl(void *ptr, PeakMemoryDomain domain, const char *file, int line, const char *func);
+PEAK PeakMemoryStats peak_debug_memory_stats(PeakMemoryDomain domain);
+/* Prints both domains and leaks; returns successful NON_DRIVER requests.
+ * realloc(NULL,0) returns NULL without a backing request or release; every
+ * realloc wrapper call increments realloc_requests, including zero-size calls.
+ * Original tracked domain is authoritative on free/realloc despite mismatch.
+ * Unknown-pointer operations clear completeness; no release is invented.
+ */
+PEAK uint64_t peak_debug_memory_report(void);
 
 #endif /* PEAK_H */
 
@@ -614,6 +705,7 @@ PEAK void  peak_debug_memory_report(void);
 #if defined(PEAK_IMPLEMENTATION) && !defined(PEAK_IMPLEMENTATION_INCLUDED)
 #define PEAK_IMPLEMENTATION_INCLUDED
 
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -629,11 +721,25 @@ typedef struct {
     PeakEvent e[PEAK_Q];
 } PeakQ;
 
+static int
+peak_q_motion(PeakEvent ev)
+{
+    return ev.type == PEAK_EVENT_POINTER && ev.pointer.state == PEAK_POINTER_MOVED;
+}
+
 static void
 peak_q_push(PeakQ *q, PeakEvent ev)
 {
-    if (!q || q->n == PEAK_Q)
+    if (!q)
         return;
+    /* Motion floods must not eat a button release. A dropped release leaves
+     * a drag running, so a later click changes the selection. */
+    if (q->n == PEAK_Q) {
+        if (peak_q_motion(ev))
+            return;
+        q->h = (q->h + 1) % PEAK_Q;
+        q->n--;
+    }
     q->e[(q->h + q->n++) % PEAK_Q] = ev;
 }
 
@@ -650,24 +756,66 @@ peak_q_pop(PeakQ *q, PeakEvent *ev)
 #endif
 
 #define PEAK_CLIP_MAX (1024u * 1024u)
+#define PEAK_HOST_ALIGN 16u
 
-static struct {
-    char *own[2];
-    size_t own_n[2];
-    char *paste;
-    size_t paste_n;
-    int paste_ready;
-    PeakClip paste_which;
-} peak_clip;
+enum {
+    PEAK_STORE_OWN0, PEAK_STORE_OWN1, PEAK_STORE_PASTE,
+    PEAK_STORE_TEXT, PEAK_STORE_DROP, PEAK_STORE_INCR,
+    PEAK_STORE_CONVERT, PEAK_STORE_RECV0, PEAK_STORE_RECV1,
+    PEAK_STORE_DRAG, PEAK_STORE_COUNT
+};
 
-static struct {
-    char *text;
-    size_t text_n;
-    int text_ready;
-    char *drop;
-    size_t drop_n;
-    int drop_ready;
-} peak_xfer;
+/* Linux legacy windows retain lifetime metadata in their existing allocation. */
+typedef struct PeakLegacySlot {
+    struct PeakLegacySlot *next;
+    uint64_t generation;
+} PeakLegacySlot;
+#define PEAK_LEGACY_HEADER ((sizeof(PeakLegacySlot) + PEAK_HOST_ALIGN - 1) & ~(size_t)(PEAK_HOST_ALIGN - 1))
+
+struct PeakCtx {
+    PeakLegacySlot *legacy_windows;
+    struct {
+        unsigned char *base, *windows;
+        size_t size, stride, max_windows, clipboard_capacity, transfer_capacity;
+        char *store[PEAK_STORE_COUNT];
+        unsigned char recv_busy[2];
+    } host;
+    struct {
+        char *own[2];
+        size_t own_n[2];
+        char *paste;
+        size_t paste_n;
+        int paste_ready;
+        PeakClip paste_which;
+    } clip;
+    struct {
+        char *text;
+        size_t text_n;
+        int text_ready;
+        char *drop;
+        size_t drop_n;
+        int drop_ready;
+    } xfer;
+};
+static PeakCtx *peak_active;
+static PeakCtx peak_legacy;
+/* Internal dispatch is single-runtime; all public entry points validate first. */
+#define peak_host (peak_active->host)
+#define peak_clip (peak_active->clip)
+#define peak_xfer (peak_active->xfer)
+#define PEAK_TRANSFER_CAP (peak_active ? peak_host.transfer_capacity : PEAK_CLIP_MAX)
+#define PEAK_OWN_CAP (peak_active ? peak_host.clipboard_capacity : PEAK_CLIP_MAX)
+static int peak_initialized;
+static uint64_t peak_generation;
+static int peak_window_valid(PeakWindow *win);
+
+static size_t peak_host_window_size(void);
+#if defined(PEAK_LINUX)
+static void *peak_host_window_alloc(size_t size);
+static void peak_host_window_free(void *p);
+static void peak_host_transfer_free(void *p);
+static char *peak_host_recv_alloc(void);
+#endif
 
 static int
 peak_clip_own_store(PeakClip which, const char *utf8, size_t n)
@@ -678,7 +826,9 @@ peak_clip_own_store(PeakClip which, const char *utf8, size_t n)
         return 0;
     if (n && !utf8)
         return 0;
-    p = realloc(peak_clip.own[which], n ? n : 1);
+    if (n > PEAK_OWN_CAP)
+        n = PEAK_OWN_CAP;
+    p = peak_host.base ? peak_clip.own[which] : realloc(peak_clip.own[which], n ? n : 1);
     if (!p)
         return 0;
     if (n)
@@ -703,11 +853,11 @@ peak_clip_paste_store(PeakClip which, const char *utf8, size_t n)
 {
     char *p;
 
-    if (n > PEAK_CLIP_MAX)
-        n = PEAK_CLIP_MAX;
+    if (n > PEAK_TRANSFER_CAP)
+        n = PEAK_TRANSFER_CAP;
     if (n && !utf8)
         n = 0;
-    p = realloc(peak_clip.paste, n ? n : 1);
+    p = peak_host.base ? peak_clip.paste : realloc(peak_clip.paste, n ? n : 1);
     if (!p) {
         peak_clip.paste_ready = 0;
         return;
@@ -725,11 +875,11 @@ peak_text_store(const char *utf8, size_t n)
 {
     char *p;
 
-    if (n > PEAK_CLIP_MAX)
-        n = PEAK_CLIP_MAX;
+    if (n > PEAK_TRANSFER_CAP)
+        n = PEAK_TRANSFER_CAP;
     if (n && !utf8)
         n = 0;
-    p = realloc(peak_xfer.text, n ? n : 1);
+    p = peak_host.base ? peak_xfer.text : realloc(peak_xfer.text, n ? n : 1);
     if (!p) {
         peak_xfer.text_ready = 0;
         return;
@@ -746,11 +896,11 @@ peak_drop_store(const char *utf8, size_t n)
 {
     char *p;
 
-    if (n > PEAK_CLIP_MAX)
-        n = PEAK_CLIP_MAX;
+    if (n > PEAK_TRANSFER_CAP)
+        n = PEAK_TRANSFER_CAP;
     if (n && !utf8)
         n = 0;
-    p = realloc(peak_xfer.drop, n ? n : 1);
+    p = peak_host.base ? peak_xfer.drop : realloc(peak_xfer.drop, n ? n : 1);
     if (!p) {
         peak_xfer.drop_ready = 0;
         return;
@@ -763,7 +913,7 @@ peak_drop_store(const char *utf8, size_t n)
 }
 
 #if defined(PEAK_WIN32)
-/* BEGIN p_win32.c */
+/* Embedded p_win32.c. */
 /*
  * Win32 window, input, StretchDIBits present, and waveOut audio.
  * user32.dll, gdi32.dll, and winmm.dll are loaded at runtime.
@@ -939,6 +1089,7 @@ static void peak_platform_window_set_title(PeakWindowInternal *intern, const cha
 static void peak_platform_window_set_size(PeakWindowInternal *intern, uint32_t width, uint32_t height);
 static void peak_platform_window_fullscreen(PeakWindowInternal *intern, int on);
 static void peak_platform_window_cursor(PeakWindowInternal *intern, int on);
+static void peak_platform_window_cursor_shape(PeakWindowInternal *intern, int shape);
 static void peak_platform_window_pointer_relative(PeakWindowInternal *intern, int on);
 static float peak_platform_window_scale(PeakWindowInternal *intern);
 
@@ -1809,6 +1960,20 @@ peak_platform_vulkan_create_surface(PeakWindowInternal *intern, void *instance, 
 }
 
 static void
+peak_platform_window_set_class(PeakWindowInternal *intern, const char *name)
+{
+	(void)intern;
+	(void)name;
+}
+
+static void
+peak_platform_window_set_opacity(PeakWindowInternal *intern, uint8_t alpha)
+{
+	(void)intern;
+	(void)alpha;
+}
+
+static void
 peak_platform_window_set_title(PeakWindowInternal *intern, const char *name)
 {
 	struct peak_win32_win *w;
@@ -1876,6 +2041,13 @@ peak_platform_window_cursor(PeakWindowInternal *intern, int on)
 }
 
 static void
+peak_platform_window_cursor_shape(PeakWindowInternal *intern, int shape)
+{
+	(void)intern;
+	(void)shape;
+}
+
+static void
 peak_platform_window_pointer_relative(PeakWindowInternal *intern, int on)
 {
 	struct peak_win32_win *w;
@@ -1897,7 +2069,7 @@ peak_platform_window_scale(PeakWindowInternal *intern)
 	return 1.f;
 }
 
-/* BEGIN p_win32_proc.c */
+/* Embedded p_win32_proc.c. */
 #include <fcntl.h>
 #include <io.h>
 
@@ -1909,12 +2081,31 @@ peak_platform_window_scale(PeakWindowInternal *intern)
 typedef HANDLE HPCON;
 #endif
 
+#ifndef MEM_RESERVE_PLACEHOLDER
+#define MEM_RESERVE_PLACEHOLDER 0x00040000
+#endif
+#ifndef MEM_REPLACE_PLACEHOLDER
+#define MEM_REPLACE_PLACEHOLDER 0x00004000
+#endif
+#ifndef MEM_PRESERVE_PLACEHOLDER
+#define MEM_PRESERVE_PLACEHOLDER 0x00000002
+#endif
+
 #define PEAK_PROC_MAX 32
 #define PEAK_WAIT_SLICE 1
 
 typedef HRESULT (WINAPI *PeakCreatePseudoConsole)(COORD, HANDLE, HANDLE, DWORD, HPCON *);
 typedef HRESULT (WINAPI *PeakResizePseudoConsole)(HPCON, COORD);
 typedef void (WINAPI *PeakClosePseudoConsole)(HPCON);
+typedef void *(WINAPI *PeakVirtualAlloc2)(HANDLE, void *, SIZE_T, ULONG, ULONG, void *, ULONG);
+typedef void *(WINAPI *PeakMapViewOfFile3)(HANDLE, HANDLE, void *, ULONG64, SIZE_T, ULONG, ULONG, void *, ULONG);
+
+typedef struct PeakSockRec {
+	HANDLE listen;
+	HANDLE pipe;
+	char name[MAX_PATH];
+	struct PeakSockRec *next;
+} PeakSockRec;
 
 typedef struct PeakProcRec {
 	HANDLE read;
@@ -1929,7 +2120,7 @@ static PeakCreatePseudoConsole peak_create_pc;
 static PeakResizePseudoConsole peak_resize_pc;
 static PeakClosePseudoConsole peak_close_pc;
 static int peak_conpty_tried;
-static char peak_pipe_name[MAX_PATH];
+static PeakSockRec *peak_sock_listeners;
 static int peak_stdout_saved = -1;
 
 static PeakProc peak_internal_proc_fail(void);
@@ -1941,6 +2132,9 @@ static int peak_internal_join_argv(char *out, size_t cap, const char *file, cons
 static HANDLE peak_internal_write_handle(PEAK_HANDLE fd);
 static int peak_internal_pipe_ready(HANDLE h);
 static void peak_internal_pipe_name(const char *path, char *out, size_t cap);
+static PeakSockRec *peak_internal_sock_find(HANDLE h);
+static HANDLE peak_internal_sock_pipe(const char *name, int first);
+static int peak_internal_sock_ready(PeakSockRec *r);
 static size_t peak_internal_io_n(size_t n);
 
 static PeakProc
@@ -2060,9 +2254,12 @@ static int
 peak_internal_pipe_ready(HANDLE h)
 {
 	DWORD avail, flags;
+	PeakSockRec *r;
 
 	if (!h || h == INVALID_HANDLE_VALUE)
 		return 0;
+	if ((r = peak_internal_sock_find(h)))
+		return peak_internal_sock_ready(r);
 	if (PeekNamedPipe(h, NULL, 0, NULL, &avail, NULL))
 		return avail > 0;
 	if (GetNamedPipeHandleStateA(h, &flags, NULL, NULL, NULL, NULL, 0))
@@ -2091,6 +2288,55 @@ peak_internal_pipe_name(const char *path, char *out, size_t cap)
 		out[n++] = c;
 	}
 	out[n] = 0;
+}
+
+static PeakSockRec *
+peak_internal_sock_find(HANDLE h)
+{
+	PeakSockRec *r;
+
+	for (r = peak_sock_listeners; r; r = r->next) {
+		if (r->listen == h)
+			return r;
+	}
+	return NULL;
+}
+
+static HANDLE
+peak_internal_sock_pipe(const char *name, int first)
+{
+	HANDLE h;
+	DWORD err;
+
+	h = CreateNamedPipeA(name, PIPE_ACCESS_DUPLEX | (first ? FILE_FLAG_FIRST_PIPE_INSTANCE : 0),
+		PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_NOWAIT, PIPE_UNLIMITED_INSTANCES,
+		4096, 4096, 0, NULL);
+	if (h == INVALID_HANDLE_VALUE)
+		return h;
+	/* In NOWAIT mode the first successful call only makes the pipe available. */
+	if (!ConnectNamedPipe(h, NULL)) {
+		err = GetLastError();
+		if (err != ERROR_PIPE_LISTENING && err != ERROR_PIPE_CONNECTED) {
+			CloseHandle(h);
+			return INVALID_HANDLE_VALUE;
+		}
+	}
+	return h;
+}
+
+static int
+peak_internal_sock_ready(PeakSockRec *r)
+{
+	DWORD err;
+
+	if (ConnectNamedPipe(r->pipe, NULL))
+		return 0;
+	err = GetLastError();
+	if (err == ERROR_PIPE_CONNECTED)
+		return 1;
+	if (err == ERROR_NO_DATA && DisconnectNamedPipe(r->pipe))
+		ConnectNamedPipe(r->pipe, NULL);
+	return 0;
 }
 
 PeakProc
@@ -2295,40 +2541,44 @@ peak_runtime_dir(char *buf, size_t cap, const char *app)
 PEAK_HANDLE
 peak_sock_listen(const char *path)
 {
-	HANDLE h;
+	PeakSockRec *r;
 
-	peak_internal_pipe_name(path, peak_pipe_name, sizeof peak_pipe_name);
-	if (!peak_pipe_name[0])
+	if (!(r = calloc(1, sizeof(*r))))
 		return PEAK_HANDLE_INVALID;
-	h = CreateNamedPipeA(peak_pipe_name, PIPE_ACCESS_DUPLEX,
-		PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_NOWAIT, PIPE_UNLIMITED_INSTANCES,
-		4096, 4096, 0, NULL);
-	if (h == INVALID_HANDLE_VALUE)
-		return PEAK_HANDLE_INVALID;
-	return h;
+	peak_internal_pipe_name(path, r->name, sizeof r->name);
+	if (!r->name[0])
+		goto fail;
+	/* A stable identity lets accepted pipes outlive or be closed before the listener. */
+	if (!(r->listen = CreateEventA(NULL, TRUE, FALSE, NULL)))
+		goto fail;
+	r->pipe = peak_internal_sock_pipe(r->name, 1);
+	if (r->pipe == INVALID_HANDLE_VALUE) {
+		CloseHandle(r->listen);
+		goto fail;
+	}
+	r->next = peak_sock_listeners;
+	peak_sock_listeners = r;
+	return r->listen;
+fail:
+	free(r);
+	return PEAK_HANDLE_INVALID;
 }
 
 PEAK_HANDLE
 peak_sock_accept(PEAK_HANDLE listen_fd)
 {
-	HANDLE h;
-	DWORD err;
+	PeakSockRec *r;
+	HANDLE accepted, next;
 
-	(void)listen_fd;
-	if (!peak_pipe_name[0])
+	r = peak_internal_sock_find((HANDLE)listen_fd);
+	if (!r || !peak_internal_sock_ready(r))
 		return PEAK_HANDLE_INVALID;
-	h = CreateNamedPipeA(peak_pipe_name, PIPE_ACCESS_DUPLEX,
-		PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_NOWAIT, PIPE_UNLIMITED_INSTANCES,
-		4096, 4096, 0, NULL);
-	if (h == INVALID_HANDLE_VALUE)
+	next = peak_internal_sock_pipe(r->name, 0);
+	if (next == INVALID_HANDLE_VALUE)
 		return PEAK_HANDLE_INVALID;
-	if (ConnectNamedPipe(h, NULL))
-		return h;
-	err = GetLastError();
-	if (err == ERROR_PIPE_CONNECTED)
-		return h;
-	CloseHandle(h);
-	return PEAK_HANDLE_INVALID;
+	accepted = r->pipe;
+	r->pipe = next;
+	return accepted;
 }
 
 PEAK_HANDLE
@@ -2485,9 +2735,19 @@ void
 peak_fd_close(PEAK_HANDLE fd)
 {
 	PeakProcRec *r;
+	PeakSockRec *sock, **link;
 
 	if (fd == PEAK_HANDLE_INVALID)
 		return;
+	for (link = &peak_sock_listeners; (sock = *link); link = &sock->next) {
+		if (sock->listen == (HANDLE)fd) {
+			*link = sock->next;
+			CloseHandle(sock->pipe);
+			CloseHandle(sock->listen);
+			free(sock);
+			return;
+		}
+	}
 	r = peak_internal_proc_find((HANDLE)fd);
 	if (r) {
 		if (r->read)
@@ -2623,6 +2883,10 @@ void *
 peak_mirror_map(size_t size)
 {
 	HANDLE map;
+	HMODULE kernel;
+	PeakVirtualAlloc2 alloc2;
+	PeakMapViewOfFile3 view3;
+	SYSTEM_INFO si;
 	void *base;
 	void *a, *b;
 	int i;
@@ -2634,6 +2898,36 @@ peak_mirror_map(size_t size)
 	map = CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, (DWORD)size, NULL);
 	if (!map)
 		return NULL;
+	kernel = GetModuleHandleA("kernelbase.dll");
+	alloc2 = kernel ? (PeakVirtualAlloc2)(void *)GetProcAddress(kernel, "VirtualAlloc2") : NULL;
+	view3 = kernel ? (PeakMapViewOfFile3)(void *)GetProcAddress(kernel, "MapViewOfFile3") : NULL;
+	if (alloc2 && view3) {
+		base = alloc2(GetCurrentProcess(), NULL, size * 2, MEM_RESERVE | MEM_RESERVE_PLACEHOLDER, PAGE_NOACCESS, NULL, 0);
+		if (!base)
+			goto fail;
+		if (!VirtualFree(base, size, MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER)) {
+			VirtualFree(base, 0, MEM_RELEASE);
+			goto fail;
+		}
+		a = view3(map, GetCurrentProcess(), base, 0, size, MEM_REPLACE_PLACEHOLDER, PAGE_READWRITE, NULL, 0);
+		if (!a) {
+			VirtualFree(base, 0, MEM_RELEASE);
+			VirtualFree((char *)base + size, 0, MEM_RELEASE);
+			goto fail;
+		}
+		b = view3(map, GetCurrentProcess(), (char *)base + size, 0, size, MEM_REPLACE_PLACEHOLDER, PAGE_READWRITE, NULL, 0);
+		if (!b) {
+			UnmapViewOfFile(a);
+			VirtualFree((char *)base + size, 0, MEM_RELEASE);
+			goto fail;
+		}
+		CloseHandle(map);
+		return base;
+	}
+	/* Legacy views require allocation-granularity aligned addresses, not just pages. */
+	GetSystemInfo(&si);
+	if (!si.dwAllocationGranularity || size % si.dwAllocationGranularity)
+		goto fail;
 	for (i = 0; i < 16; i++) {
 		base = VirtualAlloc(NULL, size * 2, MEM_RESERVE, PAGE_NOACCESS);
 		if (!base)
@@ -2649,6 +2943,7 @@ peak_mirror_map(size_t size)
 		}
 		UnmapViewOfFile(a);
 	}
+fail:
 	CloseHandle(map);
 	return NULL;
 }
@@ -2818,10 +3113,9 @@ peak_stdout_restore(void)
 	peak_stdout_saved = -1;
 	return 1;
 }
-/* END p_win32_proc.c */
-/* END p_win32.c */
+
 #elif defined(PEAK_LINUX)
-/* BEGIN p_linux.c */
+/* Embedded p_linux.c. */
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 #include <X11/Xutil.h>
@@ -2888,6 +3182,7 @@ peak_stdout_restore(void)
 	X(XSendEvent,          Status, (Display *, Window, Bool, long, XEvent *)) \
 	X(XResizeWindow,       int, (Display *, Window, unsigned int, unsigned int)) \
 	X(XDefineCursor,       int, (Display *, Window, Cursor)) \
+	X(XCreateFontCursor,  Cursor, (Display *, unsigned int)) \
 	X(XUndefineCursor,     int, (Display *, Window)) \
 	X(XCreatePixmap,       Pixmap, (Display *, Drawable, unsigned int, unsigned int, unsigned int)) \
 	X(XFreePixmap,         int, (Display *, Pixmap)) \
@@ -2960,6 +3255,7 @@ typedef struct {
 
 struct peak_linux_win {
 	Window window;
+	Window clip_window; /* Unmapped protocol requestor, not an application slot. */
 	GC gfx_ctx;
 	XImage *ximage;
 	Visual *visual;
@@ -2976,6 +3272,7 @@ struct peak_linux_win {
 	int touch_n;
 	float last_x, last_y;
 	Cursor blank;
+	Cursor glyph;
 	Window xdnd_source;
 	Time xdnd_time;
 	PeakEvent extra;
@@ -2993,6 +3290,8 @@ static int peak_clip_incr_on;
 static PeakClip peak_clip_req_which;
 static int peak_clip_req_on;
 static int peak_clip_req_xa;
+static Window peak_clip_req_window;
+static struct peak_linux_win *peak_clip_req_owner;
 #ifndef PEAK_NO_AUDIO
 static PeakAudio peak_audio;
 #endif
@@ -3001,7 +3300,7 @@ static int peak_linux_kind;
 #define PEAK_LINUX_WAYLAND 1
 #define PEAK_LINUX_X11     2
 
-/* BEGIN p_wayland.c */
+/* Embedded p_wayland.c. */
 /*
  * Wayland window, input, shm present, and WSI.
  * libwayland-client and libxkbcommon are dlopened.
@@ -3091,6 +3390,7 @@ struct wl_interface wl_shm_interface;
 struct wl_interface wl_shm_pool_interface;
 struct wl_interface wl_buffer_interface;
 struct wl_interface wl_surface_interface;
+struct wl_interface wl_region_interface;
 struct wl_interface wl_seat_interface;
 struct wl_interface wl_pointer_interface;
 struct wl_interface wl_keyboard_interface;
@@ -3102,16 +3402,16 @@ struct wl_interface wl_data_source_interface;
 struct wl_interface wl_data_offer_interface;
 struct wl_interface wl_callback_interface;
 
-/* BEGIN xdg-shell-protocol.c */
+/* Embedded xdg-shell-protocol.c. */
 /* Generated by wayland-scanner 1.26.0 */
 
 /*
- * Copyright (c) 2008-2013 Kristian Hogsberg
- * Copyright (c) 2013      Rafael Antognolli
- * Copyright (c) 2013      Jasper St. Pierre
- * Copyright (c) 2010-2013 Intel Corporation
- * Copyright (c) 2015-2017 Samsung Electronics Co., Ltd
- * Copyright (c) 2015-2017 Red Hat Inc.
+ * Copyright © 2008-2013 Kristian Høgsberg
+ * Copyright © 2013      Rafael Antognolli
+ * Copyright © 2013      Jasper St. Pierre
+ * Copyright © 2010-2013 Intel Corporation
+ * Copyright © 2015-2017 Samsung Electronics Co., Ltd
+ * Copyright © 2015-2017 Red Hat Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -3287,15 +3587,256 @@ WL_PRIVATE const struct wl_interface xdg_popup_interface = {
 	3, xdg_popup_events,
 };
 
-/* END xdg-shell-protocol.c */
+
+const struct wl_interface zwp_tablet_tool_v2_interface = { "zwp_tablet_tool_v2", 1, 0, NULL, 0, NULL };
+/* Embedded fractional-scale-protocol.c. */
+/* Generated by wayland-scanner 1.26.0. Included from p_wayland.c. */
+
+extern struct wl_interface wl_surface_interface;
+extern const struct wl_interface wp_fractional_scale_v1_interface;
+
+static const struct wl_interface *fractional_scale_v1_types[] = {
+	NULL,
+	&wp_fractional_scale_v1_interface,
+	&wl_surface_interface,
+};
+
+static const struct wl_message wp_fractional_scale_manager_v1_requests[] = {
+	{ "destroy", "", fractional_scale_v1_types + 0 },
+	{ "get_fractional_scale", "no", fractional_scale_v1_types + 1 },
+};
+
+WL_PRIVATE const struct wl_interface wp_fractional_scale_manager_v1_interface = {
+	"wp_fractional_scale_manager_v1", 1,
+	2, wp_fractional_scale_manager_v1_requests,
+	0, NULL,
+};
+
+static const struct wl_message wp_fractional_scale_v1_requests[] = {
+	{ "destroy", "", fractional_scale_v1_types + 0 },
+};
+
+static const struct wl_message wp_fractional_scale_v1_events[] = {
+	{ "preferred_scale", "u", fractional_scale_v1_types + 0 },
+};
+
+WL_PRIVATE const struct wl_interface wp_fractional_scale_v1_interface = {
+	"wp_fractional_scale_v1", 1,
+	1, wp_fractional_scale_v1_requests,
+	1, wp_fractional_scale_v1_events,
+};
+
+
+/* Embedded viewporter-protocol.c. */
+/* Generated by wayland-scanner 1.26.0. Included from p_wayland.c. */
+
+extern struct wl_interface wl_surface_interface;
+extern const struct wl_interface wp_viewport_interface;
+
+static const struct wl_interface *viewporter_types[] = {
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	&wp_viewport_interface,
+	&wl_surface_interface,
+};
+
+static const struct wl_message wp_viewporter_requests[] = {
+	{ "destroy", "", viewporter_types + 0 },
+	{ "get_viewport", "no", viewporter_types + 4 },
+};
+
+WL_PRIVATE const struct wl_interface wp_viewporter_interface = {
+	"wp_viewporter", 1,
+	2, wp_viewporter_requests,
+	0, NULL,
+};
+
+static const struct wl_message wp_viewport_requests[] = {
+	{ "destroy", "", viewporter_types + 0 },
+	{ "set_source", "ffff", viewporter_types + 0 },
+	{ "set_destination", "ii", viewporter_types + 0 },
+};
+
+WL_PRIVATE const struct wl_interface wp_viewport_interface = {
+	"wp_viewport", 1,
+	3, wp_viewport_requests,
+	0, NULL,
+};
+
+
+/* Embedded cursor-shape-protocol.c. */
+/* Generated by wayland-scanner 1.26.0. Included from p_wayland.c. */
+
+extern struct wl_interface wl_pointer_interface;
+extern const struct wl_interface wp_cursor_shape_device_v1_interface;
+extern const struct wl_interface zwp_tablet_tool_v2_interface;
+
+static const struct wl_interface *cursor_shape_v1_types[] = {
+	NULL,
+	NULL,
+	&wp_cursor_shape_device_v1_interface,
+	&wl_pointer_interface,
+	&wp_cursor_shape_device_v1_interface,
+	&zwp_tablet_tool_v2_interface,
+};
+
+static const struct wl_message wp_cursor_shape_manager_v1_requests[] = {
+	{ "destroy", "", cursor_shape_v1_types + 0 },
+	{ "get_pointer", "no", cursor_shape_v1_types + 2 },
+	{ "get_tablet_tool_v2", "no", cursor_shape_v1_types + 4 },
+};
+
+WL_PRIVATE const struct wl_interface wp_cursor_shape_manager_v1_interface = {
+	"wp_cursor_shape_manager_v1", 2,
+	3, wp_cursor_shape_manager_v1_requests,
+	0, NULL,
+};
+
+static const struct wl_message wp_cursor_shape_device_v1_requests[] = {
+	{ "destroy", "", cursor_shape_v1_types + 0 },
+	{ "set_shape", "uu", cursor_shape_v1_types + 0 },
+};
+
+WL_PRIVATE const struct wl_interface wp_cursor_shape_device_v1_interface = {
+	"wp_cursor_shape_device_v1", 2,
+	2, wp_cursor_shape_device_v1_requests,
+	0, NULL,
+};
+
+
+/* Embedded primary-selection-protocol.c. */
+/* Generated by wayland-scanner 1.26.0. Included from p_wayland.c. */
+
+extern struct wl_interface wl_seat_interface;
+extern const struct wl_interface zwp_primary_selection_device_v1_interface;
+extern const struct wl_interface zwp_primary_selection_offer_v1_interface;
+extern const struct wl_interface zwp_primary_selection_source_v1_interface;
+
+static const struct wl_interface *wp_primary_selection_unstable_v1_types[] = {
+	NULL,
+	NULL,
+	&zwp_primary_selection_source_v1_interface,
+	&zwp_primary_selection_device_v1_interface,
+	&wl_seat_interface,
+	&zwp_primary_selection_source_v1_interface,
+	NULL,
+	&zwp_primary_selection_offer_v1_interface,
+	&zwp_primary_selection_offer_v1_interface,
+};
+
+static const struct wl_message zwp_primary_selection_device_manager_v1_requests[] = {
+	{ "create_source", "n", wp_primary_selection_unstable_v1_types + 2 },
+	{ "get_device", "no", wp_primary_selection_unstable_v1_types + 3 },
+	{ "destroy", "", wp_primary_selection_unstable_v1_types + 0 },
+};
+
+WL_PRIVATE const struct wl_interface zwp_primary_selection_device_manager_v1_interface = {
+	"zwp_primary_selection_device_manager_v1", 1,
+	3, zwp_primary_selection_device_manager_v1_requests,
+	0, NULL,
+};
+
+static const struct wl_message zwp_primary_selection_device_v1_requests[] = {
+	{ "set_selection", "?ou", wp_primary_selection_unstable_v1_types + 5 },
+	{ "destroy", "", wp_primary_selection_unstable_v1_types + 0 },
+};
+
+static const struct wl_message zwp_primary_selection_device_v1_events[] = {
+	{ "data_offer", "n", wp_primary_selection_unstable_v1_types + 7 },
+	{ "selection", "?o", wp_primary_selection_unstable_v1_types + 8 },
+};
+
+WL_PRIVATE const struct wl_interface zwp_primary_selection_device_v1_interface = {
+	"zwp_primary_selection_device_v1", 1,
+	2, zwp_primary_selection_device_v1_requests,
+	2, zwp_primary_selection_device_v1_events,
+};
+
+static const struct wl_message zwp_primary_selection_offer_v1_requests[] = {
+	{ "receive", "sh", wp_primary_selection_unstable_v1_types + 0 },
+	{ "destroy", "", wp_primary_selection_unstable_v1_types + 0 },
+};
+
+static const struct wl_message zwp_primary_selection_offer_v1_events[] = {
+	{ "offer", "s", wp_primary_selection_unstable_v1_types + 0 },
+};
+
+WL_PRIVATE const struct wl_interface zwp_primary_selection_offer_v1_interface = {
+	"zwp_primary_selection_offer_v1", 1,
+	2, zwp_primary_selection_offer_v1_requests,
+	1, zwp_primary_selection_offer_v1_events,
+};
+
+static const struct wl_message zwp_primary_selection_source_v1_requests[] = {
+	{ "offer", "s", wp_primary_selection_unstable_v1_types + 0 },
+	{ "destroy", "", wp_primary_selection_unstable_v1_types + 0 },
+};
+
+static const struct wl_message zwp_primary_selection_source_v1_events[] = {
+	{ "send", "sh", wp_primary_selection_unstable_v1_types + 0 },
+	{ "cancelled", "", wp_primary_selection_unstable_v1_types + 0 },
+};
+
+WL_PRIVATE const struct wl_interface zwp_primary_selection_source_v1_interface = {
+	"zwp_primary_selection_source_v1", 1,
+	2, zwp_primary_selection_source_v1_requests,
+	2, zwp_primary_selection_source_v1_events,
+};
+
+
+/* Embedded alpha-modifier-protocol.c. */
+/* Generated by wayland-scanner 1.26.0. Included from p_wayland.c. */
+
+extern struct wl_interface wl_surface_interface;
+extern const struct wl_interface wp_alpha_modifier_surface_v1_interface;
+
+static const struct wl_interface *alpha_modifier_v1_types[] = {
+	NULL,
+	&wp_alpha_modifier_surface_v1_interface,
+	&wl_surface_interface,
+};
+
+static const struct wl_message wp_alpha_modifier_v1_requests[] = {
+	{ "destroy", "", alpha_modifier_v1_types + 0 },
+	{ "get_surface", "no", alpha_modifier_v1_types + 1 },
+};
+
+WL_PRIVATE const struct wl_interface wp_alpha_modifier_v1_interface = {
+	"wp_alpha_modifier_v1", 1,
+	2, wp_alpha_modifier_v1_requests,
+	0, NULL,
+};
+
+static const struct wl_message wp_alpha_modifier_surface_v1_requests[] = {
+	{ "destroy", "", alpha_modifier_v1_types + 0 },
+	{ "set_multiplier", "u", alpha_modifier_v1_types + 0 },
+};
+
+WL_PRIVATE const struct wl_interface wp_alpha_modifier_surface_v1_interface = {
+	"wp_alpha_modifier_surface_v1", 1,
+	2, wp_alpha_modifier_surface_v1_requests,
+	0, NULL,
+};
+
 
 struct peak_wayland_win {
 	struct wl_surface *surface;
 	struct xdg_surface *xdg_surface;
 	struct xdg_toplevel *xdg_toplevel;
+	struct wp_fractional_scale_v1 *frac;
+	struct wp_viewport *viewport;
+	struct wp_alpha_modifier_surface_v1 *alpha;
+	struct wl_output *output;
 	uint32_t *buffer;
 	uint32_t width;
 	uint32_t height;
+	uint32_t logical_w;
+	uint32_t logical_h;
+	uint32_t frac_120;
+	int have_frac;
+	int int_scale;
 	int shm_fd;
 	void *shm;
 	size_t shm_n;
@@ -3303,11 +3844,22 @@ struct peak_wayland_win {
 	int configured;
 	int flags;
 	int cursor_on;
+	int cursor_shape;
+	uint8_t opacity;
 	int relative;
 	int touch_n;
 	int pointer_in;
+	uint32_t attached_w, attached_h;
 	float last_x, last_y;
+	float pointer_x, pointer_y; /* Surface coordinates, independent of resize/scale. */
 	PeakQ q;
+};
+
+struct peak_wl_output {
+	struct wl_output *obj;
+	uint32_t name;
+	int scale;
+	int pending;
 };
 
 typedef struct {
@@ -3324,6 +3876,31 @@ typedef struct {
 	struct wl_data_device *dd;
 	struct wl_data_source *ds;
 	struct wl_data_source *drag_ds;
+	struct wp_fractional_scale_manager_v1 *frac_mgr;
+	struct wp_viewporter *viewporter;
+	struct wp_cursor_shape_manager_v1 *cursor_mgr;
+	struct wp_cursor_shape_device_v1 *cursor_dev;
+	struct wp_alpha_modifier_v1 *alpha_mgr;
+	struct zwp_primary_selection_device_manager_v1 *ps_mgr;
+	struct zwp_primary_selection_device_v1 *ps_dev;
+	struct zwp_primary_selection_source_v1 *ps_src;
+	struct zwp_primary_selection_offer_v1 *ps_offer;
+	struct zwp_primary_selection_offer_v1 *ps_fresh;
+	struct peak_wl_output outputs[8];
+	struct peak_wayland_win *wins[8];
+	int out_scale;
+	int ps_utf8;
+	int ps_fresh_utf8;
+	int frame_v120;
+	int frame_h120;
+	int frame_vdisc;
+	int frame_hdisc;
+	double frame_v;
+	double frame_h;
+	int frame_saw_120;
+	int frame_saw_disc;
+	int acc_v120;
+	double acc_v;
 	struct wl_data_offer *offer;
 	struct wl_data_offer *dnd;
 	struct wl_data_offer *fresh;
@@ -3349,6 +3926,7 @@ typedef struct {
 	uint32_t buttons;
 	PeakKeyMod mod;
 	struct peak_wayland_win *focus;
+	struct peak_wayland_win *hover;
 	int32_t repeat_rate;
 	int32_t repeat_delay;
 	uint32_t repeat_key;
@@ -3430,7 +4008,7 @@ static const char *peak_wayland_mime_lit(const char *mime);
 static int peak_wayland_mime_rank(const char *m);
 static void peak_wayland_ds_kill(struct wl_data_source **slot);
 static void peak_wayland_dnd_accept(void);
-static int peak_wayland_offer_recv(struct wl_data_offer *o, const char *mime, char **out, size_t *out_n);
+static int peak_wayland_offer_recv(struct wl_proxy *o, uint32_t opcode, const char *mime, char **out, size_t *out_n);
 static int peak_wayland_drop_drag(PeakWindowInternal *intern, const char *utf8, size_t n);
 static int peak_wayland_shm_resize(struct peak_wayland_win *w, uint32_t width, uint32_t height);
 static int peak_wayland_init(void);
@@ -3440,9 +4018,11 @@ static void peak_wayland_window_close(PeakWindowInternal *intern);
 static uint32_t *peak_wayland_window_buffer(PeakWindowInternal *intern, size_t *width, size_t *height);
 static void peak_wayland_window_present(PeakWindowInternal *intern);
 static void peak_wayland_window_set_title(PeakWindowInternal *intern, const char *name);
+static void peak_wayland_window_set_class(PeakWindowInternal *intern, const char *name);
 static void peak_wayland_window_set_size(PeakWindowInternal *intern, uint32_t width, uint32_t height);
 static void peak_wayland_window_fullscreen(PeakWindowInternal *intern, int on);
 static void peak_wayland_window_cursor(PeakWindowInternal *intern, int on);
+static void peak_wayland_window_cursor_shape(PeakWindowInternal *intern, int shape);
 static void peak_wayland_window_pointer_relative(PeakWindowInternal *intern, int on);
 static float peak_wayland_window_scale(PeakWindowInternal *intern);
 static int peak_wayland_clip_set(PeakWindowInternal *intern, PeakClip which, const char *utf8, size_t n);
@@ -3492,6 +4072,7 @@ peak_wayland_load(void)
 		return 0;
 	if (!peak_wayland_copy_iface("wl_surface_interface", &wl_surface_interface))
 		return 0;
+	peak_wayland_copy_iface("wl_region_interface", &wl_region_interface);
 	if (!peak_wayland_copy_iface("wl_seat_interface", &wl_seat_interface))
 		return 0;
 	if (!peak_wayland_copy_iface("wl_pointer_interface", &wl_pointer_interface))
@@ -3526,38 +4107,449 @@ peak_wayland_marshal(struct wl_proxy *p, uint32_t op, const struct wl_interface 
 	return peak_wl.wl_proxy_marshal_array_flags(p, op, iface, ver, 0, args);
 }
 
+static struct wl_proxy *
+peak_wayland_bind(struct wl_registry *reg, uint32_t name, const char *iface_name, const struct wl_interface *iface, uint32_t ver)
+{
+	union wl_argument args[4];
+
+	if (!reg || !iface || !iface_name || !ver)
+		return NULL;
+	memset(args, 0, sizeof args);
+	args[0].u = name;
+	args[1].s = iface_name;
+	args[2].u = ver;
+	return peak_wl.wl_proxy_marshal_array_flags((struct wl_proxy *)reg, 0, iface, ver, 0, args);
+}
+
+static uint32_t
+peak_wayland_ver(uint32_t adv, uint32_t cap)
+{
+	if (adv < 1)
+		return 1;
+	return adv > cap ? cap : adv;
+}
+
+static uint32_t
+peak_wayland_scale_120(struct peak_wayland_win *w)
+{
+	if (w && w->have_frac && w->frac_120 >= 120)
+		return w->frac_120;
+	/* wl_output.scale is an integer (1.6 becomes 2). Wait for fractional. */
+	if (w && w->frac && !w->have_frac)
+		return 120;
+	if (w && w->int_scale > 0)
+		return (uint32_t)w->int_scale * 120u;
+	if (peak_wayland.out_scale > 0)
+		return (uint32_t)peak_wayland.out_scale * 120u;
+	return 120;
+}
+
+static void
+peak_wayland_to_buf(struct peak_wayland_win *w, float lx, float ly, float *ox, float *oy)
+{
+	float sx, sy;
+
+	sx = 1.f;
+	sy = 1.f;
+	if (w && w->logical_w && w->width)
+		sx = (float)w->width / (float)w->logical_w;
+	if (w && w->logical_h && w->height)
+		sy = (float)w->height / (float)w->logical_h;
+	if (ox)
+		*ox = lx * sx;
+	if (oy)
+		*oy = ly * sy;
+}
+
+static void
+peak_wayland_note_resize(struct peak_wayland_win *w)
+{
+	PeakEvent ev;
+
+	if (!w)
+		return;
+	memset(&ev, 0, sizeof ev);
+	ev.type = PEAK_EVENT_WINDOW_RESIZE;
+	ev.resize.width = w->width;
+	ev.resize.height = w->height;
+	peak_q_push(&w->q, ev);
+}
+
+static void
+peak_wayland_viewport_dest(struct peak_wayland_win *w)
+{
+	union wl_argument args[2];
+
+	if (!w || !w->viewport || !w->logical_w || !w->logical_h)
+		return;
+	memset(args, 0, sizeof args);
+	args[0].i = (int32_t)w->logical_w;
+	args[1].i = (int32_t)w->logical_h;
+	peak_wayland_marshal((struct wl_proxy *)w->viewport, 2, NULL, args);
+}
+
+/* Hit box is the logical tile, not the fractional-scale buffer. Source is
+ * separate: it must match the buffer attached in the same commit. */
+static void
+peak_wayland_clip_input(struct peak_wayland_win *w)
+{
+	union wl_argument args[4];
+	struct wl_region *reg;
+
+	if (!w || !w->surface || !w->logical_w || !w->logical_h)
+		return;
+	if (w->viewport)
+		peak_wayland_viewport_dest(w);
+	/* Geometry is applied with dest, so it matches the new surface size. */
+	if (w->xdg_surface && (w->viewport || w->attached_w)) {
+		memset(args, 0, sizeof args);
+		args[0].i = 0;
+		args[1].i = 0;
+		args[2].i = (int32_t)w->logical_w;
+		args[3].i = (int32_t)w->logical_h;
+		peak_wayland_marshal((struct wl_proxy *)w->xdg_surface, 3, NULL, args);
+	}
+	if (!wl_region_interface.name || !peak_wayland.compositor)
+		return;
+	reg = (struct wl_region *)peak_wayland_marshal((struct wl_proxy *)peak_wayland.compositor, 1, &wl_region_interface, NULL);
+	if (!reg)
+		return;
+	memset(args, 0, sizeof args);
+	args[0].i = 0;
+	args[1].i = 0;
+	args[2].i = (int32_t)w->logical_w;
+	args[3].i = (int32_t)w->logical_h;
+	peak_wayland_marshal((struct wl_proxy *)reg, 1, NULL, args);
+	memset(args, 0, sizeof args);
+	args[0].o = (struct wl_object *)reg;
+	peak_wayland_marshal((struct wl_proxy *)w->surface, 5, NULL, args);
+	/* Destroy the server-side region too; proxy_destroy alone leaks it. */
+	peak_wayland_marshal((struct wl_proxy *)reg, 0, NULL, NULL);
+	peak_wl.wl_proxy_destroy((struct wl_proxy *)reg);
+}
+
+static void
+peak_wayland_clip_source(struct peak_wayland_win *w)
+{
+	union wl_argument args[4];
+
+	if (!w || !w->viewport || !w->width || !w->height)
+		return;
+	memset(args, 0, sizeof args);
+	args[0].f = wl_fixed_from_int(0);
+	args[1].f = wl_fixed_from_int(0);
+	args[2].f = wl_fixed_from_int((int)w->width);
+	args[3].f = wl_fixed_from_int((int)w->height);
+	peak_wayland_marshal((struct wl_proxy *)w->viewport, 1, NULL, args);
+	peak_wayland_viewport_dest(w);
+}
+
+static void
+peak_wayland_bind_geom(struct peak_wayland_win *w)
+{
+	peak_wayland_clip_input(w);
+	peak_wayland_clip_source(w);
+}
+
+/* Shrink the hit target before the next damaged present. A configure that
+ * only waits for present leaves the previous scaled buffer covering the tile
+ * beside this one. No source change: the attached buffer is unchanged. */
+static void
+peak_wayland_commit_clip(struct peak_wayland_win *w)
+{
+	if (!w || !w->surface || !w->configured || !w->attached_w)
+		return;
+	peak_wayland_clip_input(w);
+	peak_wayland_marshal((struct wl_proxy *)w->surface, 6, NULL, NULL);
+	peak_wl.wl_display_flush(peak_wayland.display);
+}
+
+static void
+peak_wayland_set_buffer_scale(struct peak_wayland_win *w, int scale)
+{
+	union wl_argument args[1];
+
+	if (!w || !w->surface || w->viewport || scale < 1)
+		return;
+	memset(args, 0, sizeof args);
+	args[0].i = scale;
+	peak_wayland_marshal((struct wl_proxy *)w->surface, 8, NULL, args);
+}
+
+static int
+peak_wayland_apply_scale(struct peak_wayland_win *w)
+{
+	uint32_t s, bw, bh;
+	int scale_i;
+
+	if (!w || !w->logical_w || !w->logical_h)
+		return 0;
+	s = peak_wayland_scale_120(w);
+	bw = (uint32_t)(((uint64_t)w->logical_w * s + 60) / 120);
+	bh = (uint32_t)(((uint64_t)w->logical_h * s + 60) / 120);
+	if (!bw)
+		bw = 1;
+	if (!bh)
+		bh = 1;
+	scale_i = (int)((s + 60) / 120);
+	if (scale_i < 1)
+		scale_i = 1;
+	if (w->viewport)
+		peak_wayland_viewport_dest(w);
+	else
+		peak_wayland_set_buffer_scale(w, scale_i);
+	if (bw == w->width && bh == w->height)
+		return 0;
+	if (!peak_wayland_shm_resize(w, bw, bh))
+		return 0;
+	if (w->viewport)
+		peak_wayland_viewport_dest(w);
+	peak_wayland_note_resize(w);
+	return 1;
+}
+
+static void
+peak_wayland_output_geometry(void *data, struct wl_output *output, int32_t x, int32_t y, int32_t pw, int32_t ph, int32_t sub, const char *make, const char *model, int32_t transform)
+{
+	(void)data;
+	(void)output;
+	(void)x;
+	(void)y;
+	(void)pw;
+	(void)ph;
+	(void)sub;
+	(void)make;
+	(void)model;
+	(void)transform;
+}
+
+static void
+peak_wayland_output_mode(void *data, struct wl_output *output, uint32_t flags, int32_t w, int32_t h, int32_t refresh)
+{
+	(void)data;
+	(void)output;
+	(void)flags;
+	(void)w;
+	(void)h;
+	(void)refresh;
+}
+
+static void
+peak_wayland_output_done(void *data, struct wl_output *output)
+{
+	struct peak_wl_output *o;
+	int i;
+
+	(void)output;
+	o = data;
+	if (!o || o->pending < 1 || o->scale == o->pending)
+		return;
+	o->scale = o->pending;
+	if (peak_wayland.out_scale < o->scale)
+		peak_wayland.out_scale = o->scale;
+	for (i = 0; i < 8; i++) {
+		struct peak_wayland_win *w;
+
+		w = peak_wayland.wins[i];
+		if (!w || w->have_frac || w->output != o->obj)
+			continue;
+		w->int_scale = o->scale;
+		peak_wayland_apply_scale(w);
+	}
+}
+
+static void
+peak_wayland_output_scale(void *data, struct wl_output *output, int32_t scale)
+{
+	struct peak_wl_output *o;
+
+	(void)output;
+	o = data;
+	if (!o || scale < 1)
+		return;
+	o->pending = scale;
+	if (peak_wl.wl_proxy_get_version((struct wl_proxy *)o->obj) < 2)
+		peak_wayland_output_done(o, o->obj);
+}
+
+static void
+peak_wayland_output_name(void *data, struct wl_output *output, const char *name)
+{
+	(void)data;
+	(void)output;
+	(void)name;
+}
+
+static void
+peak_wayland_output_description(void *data, struct wl_output *output, const char *text)
+{
+	(void)data;
+	(void)output;
+	(void)text;
+}
+
+static void
+peak_wayland_surface_enter(void *data, struct wl_surface *surface, struct wl_output *output)
+{
+	struct peak_wayland_win *w;
+	int i;
+
+	(void)surface;
+	w = data;
+	if (!w)
+		return;
+	w->output = output;
+	for (i = 0; i < 8; i++) {
+		if (peak_wayland.outputs[i].obj != output)
+			continue;
+		if (peak_wayland.outputs[i].scale > 0)
+			w->int_scale = peak_wayland.outputs[i].scale;
+		else if (peak_wayland.outputs[i].pending > 0)
+			w->int_scale = peak_wayland.outputs[i].pending;
+		break;
+	}
+	if (!w->have_frac)
+		peak_wayland_apply_scale(w);
+}
+
+static void
+peak_wayland_surface_leave(void *data, struct wl_surface *surface, struct wl_output *output)
+{
+	struct peak_wayland_win *w;
+
+	(void)surface;
+	w = data;
+	if (w && w->output == output)
+		w->output = NULL;
+}
+
+static void
+peak_wayland_surface_preferred_scale(void *data, struct wl_surface *surface, int32_t scale)
+{
+	struct peak_wayland_win *w;
+
+	(void)surface;
+	w = data;
+	if (!w || w->have_frac || scale < 1)
+		return;
+	w->int_scale = scale;
+	peak_wayland_apply_scale(w);
+	peak_wayland_commit_clip(w);
+}
+
+static void
+peak_wayland_surface_preferred_transform(void *data, struct wl_surface *surface, uint32_t transform)
+{
+	(void)data;
+	(void)surface;
+	(void)transform;
+}
+
+static void
+peak_wayland_frac_scale(void *data, struct wp_fractional_scale_v1 *frac, uint32_t scale)
+{
+	struct peak_wayland_win *w;
+
+	(void)frac;
+	w = data;
+	if (!w)
+		return;
+	if (scale < 120)
+		scale = 120;
+	w->frac_120 = scale;
+	w->have_frac = 1;
+	peak_wayland_apply_scale(w);
+	peak_wayland_commit_clip(w);
+}
+
+static uint32_t
+peak_wayland_shape_enum(int shape)
+{
+	switch (shape) {
+	case 1: return 9;  /* text */
+	case 2: return 4;  /* pointer */
+	case 3: return 6;  /* wait */
+	case 4: return 8;  /* crosshair */
+	case 5: return 15; /* not-allowed */
+	case 6: return 3;  /* help */
+	default: return 1; /* default */
+	}
+}
+
+static void
+peak_wayland_cursor_apply(struct peak_wayland_win *w)
+{
+	union wl_argument args[4];
+
+	if (!w || !peak_wayland.pointer)
+		return;
+	if (!w->cursor_on) {
+		memset(args, 0, sizeof args);
+		args[0].u = peak_wayland.serial;
+		peak_wayland_marshal((struct wl_proxy *)peak_wayland.pointer, 0, NULL, args);
+		return;
+	}
+	if (!peak_wayland.cursor_dev)
+		return;
+	memset(args, 0, sizeof args);
+	args[0].u = peak_wayland.serial;
+	args[1].u = peak_wayland_shape_enum(w->cursor_shape);
+	peak_wayland_marshal((struct wl_proxy *)peak_wayland.cursor_dev, 1, NULL, args);
+}
+
 static void
 peak_wayland_registry_global(void *data, struct wl_registry *reg, uint32_t name, const char *iface, uint32_t ver)
 {
-	union wl_argument args[4];
+	static const struct {
+		void (*geometry)(void *, struct wl_output *, int32_t, int32_t, int32_t, int32_t, int32_t, const char *, const char *, int32_t);
+		void (*mode)(void *, struct wl_output *, uint32_t, int32_t, int32_t, int32_t);
+		void (*done)(void *, struct wl_output *);
+		void (*scale)(void *, struct wl_output *, int32_t);
+		void (*name)(void *, struct wl_output *, const char *);
+		void (*description)(void *, struct wl_output *, const char *);
+	} ol = {
+		peak_wayland_output_geometry, peak_wayland_output_mode, peak_wayland_output_done,
+		peak_wayland_output_scale, peak_wayland_output_name, peak_wayland_output_description
+	};
+	uint32_t use;
+	int i;
 
 	(void)data;
 	if (!iface)
 		return;
-	memset(args, 0, sizeof args);
-	args[0].u = name;
-	args[2].u = ver;
 	if (!strcmp(iface, "wl_compositor") && !peak_wayland.compositor) {
-		args[1].s = "wl_compositor";
-		peak_wayland.compositor = (struct wl_compositor *)peak_wayland_marshal((struct wl_proxy *)reg, 0, &wl_compositor_interface, args);
+		use = peak_wayland_ver(ver, 6);
+		peak_wayland.compositor = (struct wl_compositor *)peak_wayland_bind(reg, name, iface, &wl_compositor_interface, use);
 	} else if (!strcmp(iface, "wl_shm") && !peak_wayland.shm) {
-		args[1].s = "wl_shm";
-		peak_wayland.shm = (struct wl_shm *)peak_wayland_marshal((struct wl_proxy *)reg, 0, &wl_shm_interface, args);
+		peak_wayland.shm = (struct wl_shm *)peak_wayland_bind(reg, name, iface, &wl_shm_interface, peak_wayland_ver(ver, 1));
 	} else if (!strcmp(iface, "wl_seat") && !peak_wayland.seat) {
-		args[1].s = "wl_seat";
-		if (ver > 4)
-			args[2].u = 4;
-		peak_wayland.seat = (struct wl_seat *)peak_wayland_marshal((struct wl_proxy *)reg, 0, &wl_seat_interface, args);
+		peak_wayland.seat = (struct wl_seat *)peak_wayland_bind(reg, name, iface, &wl_seat_interface, peak_wayland_ver(ver, 9));
 	} else if (!strcmp(iface, "xdg_wm_base") && !peak_wayland.wm) {
-		args[1].s = "xdg_wm_base";
-		if (ver > 6)
-			args[2].u = 6;
-		peak_wayland.wm = (struct xdg_wm_base *)peak_wayland_marshal((struct wl_proxy *)reg, 0, &xdg_wm_base_interface, args);
+		peak_wayland.wm = (struct xdg_wm_base *)peak_wayland_bind(reg, name, iface, &xdg_wm_base_interface, peak_wayland_ver(ver, 6));
 	} else if (!strcmp(iface, "wl_data_device_manager") && !peak_wayland.ddm && wl_data_device_manager_interface.name) {
-		args[1].s = "wl_data_device_manager";
-		if (ver > 3)
-			args[2].u = 3;
-		peak_wayland.ddm = (struct wl_data_device_manager *)peak_wayland_marshal((struct wl_proxy *)reg, 0, &wl_data_device_manager_interface, args);
+		peak_wayland.ddm = (struct wl_data_device_manager *)peak_wayland_bind(reg, name, iface, &wl_data_device_manager_interface, peak_wayland_ver(ver, 3));
+	} else if (!strcmp(iface, "wl_output") && wl_output_interface.name) {
+		for (i = 0; i < 8; i++) {
+			if (peak_wayland.outputs[i].obj)
+				continue;
+			peak_wayland.outputs[i].obj = (struct wl_output *)peak_wayland_bind(reg, name, iface, &wl_output_interface, peak_wayland_ver(ver, 4));
+			peak_wayland.outputs[i].name = name;
+			peak_wayland.outputs[i].scale = 0;
+			peak_wayland.outputs[i].pending = 1;
+			if (peak_wayland.outputs[i].obj)
+				peak_wl.wl_proxy_add_listener((struct wl_proxy *)peak_wayland.outputs[i].obj, (void (**)(void))(void *)&ol, &peak_wayland.outputs[i]);
+			break;
+		}
+	} else if (!strcmp(iface, "wp_fractional_scale_manager_v1") && !peak_wayland.frac_mgr) {
+		peak_wayland.frac_mgr = (struct wp_fractional_scale_manager_v1 *)peak_wayland_bind(reg, name, iface, &wp_fractional_scale_manager_v1_interface, 1);
+	} else if (!strcmp(iface, "wp_viewporter") && !peak_wayland.viewporter) {
+		peak_wayland.viewporter = (struct wp_viewporter *)peak_wayland_bind(reg, name, iface, &wp_viewporter_interface, 1);
+	} else if (!strcmp(iface, "wp_cursor_shape_manager_v1") && !peak_wayland.cursor_mgr) {
+		peak_wayland.cursor_mgr = (struct wp_cursor_shape_manager_v1 *)peak_wayland_bind(reg, name, iface, &wp_cursor_shape_manager_v1_interface, 1);
+	} else if (!strcmp(iface, "wp_alpha_modifier_v1") && !peak_wayland.alpha_mgr) {
+		peak_wayland.alpha_mgr = (struct wp_alpha_modifier_v1 *)peak_wayland_bind(reg, name, iface, &wp_alpha_modifier_v1_interface, 1);
+	} else if (!strcmp(iface, "zwp_primary_selection_device_manager_v1") && !peak_wayland.ps_mgr) {
+		peak_wayland.ps_mgr = (struct zwp_primary_selection_device_manager_v1 *)peak_wayland_bind(reg, name, iface, &zwp_primary_selection_device_manager_v1_interface, 1);
 	}
 }
 
@@ -3589,30 +4581,22 @@ peak_wayland_xdg_configure(void *data, struct xdg_surface *surf, uint32_t serial
 	args[0].u = serial;
 	peak_wayland_marshal((struct wl_proxy *)surf, 4, NULL, args);
 	w->configured = 1;
+	peak_wayland_commit_clip(w);
 }
 
 static void
 peak_wayland_toplevel_configure(void *data, struct xdg_toplevel *top, int32_t w, int32_t h, struct wl_array *states)
 {
 	struct peak_wayland_win *win;
-	PeakEvent ev;
 
 	(void)top;
 	(void)states;
 	win = data;
 	if (w <= 0 || h <= 0)
 		return;
-	if ((uint32_t)w == win->width && (uint32_t)h == win->height)
-		return;
-	if (!peak_wayland_shm_resize(win, (uint32_t)w, (uint32_t)h)) {
-		win->width = (uint32_t)w;
-		win->height = (uint32_t)h;
-	}
-	memset(&ev, 0, sizeof ev);
-	ev.type = PEAK_EVENT_WINDOW_RESIZE;
-	ev.resize.width = win->width;
-	ev.resize.height = win->height;
-	peak_q_push(&win->q, ev);
+	win->logical_w = (uint32_t)w;
+	win->logical_h = (uint32_t)h;
+	peak_wayland_apply_scale(win);
 }
 
 static void
@@ -3645,42 +4629,117 @@ peak_wayland_toplevel_caps(void *data, struct xdg_toplevel *top, struct wl_array
 	(void)caps;
 }
 
+static struct peak_wayland_win *
+peak_wayland_win_from_surface(struct wl_surface *s)
+{
+	int i;
+
+	if (!s)
+		return NULL;
+	for (i = 0; i < 8; i++) {
+		if (peak_wayland.wins[i] && peak_wayland.wins[i]->surface == s)
+			return peak_wayland.wins[i];
+	}
+	return NULL;
+}
+
+static void
+peak_wayland_release_buttons(struct peak_wayland_win *w)
+{
+	PeakEvent ev;
+	uint32_t bits;
+
+	if (!w)
+		return;
+	bits = peak_wayland.buttons;
+	peak_wayland.buttons = 0;
+	if (!bits)
+		return;
+	if (bits & 1) {
+		memset(&ev, 0, sizeof ev);
+		ev.type = PEAK_EVENT_POINTER;
+		ev.pointer.state = PEAK_POINTER_RELEASED;
+		ev.pointer.type = PEAK_POINTER_LEFT;
+		ev.pointer.x = w->last_x;
+		ev.pointer.y = w->last_y;
+		ev.pointer.mod = peak_wayland.mod;
+		peak_q_push(&w->q, ev);
+	}
+	if (bits & 2) {
+		memset(&ev, 0, sizeof ev);
+		ev.type = PEAK_EVENT_POINTER;
+		ev.pointer.state = PEAK_POINTER_RELEASED;
+		ev.pointer.type = PEAK_POINTER_MIDDLE;
+		ev.pointer.x = w->last_x;
+		ev.pointer.y = w->last_y;
+		ev.pointer.mod = peak_wayland.mod;
+		peak_q_push(&w->q, ev);
+	}
+	if (bits & 4) {
+		memset(&ev, 0, sizeof ev);
+		ev.type = PEAK_EVENT_POINTER;
+		ev.pointer.state = PEAK_POINTER_RELEASED;
+		ev.pointer.type = PEAK_POINTER_RIGHT;
+		ev.pointer.x = w->last_x;
+		ev.pointer.y = w->last_y;
+		ev.pointer.mod = peak_wayland.mod;
+		peak_q_push(&w->q, ev);
+	}
+}
+
+static int
+peak_wayland_ptr_inside(struct peak_wayland_win *w, float x, float y)
+{
+	if (!w)
+		return 0;
+	return x >= 0.f && y >= 0.f &&
+		x < (float)w->logical_w && y < (float)w->logical_h;
+}
+
 static void
 peak_wayland_pointer_enter(void *data, struct wl_pointer *p, uint32_t serial, struct wl_surface *s, wl_fixed_t x, wl_fixed_t y)
 {
+	struct peak_wayland_win *w;
+
 	(void)data;
 	(void)p;
-	(void)s;
 	peak_wayland.serial = serial;
-	if (peak_wayland.focus) {
-		peak_wayland.focus->pointer_in = 1;
-		peak_wayland.focus->last_x = (float)wl_fixed_to_double(x);
-		peak_wayland.focus->last_y = (float)wl_fixed_to_double(y);
+	w = peak_wayland_win_from_surface(s);
+	peak_wayland.hover = w;
+	if (!w)
+		return;
+	/* Coords outside the logical tile belong to the window beside us. */
+	if (!peak_wayland_ptr_inside(w, (float)wl_fixed_to_double(x), (float)wl_fixed_to_double(y))) {
+		w->pointer_in = 0;
+		peak_wayland_release_buttons(w);
+		return;
 	}
+	w->pointer_in = 1;
+	w->pointer_x = (float)wl_fixed_to_double(x);
+	w->pointer_y = (float)wl_fixed_to_double(y);
+	peak_wayland_to_buf(w, w->pointer_x, w->pointer_y, &w->last_x, &w->last_y);
+	peak_wayland_cursor_apply(w);
 }
 
 static void
 peak_wayland_pointer_leave(void *data, struct wl_pointer *p, uint32_t serial, struct wl_surface *s)
 {
 	struct peak_wayland_win *w;
-	PeakEvent ev;
 
 	(void)data;
 	(void)p;
-	(void)s;
 	peak_wayland.serial = serial;
-	w = peak_wayland.focus;
+	w = peak_wayland_win_from_surface(s);
+	if (!w)
+		w = peak_wayland.hover;
+	if (peak_wayland.hover == w)
+		peak_wayland.hover = NULL;
 	if (!w)
 		return;
 	w->pointer_in = 0;
-	memset(&ev, 0, sizeof ev);
-	ev.type = PEAK_EVENT_POINTER;
-	ev.pointer.state = PEAK_POINTER_MOVED;
-	ev.pointer.type = peak_wayland_ptr_type();
-	ev.pointer.x = w->last_x;
-	ev.pointer.y = w->last_y;
-	ev.pointer.mod = peak_wayland.mod;
-	peak_q_push(&w->q, ev);
+	/* A move here used to extend the selection after the pointer had left.
+	 * Release instead, so a click on the next window is not a continued drag. */
+	peak_wayland_release_buttons(w);
 }
 
 static void
@@ -3693,11 +4752,20 @@ peak_wayland_pointer_motion(void *data, struct wl_pointer *p, uint32_t time, wl_
 	(void)data;
 	(void)p;
 	(void)time;
-	w = peak_wayland.focus;
+	w = peak_wayland.hover;
 	if (!w)
 		return;
-	px = (float)wl_fixed_to_double(x);
-	py = (float)wl_fixed_to_double(y);
+	w->pointer_x = (float)wl_fixed_to_double(x);
+	w->pointer_y = (float)wl_fixed_to_double(y);
+	if (!peak_wayland_ptr_inside(w, w->pointer_x, w->pointer_y)) {
+		if (w->pointer_in) {
+			w->pointer_in = 0;
+			peak_wayland_release_buttons(w);
+		}
+		return;
+	}
+	w->pointer_in = 1;
+	peak_wayland_to_buf(w, (float)wl_fixed_to_double(x), (float)wl_fixed_to_double(y), &px, &py);
 	memset(&ev, 0, sizeof ev);
 	ev.type = PEAK_EVENT_POINTER;
 	ev.pointer.state = PEAK_POINTER_MOVED;
@@ -3733,9 +4801,18 @@ peak_wayland_pointer_button(void *data, struct wl_pointer *p, uint32_t serial, u
 	(void)data;
 	(void)p;
 	(void)time;
-	w = peak_wayland.focus;
-	if (!w)
+	w = peak_wayland.hover;
+	if (!w || !w->pointer_in)
 		return;
+	/* A configure can shrink the tile without another pointer motion. */
+	if (!peak_wayland_ptr_inside(w, w->pointer_x, w->pointer_y)) {
+		w->pointer_in = 0;
+		peak_wayland_release_buttons(w);
+		return;
+	}
+	if (button != BTN_LEFT && button != BTN_MIDDLE && button != BTN_RIGHT)
+		return;
+	peak_wayland_to_buf(w, w->pointer_x, w->pointer_y, &w->last_x, &w->last_y);
 	peak_wayland.serial = serial;
 	if (state)
 		peak_wayland.btn_serial = serial;
@@ -3770,26 +4847,159 @@ peak_wayland_pointer_button(void *data, struct wl_pointer *p, uint32_t serial, u
 }
 
 static void
+peak_wayland_wheel(struct peak_wayland_win *w, int down, int n)
+{
+	PeakEvent ev;
+	int i;
+
+	if (!w || !w->pointer_in || n <= 0 ||
+		!peak_wayland_ptr_inside(w, w->pointer_x, w->pointer_y))
+		return;
+	peak_wayland_to_buf(w, w->pointer_x, w->pointer_y, &w->last_x, &w->last_y);
+	if (n > 16)
+		n = 16;
+	for (i = 0; i < n; i++) {
+		memset(&ev, 0, sizeof ev);
+		ev.type = PEAK_EVENT_POINTER;
+		ev.pointer.state = PEAK_POINTER_PRESSED;
+		ev.pointer.type = down ? PEAK_POINTER_WHEEL_DOWN : PEAK_POINTER_WHEEL_UP;
+		ev.pointer.x = w->last_x;
+		ev.pointer.y = w->last_y;
+		ev.pointer.mod = peak_wayland.mod;
+		peak_q_push(&w->q, ev);
+	}
+}
+
+static void
+peak_wayland_axis_flush(struct peak_wayland_win *w)
+{
+	int steps;
+
+	if (!w)
+		w = peak_wayland.hover;
+	if (peak_wayland.frame_saw_120)
+		peak_wayland.acc_v120 += peak_wayland.frame_v120;
+	else if (peak_wayland.frame_saw_disc)
+		peak_wayland.acc_v120 += peak_wayland.frame_vdisc * 120;
+	else {
+		steps = 0;
+		peak_wayland.acc_v += peak_wayland.frame_v;
+		while (peak_wayland.acc_v >= 10.0) {
+			peak_wayland.acc_v -= 10.0;
+			steps++;
+		}
+		if (steps)
+			peak_wayland_wheel(w, 1, steps);
+		steps = 0;
+		while (peak_wayland.acc_v <= -10.0) {
+			peak_wayland.acc_v += 10.0;
+			steps++;
+		}
+		if (steps)
+			peak_wayland_wheel(w, 0, steps);
+	}
+	(void)peak_wayland.frame_h120;
+	(void)peak_wayland.frame_hdisc;
+	(void)peak_wayland.frame_h;
+	if (peak_wayland.frame_saw_120 || peak_wayland.frame_saw_disc) {
+		while (peak_wayland.acc_v120 >= 120) {
+			peak_wayland.acc_v120 -= 120;
+			peak_wayland_wheel(w, 1, 1);
+		}
+		while (peak_wayland.acc_v120 <= -120) {
+			peak_wayland.acc_v120 += 120;
+			peak_wayland_wheel(w, 0, 1);
+		}
+	}
+	peak_wayland.frame_v120 = 0;
+	peak_wayland.frame_h120 = 0;
+	peak_wayland.frame_vdisc = 0;
+	peak_wayland.frame_hdisc = 0;
+	peak_wayland.frame_v = 0;
+	peak_wayland.frame_h = 0;
+	peak_wayland.frame_saw_120 = 0;
+	peak_wayland.frame_saw_disc = 0;
+}
+
+static void
 peak_wayland_pointer_axis(void *data, struct wl_pointer *p, uint32_t time, uint32_t axis, wl_fixed_t value)
 {
-	struct peak_wayland_win *w;
-	PeakEvent ev;
+	double v;
 
+	(void)data;
+	(void)time;
+	v = wl_fixed_to_double(value);
+	if (axis == 0)
+		peak_wayland.frame_v += v;
+	else
+		peak_wayland.frame_h += v;
+	if (!p || peak_wl.wl_proxy_get_version((struct wl_proxy *)p) >= 5)
+		return;
+	if (axis == 0 && v != 0.0)
+		peak_wayland_wheel(peak_wayland.hover, v > 0.0, 1);
+	peak_wayland.frame_v = 0;
+	peak_wayland.frame_h = 0;
+}
+
+static void
+peak_wayland_pointer_frame(void *data, struct wl_pointer *p)
+{
+	(void)data;
+	(void)p;
+	peak_wayland_axis_flush(peak_wayland.hover);
+}
+
+static void
+peak_wayland_pointer_axis_source(void *data, struct wl_pointer *p, uint32_t source)
+{
+	(void)data;
+	(void)p;
+	(void)source;
+}
+
+static void
+peak_wayland_pointer_axis_stop(void *data, struct wl_pointer *p, uint32_t time, uint32_t axis)
+{
 	(void)data;
 	(void)p;
 	(void)time;
+	if (axis == 0) {
+		peak_wayland.acc_v120 = 0;
+		peak_wayland.acc_v = 0;
+	}
+}
+
+static void
+peak_wayland_pointer_axis_discrete(void *data, struct wl_pointer *p, uint32_t axis, int32_t discrete)
+{
+	(void)data;
+	(void)p;
+	peak_wayland.frame_saw_disc = 1;
+	if (axis == 0)
+		peak_wayland.frame_vdisc += discrete;
+	else
+		peak_wayland.frame_hdisc += discrete;
+}
+
+static void
+peak_wayland_pointer_axis_value120(void *data, struct wl_pointer *p, uint32_t axis, int32_t value120)
+{
+	(void)data;
+	(void)p;
+	peak_wayland.frame_saw_120 = 1;
+	if (axis == 0)
+		peak_wayland.frame_v120 += value120;
+	else
+		peak_wayland.frame_h120 += value120;
+}
+
+static void
+peak_wayland_pointer_axis_rel(void *data, struct wl_pointer *p, uint32_t axis, uint32_t direction)
+{
+	(void)data;
+	(void)p;
 	(void)axis;
-	w = peak_wayland.focus;
-	if (!w)
-		return;
-	memset(&ev, 0, sizeof ev);
-	ev.type = PEAK_EVENT_POINTER;
-	ev.pointer.state = PEAK_POINTER_PRESSED;
-	ev.pointer.type = (wl_fixed_to_double(value) > 0) ? PEAK_POINTER_WHEEL_DOWN : PEAK_POINTER_WHEEL_UP;
-	ev.pointer.x = w->last_x;
-	ev.pointer.y = w->last_y;
-	ev.pointer.mod = peak_wayland.mod;
-	peak_q_push(&w->q, ev);
+	(void)direction;
 }
 
 static int
@@ -3916,8 +5126,14 @@ peak_wayland_key_emit(struct peak_wayland_win *w, uint32_t key, int down, int co
 	ev.key.mod = peak_wayland.mod;
 	n = 0;
 	ev.key.code = peak_wayland_key_utf8(key, compose && down, buf, sizeof buf, &n);
+	/* xkb reports Delete as U+007F. That byte is tty VERASE (backspace),
+	 * not forward delete. Keep it as a key; do not also emit text. */
+	if (ev.key.key == PEAK_KEY_UNKNOWN && n == 1 && (unsigned char)buf[0] == 0x7f)
+		ev.key.key = PEAK_KEY_DELETE;
 	peak_q_push(&w->q, ev);
-	if (!down || !n || (unsigned char)buf[0] < 32)
+	if (!down || !n || (unsigned char)buf[0] < 32 || (unsigned char)buf[0] == 0x7f)
+		return;
+	if (ev.key.key == PEAK_KEY_DELETE || ev.key.key == PEAK_KEY_BACKSPACE)
 		return;
 	peak_text_store(buf, n);
 	memset(&ev, 0, sizeof ev);
@@ -3982,23 +5198,44 @@ peak_wayland_keyboard_keymap(void *data, struct wl_keyboard *k, uint32_t fmt, in
 static void
 peak_wayland_keyboard_enter(void *data, struct wl_keyboard *k, uint32_t serial, struct wl_surface *s, struct wl_array *keys)
 {
+	struct peak_wayland_win *w;
+	PeakEvent ev;
+
 	(void)data;
 	(void)k;
-	(void)s;
 	(void)keys;
 	peak_wayland.serial = serial;
+	w = peak_wayland_win_from_surface(s);
+	if (!w)
+		return;
+	peak_wayland.focus = w;
+	memset(&ev, 0, sizeof ev);
+	ev.type = PEAK_EVENT_FOCUS;
+	ev.focus.on = 1;
+	peak_q_push(&w->q, ev);
 }
 
 static void
 peak_wayland_keyboard_leave(void *data, struct wl_keyboard *k, uint32_t serial, struct wl_surface *s)
 {
+	struct peak_wayland_win *w;
+	PeakEvent ev;
+
 	(void)data;
 	(void)k;
 	(void)serial;
-	(void)s;
 	peak_wayland_repeat_stop();
 	if (peak_wayland.xkb_compose && peak_xkb.xkb_compose_state_reset)
 		peak_xkb.xkb_compose_state_reset(peak_wayland.xkb_compose);
+	w = peak_wayland_win_from_surface(s);
+	if (!w)
+		w = peak_wayland.focus;
+	if (!w || (peak_wayland.focus && peak_wayland.focus != w))
+		return;
+	memset(&ev, 0, sizeof ev);
+	ev.type = PEAK_EVENT_FOCUS;
+	ev.focus.on = 0;
+	peak_q_push(&w->q, ev);
 }
 
 static PeakPointerType
@@ -4306,8 +5543,7 @@ peak_wayland_touch_down(void *data, struct wl_touch *t, uint32_t serial, uint32_
 	ev.type = PEAK_EVENT_POINTER;
 	ev.pointer.state = PEAK_POINTER_PRESSED;
 	ev.pointer.type = PEAK_POINTER_TOUCH;
-	ev.pointer.x = (float)wl_fixed_to_double(x);
-	ev.pointer.y = (float)wl_fixed_to_double(y);
+	peak_wayland_to_buf(w, (float)wl_fixed_to_double(x), (float)wl_fixed_to_double(y), &ev.pointer.x, &ev.pointer.y);
 	peak_q_push(&w->q, ev);
 }
 
@@ -4356,9 +5592,26 @@ peak_wayland_touch_motion(void *data, struct wl_touch *t, uint32_t time, int32_t
 	ev.type = PEAK_EVENT_POINTER;
 	ev.pointer.state = PEAK_POINTER_MOVED;
 	ev.pointer.type = PEAK_POINTER_TOUCH;
-	ev.pointer.x = (float)wl_fixed_to_double(x);
-	ev.pointer.y = (float)wl_fixed_to_double(y);
+	peak_wayland_to_buf(w, (float)wl_fixed_to_double(x), (float)wl_fixed_to_double(y), &ev.pointer.x, &ev.pointer.y);
 	peak_q_push(&w->q, ev);
+}
+
+static void
+peak_wayland_touch_shape(void *data, struct wl_touch *t, int32_t id, uint32_t shape)
+{
+	(void)data;
+	(void)t;
+	(void)id;
+	(void)shape;
+}
+
+static void
+peak_wayland_touch_orientation(void *data, struct wl_touch *t, int32_t id, uint32_t orientation)
+{
+	(void)data;
+	(void)t;
+	(void)id;
+	(void)orientation;
 }
 
 static void
@@ -4384,9 +5637,18 @@ peak_wayland_seat_caps(void *data, struct wl_seat *seat, uint32_t caps)
 		void (*motion)(void *, struct wl_pointer *, uint32_t, wl_fixed_t, wl_fixed_t);
 		void (*button)(void *, struct wl_pointer *, uint32_t, uint32_t, uint32_t, uint32_t);
 		void (*axis)(void *, struct wl_pointer *, uint32_t, uint32_t, wl_fixed_t);
+		void (*frame)(void *, struct wl_pointer *);
+		void (*axis_source)(void *, struct wl_pointer *, uint32_t);
+		void (*axis_stop)(void *, struct wl_pointer *, uint32_t, uint32_t);
+		void (*axis_discrete)(void *, struct wl_pointer *, uint32_t, int32_t);
+		void (*axis_value120)(void *, struct wl_pointer *, uint32_t, int32_t);
+		void (*axis_relative_direction)(void *, struct wl_pointer *, uint32_t, uint32_t);
 	} pl = {
 		peak_wayland_pointer_enter, peak_wayland_pointer_leave, peak_wayland_pointer_motion,
-		peak_wayland_pointer_button, peak_wayland_pointer_axis
+		peak_wayland_pointer_button, peak_wayland_pointer_axis, peak_wayland_pointer_frame,
+		peak_wayland_pointer_axis_source, peak_wayland_pointer_axis_stop,
+		peak_wayland_pointer_axis_discrete, peak_wayland_pointer_axis_value120,
+		peak_wayland_pointer_axis_rel
 	};
 	static const struct {
 		void (*keymap)(void *, struct wl_keyboard *, uint32_t, int, uint32_t);
@@ -4405,16 +5667,26 @@ peak_wayland_seat_caps(void *data, struct wl_seat *seat, uint32_t caps)
 		void (*motion)(void *, struct wl_touch *, uint32_t, int32_t, wl_fixed_t, wl_fixed_t);
 		void (*frame)(void *, struct wl_touch *);
 		void (*cancel)(void *, struct wl_touch *);
+		void (*shape)(void *, struct wl_touch *, int32_t, uint32_t);
+		void (*orientation)(void *, struct wl_touch *, int32_t, uint32_t);
 	} tl = {
 		peak_wayland_touch_down, peak_wayland_touch_up, peak_wayland_touch_motion,
-		peak_wayland_touch_frame, peak_wayland_touch_cancel
+		peak_wayland_touch_frame, peak_wayland_touch_cancel,
+		peak_wayland_touch_shape, peak_wayland_touch_orientation
 	};
 
 	(void)data;
 	if ((caps & 1) && !peak_wayland.pointer) {
+		union wl_argument cargs[2];
+
 		peak_wayland.pointer = (struct wl_pointer *)peak_wayland_marshal((struct wl_proxy *)seat, 0, &wl_pointer_interface, NULL);
 		if (peak_wayland.pointer)
 			peak_wl.wl_proxy_add_listener((struct wl_proxy *)peak_wayland.pointer, (void (**)(void))(void *)&pl, NULL);
+		if (peak_wayland.pointer && peak_wayland.cursor_mgr && !peak_wayland.cursor_dev) {
+			memset(cargs, 0, sizeof cargs);
+			cargs[1].o = (struct wl_object *)peak_wayland.pointer;
+			peak_wayland.cursor_dev = (struct wp_cursor_shape_device_v1 *)peak_wayland_marshal((struct wl_proxy *)peak_wayland.cursor_mgr, 1, &wp_cursor_shape_device_v1_interface, cargs);
+		}
 	}
 	if ((caps & 2) && !peak_wayland.keyboard) {
 		peak_wayland.keyboard = (struct wl_keyboard *)peak_wayland_marshal((struct wl_proxy *)seat, 1, &wl_keyboard_interface, NULL);
@@ -4446,6 +5718,12 @@ peak_wayland_shm_resize(struct peak_wayland_win *w, uint32_t width, uint32_t hei
 
 	if (!width || !height)
 		return 0;
+#ifdef PEAK_VULKAN
+	/* Native configure dimensions only; Vulkan supplies the surface buffers. */
+	w->width = width;
+	w->height = height;
+	return 1;
+#endif
 	n = (size_t)width * height * 4;
 	if (w->shm) {
 		munmap(w->shm, w->shm_n);
@@ -4494,6 +5772,8 @@ peak_wayland_shm_resize(struct peak_wayland_win *w, uint32_t width, uint32_t hei
 	w->height = height;
 	return 1;
 }
+
+static void peak_wayland_ps_setup(void);
 
 static int
 peak_wayland_init(void)
@@ -4575,6 +5855,7 @@ peak_wayland_init(void)
 		if (peak_wayland.dd)
 			peak_wl.wl_proxy_add_listener((struct wl_proxy *)peak_wayland.dd, (void (**)(void))(void *)&ddl, NULL);
 	}
+	peak_wayland_ps_setup();
 	peak_wl.wl_display_roundtrip(peak_wayland.display);
 	return 1;
 fail:
@@ -4585,7 +5866,7 @@ fail:
 static void
 peak_wayland_quit(void)
 {
-	free(peak_wayland.drag);
+	peak_host_transfer_free(peak_wayland.drag);
 	peak_wayland_xkb_quit();
 	if (peak_wayland.timer_fd >= 0)
 		close(peak_wayland.timer_fd);
@@ -4617,15 +5898,52 @@ peak_wayland_window_open(const char *name, uint32_t width, uint32_t height, uint
 
 	if (!peak_wayland.display && !peak_wayland_init())
 		return intern;
-	w = calloc(1, sizeof *w);
+	w = peak_host_window_alloc(sizeof *w);
 	if (!w)
 		return intern;
 	w->shm_fd = -1;
 	w->cursor_on = 1;
+	w->opacity = 255;
+	w->logical_w = width ? width : 1;
+	w->logical_h = height ? height : 1;
 	w->flags = (int)flags;
+	intern.w = w;
 	w->surface = (struct wl_surface *)peak_wayland_marshal((struct wl_proxy *)peak_wayland.compositor, 0, &wl_surface_interface, NULL);
 	if (!w->surface)
 		goto fail;
+	{
+		static const struct {
+			void (*enter)(void *, struct wl_surface *, struct wl_output *);
+			void (*leave)(void *, struct wl_surface *, struct wl_output *);
+			void (*preferred_buffer_scale)(void *, struct wl_surface *, int32_t);
+			void (*preferred_buffer_transform)(void *, struct wl_surface *, uint32_t);
+		} surf_l = {
+			peak_wayland_surface_enter, peak_wayland_surface_leave,
+			peak_wayland_surface_preferred_scale, peak_wayland_surface_preferred_transform
+		};
+		static const struct {
+			void (*preferred_scale)(void *, struct wp_fractional_scale_v1 *, uint32_t);
+		} frac_l = { peak_wayland_frac_scale };
+
+		peak_wl.wl_proxy_add_listener((struct wl_proxy *)w->surface, (void (**)(void))(void *)&surf_l, w);
+		if (peak_wayland.frac_mgr) {
+			memset(args, 0, sizeof args);
+			args[1].o = (struct wl_object *)w->surface;
+			w->frac = (struct wp_fractional_scale_v1 *)peak_wayland_marshal((struct wl_proxy *)peak_wayland.frac_mgr, 1, &wp_fractional_scale_v1_interface, args);
+			if (w->frac)
+				peak_wl.wl_proxy_add_listener((struct wl_proxy *)w->frac, (void (**)(void))(void *)&frac_l, w);
+		}
+		if (peak_wayland.viewporter) {
+			memset(args, 0, sizeof args);
+			args[1].o = (struct wl_object *)w->surface;
+			w->viewport = (struct wp_viewport *)peak_wayland_marshal((struct wl_proxy *)peak_wayland.viewporter, 1, &wp_viewport_interface, args);
+		}
+		if (peak_wayland.alpha_mgr) {
+			memset(args, 0, sizeof args);
+			args[1].o = (struct wl_object *)w->surface;
+			w->alpha = (struct wp_alpha_modifier_surface_v1 *)peak_wayland_marshal((struct wl_proxy *)peak_wayland.alpha_mgr, 1, &wp_alpha_modifier_surface_v1_interface, args);
+		}
+	}
 	memset(args, 0, sizeof args);
 	args[1].o = (struct wl_object *)w->surface;
 	w->xdg_surface = (struct xdg_surface *)peak_wayland_marshal((struct wl_proxy *)peak_wayland.wm, 2, &xdg_surface_interface, args);
@@ -4652,12 +5970,38 @@ peak_wayland_window_open(const char *name, uint32_t width, uint32_t height, uint
 		peak_wayland_marshal((struct wl_proxy *)w->surface, 6, NULL, NULL);
 		peak_wl.wl_display_roundtrip(peak_wayland.display);
 	}
+	/* Preferred fractional scale arrives once a buffer is committed after ack. */
+	if (w->frac && !w->have_frac && w->wl_buf && w->surface) {
+		union wl_argument pargs[4];
+
+		memset(pargs, 0, sizeof pargs);
+		pargs[0].o = (struct wl_object *)w->wl_buf;
+		peak_wayland_bind_geom(w);
+		peak_wayland_marshal((struct wl_proxy *)w->surface, 1, NULL, pargs);
+		pargs[0].i = 0;
+		pargs[1].i = 0;
+		pargs[2].i = (int32_t)(w->logical_w ? w->logical_w : w->width);
+		pargs[3].i = (int32_t)(w->logical_h ? w->logical_h : w->height);
+		peak_wayland_marshal((struct wl_proxy *)w->surface, 2, NULL, pargs);
+		peak_wayland_marshal((struct wl_proxy *)w->surface, 6, NULL, NULL);
+		w->attached_w = w->width;
+		w->attached_h = w->height;
+		peak_wl.wl_display_roundtrip(peak_wayland.display);
+	}
 	peak_wayland.focus = w;
-	intern.w = w;
+	{
+		int i;
+
+		for (i = 0; i < 8; i++) {
+			if (!peak_wayland.wins[i]) {
+				peak_wayland.wins[i] = w;
+				break;
+			}
+		}
+	}
 	return intern;
 fail:
 	peak_wayland_window_close(&intern);
-	free(w);
 	return intern;
 }
 
@@ -4673,6 +6017,24 @@ peak_wayland_window_close(PeakWindowInternal *intern)
 		peak_wayland.focus = NULL;
 		peak_wayland_repeat_stop();
 	}
+	if (peak_wayland.hover == w) {
+		peak_wayland.hover = NULL;
+		peak_wayland.buttons = 0;
+	}
+	{
+		int i;
+
+		for (i = 0; i < 8; i++) {
+			if (peak_wayland.wins[i] == w)
+				peak_wayland.wins[i] = NULL;
+		}
+	}
+	if (w->alpha)
+		peak_wl.wl_proxy_destroy((struct wl_proxy *)w->alpha);
+	if (w->frac)
+		peak_wl.wl_proxy_destroy((struct wl_proxy *)w->frac);
+	if (w->viewport)
+		peak_wl.wl_proxy_destroy((struct wl_proxy *)w->viewport);
 	if (w->xdg_toplevel)
 		peak_wl.wl_proxy_destroy((struct wl_proxy *)w->xdg_toplevel);
 	if (w->xdg_surface)
@@ -4685,8 +6047,9 @@ peak_wayland_window_close(PeakWindowInternal *intern)
 		munmap(w->shm, w->shm_n);
 	if (w->shm_fd >= 0)
 		close(w->shm_fd);
-	free(w->buffer);
-	free(w);
+	if (w->buffer)
+		free(w->buffer);
+	peak_host_window_free(w);
 	if (intern)
 		intern->w = NULL;
 }
@@ -4716,17 +6079,36 @@ peak_wayland_window_present(PeakWindowInternal *intern)
 	w = intern ? intern->w : NULL;
 	if (!w || !w->surface || !w->wl_buf || !w->buffer || !w->shm)
 		return;
+	peak_wayland_bind_geom(w);
 	memcpy(w->shm, w->buffer, w->shm_n);
+	if (!w->alpha && w->opacity < 255) {
+		uint32_t *px;
+		size_t i, n;
+		uint32_t a;
+
+		px = w->shm;
+		n = w->shm_n / 4;
+		a = w->opacity;
+		for (i = 0; i < n; i++) {
+			uint32_t c, pa;
+
+			c = px[i];
+			pa = ((c >> 24) & 255u) * a / 255u;
+			px[i] = (c & 0x00ffffffu) | (pa << 24);
+		}
+	}
 	args[0].o = (struct wl_object *)w->wl_buf;
 	args[1].i = 0;
 	args[2].i = 0;
 	peak_wayland_marshal((struct wl_proxy *)w->surface, 1, NULL, args);
 	args[0].i = 0;
 	args[1].i = 0;
-	args[2].i = (int32_t)w->width;
-	args[3].i = (int32_t)w->height;
+	args[2].i = (int32_t)(w->logical_w ? w->logical_w : w->width);
+	args[3].i = (int32_t)(w->logical_h ? w->logical_h : w->height);
 	peak_wayland_marshal((struct wl_proxy *)w->surface, 2, NULL, args);
 	peak_wayland_marshal((struct wl_proxy *)w->surface, 6, NULL, NULL);
+	w->attached_w = w->width;
+	w->attached_h = w->height;
 	peak_wl.wl_display_flush(peak_wayland.display);
 }
 
@@ -4745,14 +6127,31 @@ peak_wayland_window_set_title(PeakWindowInternal *intern, const char *name)
 }
 
 static void
+peak_wayland_window_set_class(PeakWindowInternal *intern, const char *name)
+{
+	struct peak_wayland_win *w;
+	union wl_argument args[1];
+
+	w = intern ? intern->w : NULL;
+	if (!w || !w->xdg_toplevel || !name || !name[0])
+		return;
+	args[0].s = name;
+	peak_wayland_marshal((struct wl_proxy *)w->xdg_toplevel, 3, NULL, args);
+	peak_wl.wl_display_flush(peak_wayland.display);
+}
+
+static void
 peak_wayland_window_set_size(PeakWindowInternal *intern, uint32_t width, uint32_t height)
 {
 	struct peak_wayland_win *w;
 
 	w = intern ? intern->w : NULL;
-	if (!w)
+	if (!w || !width || !height)
 		return;
-	peak_wayland_shm_resize(w, width, height);
+	w->logical_w = width;
+	w->logical_h = height;
+	peak_wayland_apply_scale(w);
+	peak_wayland_commit_clip(w);
 }
 
 static void
@@ -4778,6 +6177,38 @@ peak_wayland_window_cursor(PeakWindowInternal *intern, int on)
 	if (!w)
 		return;
 	w->cursor_on = on;
+	peak_wayland_cursor_apply(w);
+}
+
+static void
+peak_wayland_window_cursor_shape(PeakWindowInternal *intern, int shape)
+{
+	struct peak_wayland_win *w;
+
+	w = intern ? intern->w : NULL;
+	if (!w)
+		return;
+	w->cursor_shape = shape;
+	if (w->cursor_on)
+		peak_wayland_cursor_apply(w);
+}
+
+static void
+peak_wayland_window_set_opacity(PeakWindowInternal *intern, uint8_t alpha)
+{
+	struct peak_wayland_win *w;
+	union wl_argument args[1];
+
+	w = intern ? intern->w : NULL;
+	if (!w)
+		return;
+	w->opacity = alpha;
+	if (!w->alpha || !w->surface)
+		return;
+	memset(args, 0, sizeof args);
+	args[0].u = (uint32_t)alpha * 0x01010101u;
+	peak_wayland_marshal((struct wl_proxy *)w->alpha, 1, NULL, args);
+	peak_wayland_commit_clip(w);
 }
 
 static void
@@ -4794,8 +6225,10 @@ peak_wayland_window_pointer_relative(PeakWindowInternal *intern, int on)
 static float
 peak_wayland_window_scale(PeakWindowInternal *intern)
 {
-	(void)intern;
-	return peak_wayland.scale > 0 ? (float)peak_wayland.scale : 1.f;
+	struct peak_wayland_win *w;
+
+	w = intern ? intern->w : NULL;
+	return (float)peak_wayland_scale_120(w) / 120.f;
 }
 
 static void
@@ -4922,7 +6355,7 @@ peak_wayland_ds_kill(struct wl_data_source **slot)
 		peak_wayland.ds = NULL;
 	if (peak_wayland.drag_ds == ds) {
 		peak_wayland.drag_ds = NULL;
-		free(peak_wayland.drag);
+		peak_host_transfer_free(peak_wayland.drag);
 		peak_wayland.drag = NULL;
 		peak_wayland.drag_n = 0;
 	}
@@ -4985,14 +6418,14 @@ peak_wayland_dd_enter(void *data, struct wl_data_device *dd, uint32_t serial, st
 
 	(void)data;
 	(void)dd;
-	(void)s;
 	peak_wayland.serial = serial;
 	peak_wayland.dnd_serial = serial;
-	w = peak_wayland.focus;
-	if (w) {
+	w = peak_wayland_win_from_surface(s);
+	if (!w)
+		w = peak_wayland.hover;
+	if (w && peak_wayland_ptr_inside(w, (float)wl_fixed_to_double(x), (float)wl_fixed_to_double(y))) {
 		w->pointer_in = 1;
-		w->last_x = (float)wl_fixed_to_double(x);
-		w->last_y = (float)wl_fixed_to_double(y);
+		peak_wayland_to_buf(w, (float)wl_fixed_to_double(x), (float)wl_fixed_to_double(y), &w->last_x, &w->last_y);
 	}
 	if (peak_wayland.dnd && peak_wayland.dnd != id) {
 		if (peak_wayland.dnd_busy)
@@ -5071,7 +6504,7 @@ peak_wayland_dd_drop(void *data, struct wl_data_device *dd)
 		mime = peak_wayland.dnd_uri ? "text/uri-list" :
 			peak_wayland.dnd_utf8 ? "text/plain;charset=utf-8" : NULL;
 	if (mime)
-		peak_wayland_offer_recv(o, mime, &acc, &n);
+		peak_wayland_offer_recv((struct wl_proxy *)o, 1, mime, &acc, &n);
 	if (peak_wayland.dnd == o && !peak_wayland.dnd_left && ver >= 3 && (action == 1 || action == 2) && n)
 		peak_wayland_marshal((struct wl_proxy *)o, 3, NULL, NULL);
 	if (peak_wayland.dnd == o)
@@ -5079,11 +6512,11 @@ peak_wayland_dd_drop(void *data, struct wl_data_device *dd)
 	peak_wayland.dnd_busy = 0;
 	peak_wayland.dnd_left = 0;
 	if (!acc || !n) {
-		free(acc);
+		peak_host_transfer_free(acc);
 		return;
 	}
 	peak_drop_store(acc, n);
-	free(acc);
+	peak_host_transfer_free(acc);
 	w = peak_wayland.focus;
 	if (!w)
 		return;
@@ -5258,6 +6691,158 @@ peak_wayland_ds_action(void *data, struct wl_data_source *ds, uint32_t action)
 	(void)action;
 }
 
+static void
+peak_wayland_ps_offer_kill(struct zwp_primary_selection_offer_v1 **slot)
+{
+	struct zwp_primary_selection_offer_v1 *o;
+
+	o = slot ? *slot : NULL;
+	if (!o)
+		return;
+	peak_wayland_marshal((struct wl_proxy *)o, 1, NULL, NULL);
+	peak_wl.wl_proxy_destroy((struct wl_proxy *)o);
+	if (peak_wayland.ps_offer == o)
+		peak_wayland.ps_offer = NULL;
+	if (peak_wayland.ps_fresh == o)
+		peak_wayland.ps_fresh = NULL;
+	*slot = NULL;
+}
+
+static void
+peak_wayland_ps_src_kill(void)
+{
+	if (!peak_wayland.ps_src)
+		return;
+	peak_wayland_marshal((struct wl_proxy *)peak_wayland.ps_src, 1, NULL, NULL);
+	peak_wl.wl_proxy_destroy((struct wl_proxy *)peak_wayland.ps_src);
+	peak_wayland.ps_src = NULL;
+}
+
+static void
+peak_wayland_ps_offer_mime(void *data, struct zwp_primary_selection_offer_v1 *o, const char *mime)
+{
+	(void)data;
+	if (!peak_wayland_mime_utf8(mime))
+		return;
+	if (o == peak_wayland.ps_fresh)
+		peak_wayland.ps_fresh_utf8 = 1;
+	if (o == peak_wayland.ps_offer)
+		peak_wayland.ps_utf8 = 1;
+}
+
+static void
+peak_wayland_ps_data_offer(void *data, struct zwp_primary_selection_device_v1 *dev, struct zwp_primary_selection_offer_v1 *id)
+{
+	static const struct {
+		void (*offer)(void *, struct zwp_primary_selection_offer_v1 *, const char *);
+	} ol = { peak_wayland_ps_offer_mime };
+
+	(void)data;
+	(void)dev;
+	if (peak_wayland.ps_fresh && peak_wayland.ps_fresh != peak_wayland.ps_offer)
+		peak_wayland_ps_offer_kill(&peak_wayland.ps_fresh);
+	peak_wayland.ps_fresh = id;
+	peak_wayland.ps_fresh_utf8 = 0;
+	if (id)
+		peak_wl.wl_proxy_add_listener((struct wl_proxy *)id, (void (**)(void))(void *)&ol, NULL);
+}
+
+static void
+peak_wayland_ps_selection(void *data, struct zwp_primary_selection_device_v1 *dev, struct zwp_primary_selection_offer_v1 *id)
+{
+	(void)data;
+	(void)dev;
+	if (peak_wayland.ps_offer && peak_wayland.ps_offer != id)
+		peak_wayland_ps_offer_kill(&peak_wayland.ps_offer);
+	peak_wayland.ps_offer = id;
+	peak_wayland.ps_utf8 = 0;
+	if (id && id == peak_wayland.ps_fresh) {
+		peak_wayland.ps_utf8 = peak_wayland.ps_fresh_utf8;
+		peak_wayland.ps_fresh = NULL;
+	}
+}
+
+static void
+peak_wayland_ps_send(void *data, struct zwp_primary_selection_source_v1 *src, const char *mime, int32_t fd)
+{
+	const char *p;
+	size_t n;
+
+	(void)data;
+	(void)src;
+	(void)mime;
+	if (fd < 0)
+		return;
+	if (!peak_clip_own_get(PEAK_CLIP_PRIMARY, &p, &n))
+		n = 0;
+	peak_wayland_ds_write(fd, p ? p : "", n);
+	close(fd);
+}
+
+static void
+peak_wayland_ps_cancelled(void *data, struct zwp_primary_selection_source_v1 *src)
+{
+	(void)data;
+	if (src && src == peak_wayland.ps_src)
+		peak_wayland_ps_src_kill();
+}
+
+static void
+peak_wayland_ps_setup(void)
+{
+	union wl_argument args[2];
+	static const struct {
+		void (*data_offer)(void *, struct zwp_primary_selection_device_v1 *, struct zwp_primary_selection_offer_v1 *);
+		void (*selection)(void *, struct zwp_primary_selection_device_v1 *, struct zwp_primary_selection_offer_v1 *);
+	} dl = { peak_wayland_ps_data_offer, peak_wayland_ps_selection };
+
+	if (!peak_wayland.ps_mgr || !peak_wayland.seat || peak_wayland.ps_dev)
+		return;
+	memset(args, 0, sizeof args);
+	args[1].o = (struct wl_object *)peak_wayland.seat;
+	peak_wayland.ps_dev = (struct zwp_primary_selection_device_v1 *)peak_wayland_marshal((struct wl_proxy *)peak_wayland.ps_mgr, 1, &zwp_primary_selection_device_v1_interface, args);
+	if (peak_wayland.ps_dev)
+		peak_wl.wl_proxy_add_listener((struct wl_proxy *)peak_wayland.ps_dev, (void (**)(void))(void *)&dl, NULL);
+}
+
+static int
+peak_wayland_ps_set(const char *utf8, size_t n)
+{
+	union wl_argument args[2];
+	static const struct {
+		void (*send)(void *, struct zwp_primary_selection_source_v1 *, const char *, int32_t);
+		void (*cancelled)(void *, struct zwp_primary_selection_source_v1 *);
+	} sl = { peak_wayland_ps_send, peak_wayland_ps_cancelled };
+
+	if (!peak_wayland.ps_dev)
+		return 1;
+	peak_wayland_ps_src_kill();
+	if (!utf8 || !n) {
+		memset(args, 0, sizeof args);
+		args[1].u = peak_wayland.serial;
+		peak_wayland_marshal((struct wl_proxy *)peak_wayland.ps_dev, 0, NULL, args);
+		peak_wl.wl_display_flush(peak_wayland.display);
+		return 1;
+	}
+	peak_wayland.ps_src = (struct zwp_primary_selection_source_v1 *)peak_wayland_marshal((struct wl_proxy *)peak_wayland.ps_mgr, 0, &zwp_primary_selection_source_v1_interface, NULL);
+	if (!peak_wayland.ps_src)
+		return 0;
+	peak_wl.wl_proxy_add_listener((struct wl_proxy *)peak_wayland.ps_src, (void (**)(void))(void *)&sl, NULL);
+	memset(args, 0, sizeof args);
+	args[0].s = "text/plain;charset=utf-8";
+	peak_wayland_marshal((struct wl_proxy *)peak_wayland.ps_src, 0, NULL, args);
+	args[0].s = "text/plain";
+	peak_wayland_marshal((struct wl_proxy *)peak_wayland.ps_src, 0, NULL, args);
+	args[0].s = "UTF8_STRING";
+	peak_wayland_marshal((struct wl_proxy *)peak_wayland.ps_src, 0, NULL, args);
+	memset(args, 0, sizeof args);
+	args[0].o = (struct wl_object *)peak_wayland.ps_src;
+	args[1].u = peak_wayland.serial;
+	peak_wayland_marshal((struct wl_proxy *)peak_wayland.ps_dev, 0, NULL, args);
+	peak_wl.wl_display_flush(peak_wayland.display);
+	return 1;
+}
+
 static int
 peak_wayland_clip_set(PeakWindowInternal *intern, PeakClip which, const char *utf8, size_t n)
 {
@@ -5275,6 +6860,8 @@ peak_wayland_clip_set(PeakWindowInternal *intern, PeakClip which, const char *ut
 	};
 
 	(void)intern;
+	if (which == PEAK_CLIP_PRIMARY)
+		return peak_wayland_ps_set(utf8, n);
 	(void)utf8;
 	(void)n;
 	if (which != PEAK_CLIP_CLIPBOARD)
@@ -5301,7 +6888,7 @@ peak_wayland_clip_set(PeakWindowInternal *intern, PeakClip which, const char *ut
 }
 
 static int
-peak_wayland_offer_recv(struct wl_data_offer *o, const char *mime, char **out, size_t *out_n)
+peak_wayland_offer_recv(struct wl_proxy *o, uint32_t opcode, const char *mime, char **out, size_t *out_n)
 {
 	int pfd[2], rfd, flags, got, empty;
 	union wl_argument args[2];
@@ -5320,14 +6907,18 @@ peak_wayland_offer_recv(struct wl_data_offer *o, const char *mime, char **out, s
 	memset(args, 0, sizeof args);
 	args[0].s = mime;
 	args[1].h = pfd[1];
-	peak_wayland_marshal((struct wl_proxy *)o, 1, NULL, args);
+	peak_wayland_marshal(o, opcode, NULL, args);
 	close(pfd[1]);
 	peak_wl.wl_display_flush(peak_wayland.display);
 	rfd = pfd[0];
 	flags = fcntl(rfd, F_GETFL, 0);
 	if (flags >= 0)
 		fcntl(rfd, F_SETFL, flags | O_NONBLOCK);
-	acc = NULL;
+	acc = peak_host.base ? peak_host_recv_alloc() : NULL;
+	if (peak_host.base && !acc) {
+		close(rfd);
+		return 0;
+	}
 	n = 0;
 	got = 0;
 	empty = 0;
@@ -5338,11 +6929,11 @@ peak_wayland_offer_recv(struct wl_data_offer *o, const char *mime, char **out, s
 		if (r > 0) {
 			char *q;
 
-			if (n + (size_t)r > PEAK_CLIP_MAX)
-				r = (ssize_t)(PEAK_CLIP_MAX - n);
+			if (n + (size_t)r > PEAK_TRANSFER_CAP)
+				r = (ssize_t)(PEAK_TRANSFER_CAP - n);
 			if (r <= 0)
 				break;
-			q = realloc(acc, n + (size_t)r);
+			q = peak_host.base ? acc : realloc(acc, n + (size_t)r);
 			if (!q)
 				break;
 			acc = q;
@@ -5373,10 +6964,10 @@ peak_wayland_offer_recv(struct wl_data_offer *o, const char *mime, char **out, s
 	}
 	close(rfd);
 	if (!got) {
-		free(acc);
+		peak_host_transfer_free(acc);
 		return 0;
 	}
-	*out = acc ? acc : calloc(1, 1);
+	*out = acc;
 	*out_n = n;
 	return *out ? 1 : 0;
 }
@@ -5392,10 +6983,10 @@ peak_wayland_clip_take_offer(PeakClip which, struct peak_wayland_win *w)
 		return 0;
 	acc = NULL;
 	n = 0;
-	if (!peak_wayland_offer_recv(peak_wayland.offer, "text/plain;charset=utf-8", &acc, &n))
+	if (!peak_wayland_offer_recv((struct wl_proxy *)peak_wayland.offer, 1, "text/plain;charset=utf-8", &acc, &n))
 		return 0;
 	peak_clip_paste_store(which, acc ? acc : "", n);
-	free(acc);
+	peak_host_transfer_free(acc);
 	memset(&ev, 0, sizeof ev);
 	ev.type = PEAK_EVENT_CLIP;
 	ev.clip.which = which;
@@ -5429,17 +7020,17 @@ peak_wayland_drop_drag(PeakWindowInternal *intern, const char *utf8, size_t n)
 		return 0;
 	if (peak_wayland.drag_ds)
 		return 1;
-	p = malloc(n ? n : 1);
+	p = peak_host.base ? peak_host.store[PEAK_STORE_DRAG] : malloc(n ? n : 1);
 	if (!p)
 		return 0;
 	if (n)
 		memcpy(p, utf8, n);
-	free(peak_wayland.drag);
+	peak_host_transfer_free(peak_wayland.drag);
 	peak_wayland.drag = p;
 	peak_wayland.drag_n = n;
 	peak_wayland.drag_ds = (struct wl_data_source *)peak_wayland_marshal((struct wl_proxy *)peak_wayland.ddm, 0, &wl_data_source_interface, NULL);
 	if (!peak_wayland.drag_ds) {
-		free(p);
+		peak_host_transfer_free(p);
 		peak_wayland.drag = NULL;
 		peak_wayland.drag_n = 0;
 		return 0;
@@ -5478,6 +7069,24 @@ peak_wayland_clip_request(PeakWindowInternal *intern, PeakClip which)
 	w = intern ? intern->w : NULL;
 	if (!w)
 		return 0;
+	if (which == PEAK_CLIP_PRIMARY && peak_wayland.ps_offer && peak_wayland.ps_utf8) {
+		char *acc;
+		size_t pn;
+
+		acc = NULL;
+		pn = 0;
+		if (peak_wayland_offer_recv((struct wl_proxy *)peak_wayland.ps_offer, 0, "text/plain;charset=utf-8", &acc, &pn)) {
+			peak_clip_paste_store(which, acc ? acc : "", pn);
+			peak_host_transfer_free(acc);
+			memset(&ev, 0, sizeof ev);
+			ev.type = PEAK_EVENT_CLIP;
+			ev.clip.which = which;
+			ev.clip.n = pn;
+			peak_q_push(&w->q, ev);
+			return 1;
+		}
+		peak_host_transfer_free(acc);
+	}
 	if (which == PEAK_CLIP_PRIMARY && peak_clip_own_get(which, &p, &n) && n) {
 		peak_clip_paste_store(which, p, n);
 		memset(&ev, 0, sizeof ev);
@@ -5577,14 +7186,18 @@ peak_wayland_vulkan_create_surface(PeakWindowInternal *intern, void *instance, c
 	return 0;
 #endif
 }
-/* END p_wayland.c */
 
 static void peak_platform_window_set_title(PeakWindowInternal *intern, const char *name);
 static void peak_platform_window_set_size(PeakWindowInternal *intern, uint32_t width, uint32_t height);
 static void peak_platform_window_fullscreen(PeakWindowInternal *intern, int on);
 static void peak_platform_window_cursor(PeakWindowInternal *intern, int on);
+static void peak_platform_window_cursor_shape(PeakWindowInternal *intern, int shape);
 static void peak_platform_window_pointer_relative(PeakWindowInternal *intern, int on);
 static float peak_platform_window_scale(PeakWindowInternal *intern);
+static int peak_linux_clip_start(struct peak_linux_win *w, PeakClip which);
+static void peak_linux_clip_done(void);
+static Bool peak_linux_clip_canceled_request(Display *display, XEvent *ev, XPointer arg);
+static void peak_linux_clip_cancel(void);
 
 static int
 peak_internal_x11_load(void *handle)
@@ -5619,7 +7232,8 @@ peak_internal_x11_key_map(KeySym sym)
 	case XK_BackSpace: return PEAK_KEY_BACKSPACE;
 	case XK_Tab:
 	case XK_ISO_Left_Tab: return PEAK_KEY_TAB;
-	case XK_Delete: return PEAK_KEY_DELETE;
+	case XK_Delete:
+	case XK_KP_Delete: return PEAK_KEY_DELETE;
 	case XK_Insert:
 	case XK_KP_Insert: return PEAK_KEY_INSERT;
 	case XK_Home:
@@ -5669,7 +7283,24 @@ static Bool
 peak_internal_x11_window_match(Display *dpy, XEvent *ev, XPointer arg)
 {
 	(void)dpy;
-	return ev->xany.window == *(Window *)arg;
+	if (ev->xany.window == *(Window *)arg)
+		return True;
+	/* Drain private transfer notifications, including queued replies to an
+	 * already-destroyed requestor. Never route its input/window events. */
+	if (ev->type == SelectionNotify &&
+		(ev->xselection.selection == peak_linux.clip_clipboard || ev->xselection.selection == XA_PRIMARY)) {
+		if (ev->xselection.requestor == peak_clip_req_window && peak_clip_req_owner &&
+			peak_clip_req_owner->window != *(Window *)arg)
+			return False;
+		return True;
+	}
+	if (ev->type == PropertyNotify && peak_linux.clip_prop && ev->xproperty.atom == peak_linux.clip_prop) {
+		if (ev->xproperty.window == peak_clip_req_window && peak_clip_req_owner &&
+			peak_clip_req_owner->window != *(Window *)arg)
+			return False;
+		return True;
+	}
+	return False;
 }
 
 static int
@@ -5677,6 +7308,12 @@ peak_linux_buffer(struct peak_linux_win *w, uint32_t width, uint32_t height)
 {
 	int screen;
 
+#ifdef PEAK_VULKAN
+	/* Vulkan owns its images; configure still updates native dimensions. */
+	w->width = width;
+	w->height = height;
+	return 1;
+#endif
 	if (w->ximage) {
 		w->ximage->data = NULL;
 		XDestroyImage(w->ximage);
@@ -5702,6 +7339,7 @@ peak_linux_buffer(struct peak_linux_win *w, uint32_t width, uint32_t height)
 	return 1;
 }
 
+#ifndef PEAK_NO_GAMEPAD
 static int peak_linux_gp_fd[4];
 static int peak_linux_gp_on[4];
 
@@ -5774,16 +7412,26 @@ peak_linux_gamepad_poll(PeakEvent *ev)
 	return 0;
 }
 
+#else
+static int
+peak_linux_gamepad_poll(PeakEvent *ev)
+{
+	(void)ev;
+	return 0;
+}
+#endif
+
 static int
 peak_platform_init(void)
 {
 	void *handle;
-	int i;
 
 	if (peak_linux_kind == PEAK_LINUX_WAYLAND || peak_linux_kind == PEAK_LINUX_X11)
 		return 1;
-	for (i = 0; i < 4; i++)
+#ifndef PEAK_NO_GAMEPAD
+	for (int i = 0; i < 4; i++)
 		peak_linux_gp_fd[i] = -1;
+#endif
 	if (peak_wayland_init()) {
 		peak_linux_kind = PEAK_LINUX_WAYLAND;
 		return 1;
@@ -5827,20 +7475,21 @@ peak_platform_init(void)
 static void
 peak_platform_quit(void)
 {
-	int i;
 
 	if (peak_linux_kind == PEAK_LINUX_WAYLAND) {
 		peak_wayland_quit();
 		peak_linux_kind = PEAK_LINUX_NONE;
 		return;
 	}
-	for (i = 0; i < 4; i++) {
+#ifndef PEAK_NO_GAMEPAD
+	for (int i = 0; i < 4; i++) {
 		if (peak_linux_gp_fd[i] >= 0) {
 			close(peak_linux_gp_fd[i]);
 			peak_linux_gp_fd[i] = -1;
 		}
 		peak_linux_gp_on[i] = 0;
 	}
+#endif
 	/* NOTE: NVIDIA's Vulkan ICD registers an XCloseDisplay hook, then
 	 * vkDestroyInstance unloads the ICD. Closing afterwards is a SIGSEGV
 	 * into unmapped memory. The connection is dropped on process exit. */
@@ -5885,13 +7534,14 @@ peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uin
 	if (!peak_linux.display && !peak_platform_init())
 		return intern;
 
-	w = calloc(1, sizeof *w);
+	w = peak_host_window_alloc(sizeof *w);
 	if (!w)
 		return intern;
 
 	screen = DefaultScreen(peak_linux.display);
 	evmask = KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask |
-		PointerMotionMask | StructureNotifyMask | PropertyChangeMask;
+		PointerMotionMask | StructureNotifyMask | PropertyChangeMask |
+		FocusChangeMask | ExposureMask;
 	w->visual = DefaultVisual(peak_linux.display, screen);
 	w->depth = DefaultDepth(peak_linux.display, screen);
 	if ((flags & PEAK_WINDOW_TRANSPARENT) && peak_linux_visual32(screen, &vi)) {
@@ -5926,7 +7576,7 @@ peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uin
 		peak_x11.XDestroyWindow(peak_linux.display, w->window);
 		if (w->colormap_owned)
 			peak_x11.XFreeColormap(peak_linux.display, w->colormap);
-		free(w);
+		peak_host_window_free(w);
 		return intern;
 	}
 
@@ -5962,19 +7612,28 @@ peak_platform_window_close(PeakWindowInternal *intern)
 	w = intern ? intern->w : NULL;
 	if (!w || !w->window || !peak_linux.display)
 		return;
+	if (peak_clip_req_owner == w)
+		peak_linux_clip_cancel();
+	if (w->clip_window) {
+		peak_x11.XDestroyWindow(peak_linux.display, w->clip_window);
+		w->clip_window = None;
+	}
 	if (w->blank && peak_x11.XFreeCursor)
 		peak_x11.XFreeCursor(peak_linux.display, w->blank);
+	if (w->glyph && peak_x11.XFreeCursor)
+		peak_x11.XFreeCursor(peak_linux.display, w->glyph);
 	if (w->ximage) {
 		w->ximage->data = NULL;
 		XDestroyImage(w->ximage);
 	}
-	free(w->buffer);
+	if (w->buffer)
+		free(w->buffer);
 	if (w->gfx_ctx)
 		peak_x11.XFreeGC(peak_linux.display, w->gfx_ctx);
 	peak_x11.XDestroyWindow(peak_linux.display, w->window);
 	if (w->colormap_owned)
 		peak_x11.XFreeColormap(peak_linux.display, w->colormap);
-	free(w);
+	peak_host_window_free(w);
 	intern->w = NULL;
 }
 
@@ -6101,15 +7760,85 @@ peak_linux_clip_request_sel(XSelectionRequestEvent *req)
 }
 
 static int
+peak_linux_clip_start(struct peak_linux_win *w, PeakClip which)
+{
+	Window window = w->window;
+	if (peak_host.base) {
+		/* Fresh XID is the bounded request epoch. Destroying the previous
+		 * requestor cancels even productive INCR without waiting or atoms. */
+		window = peak_x11.XCreateSimpleWindow(peak_linux.display,
+			DefaultRootWindow(peak_linux.display), 0, 0, 1, 1, 0, 0, 0);
+		if (!window)
+			return 0;
+		w->clip_window = window;
+		peak_x11.XSelectInput(peak_linux.display, window, PropertyChangeMask);
+	}
+	peak_clip_req_owner = w;
+	peak_clip_req_on = 1;
+	peak_clip_req_window = window;
+	peak_clip_req_which = which;
+	peak_clip_req_xa = 0;
+	peak_x11.XConvertSelection(peak_linux.display, peak_linux_clip_atom(which),
+		peak_linux.clip_utf8, peak_linux.clip_prop, window, CurrentTime);
+	peak_x11.XFlush(peak_linux.display);
+	return 1;
+}
+
+static void
+peak_linux_clip_done(void)
+{
+	if (peak_clip_req_owner && peak_clip_req_owner->clip_window) {
+		peak_x11.XDestroyWindow(peak_linux.display, peak_clip_req_owner->clip_window);
+		peak_clip_req_owner->clip_window = None;
+	}
+	peak_clip_req_owner = NULL;
+	peak_clip_req_on = peak_clip_req_xa = peak_clip_incr_on = 0;
+	peak_clip_req_window = None;
+	peak_host_transfer_free(peak_clip_incr);
+	peak_clip_incr = NULL;
+	peak_clip_incr_n = 0;
+}
+
+static Bool
+peak_linux_clip_canceled_request(Display *display, XEvent *ev, XPointer arg)
+{
+	(void)display;
+	return ev->type == SelectionRequest && ev->xselectionrequest.requestor == *(Window *)arg;
+}
+
+static void
+peak_linux_clip_cancel(void)
+{
+	if (peak_clip_req_owner && peak_clip_req_owner->clip_window) {
+		Window window = peak_clip_req_owner->clip_window;
+		Atom type;
+		int fmt;
+		unsigned long n, remain;
+		unsigned char *data = NULL;
+		XEvent ev;
+		/* One server round trip, zero payload. FIFO puts any local owner's
+		 * old SelectionRequest in our queue before this reply. Do not let it
+		 * respond to a requestor we are about to destroy. This never waits
+		 * for the selection owner or drains a productive INCR stream. */
+		peak_x11.XGetWindowProperty(peak_linux.display, window, peak_linux.clip_prop,
+			0, 0, False, AnyPropertyType, &type, &fmt, &n, &remain, &data);
+		if (data) peak_x11.XFree(data);
+		while (peak_x11.XCheckIfEvent(peak_linux.display, &ev,
+			peak_linux_clip_canceled_request, (XPointer)&window)) {}
+	}
+	peak_linux_clip_done();
+}
+
+static int
 peak_linux_clip_incr_add(const char *p, size_t n)
 {
 	char *q;
 
-	if (peak_clip_incr_n + n > PEAK_CLIP_MAX)
-		n = PEAK_CLIP_MAX - peak_clip_incr_n;
+	if (n > PEAK_TRANSFER_CAP - peak_clip_incr_n)
+		n = PEAK_TRANSFER_CAP - peak_clip_incr_n;
 	if (!n)
 		return 1;
-	q = realloc(peak_clip_incr, peak_clip_incr_n + n);
+	q = peak_host.base ? peak_host.store[PEAK_STORE_INCR] : realloc(peak_clip_incr, peak_clip_incr_n + n);
 	if (!q)
 		return 0;
 	memcpy(q + peak_clip_incr_n, p, n);
@@ -6125,11 +7854,15 @@ peak_linux_latin1_utf8(const unsigned char *s, size_t n, char **out, size_t *out
 	size_t i;
 	size_t o;
 
-	d = malloc(n * 2 + 1);
+	if (peak_host.base && n > PEAK_TRANSFER_CAP)
+		return 0;
+	if (n > (SIZE_MAX - 1) / 2)
+		return 0;
+	d = peak_host.base ? peak_host.store[PEAK_STORE_CONVERT] : malloc(n * 2 + 1);
 	if (!d)
 		return 0;
 	o = 0;
-	for (i = 0; i < n && o + 2 < n * 2 + 1; i++) {
+	for (i = 0; i < n; i++) {
 		if (s[i] < 0x80)
 			d[o++] = (char)s[i];
 		else {
@@ -6154,9 +7887,9 @@ peak_linux_clip_take_prop(Window window, Atom prop, PeakClip which, PeakEvent *e
 	size_t un;
 
 	data = NULL;
-	if (peak_x11.XGetWindowProperty(peak_linux.display, window, prop, 0, (long)(PEAK_CLIP_MAX / 4),
+	if (peak_x11.XGetWindowProperty(peak_linux.display, window, prop, 0, (long)((PEAK_TRANSFER_CAP + 3) / 4),
 			False, AnyPropertyType, &type, &fmt, &nitems, &remain, &data) != Success) {
-		peak_clip_req_on = 0;
+		peak_linux_clip_done();
 		return 0;
 	}
 	if (type == None || !data) {
@@ -6169,12 +7902,18 @@ peak_linux_clip_take_prop(Window window, Atom prop, PeakClip which, PeakEvent *e
 				XA_STRING, peak_linux.clip_prop, window, CurrentTime);
 			peak_x11.XFlush(peak_linux.display);
 		} else {
-			peak_clip_req_on = 0;
+			peak_linux_clip_done();
 		}
 		return 0;
 	}
 	if (type == peak_linux.clip_incr) {
-		free(peak_clip_incr);
+		if (fmt != 32 || nitems != 1) {
+			peak_x11.XFree(data);
+			peak_x11.XDeleteProperty(peak_linux.display, window, prop);
+			peak_linux_clip_done();
+			return 0;
+		}
+		peak_host_transfer_free(peak_clip_incr);
 		peak_clip_incr = NULL;
 		peak_clip_incr_n = 0;
 		peak_clip_incr_on = 1;
@@ -6186,20 +7925,20 @@ peak_linux_clip_take_prop(Window window, Atom prop, PeakClip which, PeakEvent *e
 	utf8 = NULL;
 	un = 0;
 	if (type == XA_STRING || fmt != 8) {
-		if (!peak_linux_latin1_utf8(data, (size_t)nitems, &utf8, &un)) {
+		if (!peak_linux_latin1_utf8(data, nitems > PEAK_TRANSFER_CAP ? PEAK_TRANSFER_CAP : (size_t)nitems, &utf8, &un)) {
 			peak_x11.XFree(data);
 			peak_x11.XDeleteProperty(peak_linux.display, window, prop);
-			peak_clip_req_on = 0;
+			peak_linux_clip_done();
 			return 0;
 		}
 		peak_clip_paste_store(which, utf8, un);
-		free(utf8);
+		peak_host_transfer_free(utf8);
 	} else {
 		peak_clip_paste_store(which, (const char *)data, (size_t)nitems);
 	}
 	peak_x11.XFree(data);
 	peak_x11.XDeleteProperty(peak_linux.display, window, prop);
-	peak_clip_req_on = 0;
+	peak_linux_clip_done();
 	ev->type = PEAK_EVENT_CLIP;
 	ev->clip.which = which;
 	ev->clip.n = peak_clip.paste_n;
@@ -6209,38 +7948,98 @@ peak_linux_clip_take_prop(Window window, Atom prop, PeakClip which, PeakEvent *e
 static int
 peak_linux_clip_property(struct peak_linux_win *w, XPropertyEvent *pe, PeakEvent *ev)
 {
+	Window window = peak_clip_req_window ? peak_clip_req_window : w->window;
 	Atom type;
 	int fmt;
 	unsigned long nitems;
 	unsigned long remain;
 	unsigned char *data;
 
-	if (!peak_clip_incr_on || pe->state != PropertyNewValue || pe->atom != peak_linux.clip_prop)
+	if (!peak_clip_incr_on || pe->state != PropertyNewValue || pe->atom != peak_linux.clip_prop ||
+		(pe->window && pe->window != window))
 		return 0;
 	data = NULL;
-	if (peak_x11.XGetWindowProperty(peak_linux.display, w->window, pe->atom, 0,
-			(long)(PEAK_CLIP_MAX / 4), False, AnyPropertyType, &type, &fmt, &nitems, &remain, &data) != Success)
+	if (peak_x11.XGetWindowProperty(peak_linux.display, window, pe->atom, 0,
+			(long)((PEAK_TRANSFER_CAP + 3) / 4), False, AnyPropertyType, &type, &fmt, &nitems, &remain, &data) != Success)
 		return 0;
+	/* A stale PropertyNotify can refer to a property already deleted. It is
+	 * not an INCR terminator. Only a typed, 8-bit empty payload completes. */
+	if (type == None) {
+		if (data) peak_x11.XFree(data);
+		return 0;
+	}
+	if (fmt != 8 || (type != peak_linux.clip_utf8 && type != XA_STRING && type != peak_linux.clip_text)) {
+		if (data) peak_x11.XFree(data);
+		peak_x11.XDeleteProperty(peak_linux.display, window, pe->atom);
+		peak_linux_clip_done();
+		return 0;
+	}
 	if (!nitems) {
+		PeakClip which = peak_clip_incr_which;
 		if (data)
 			peak_x11.XFree(data);
-		peak_x11.XDeleteProperty(peak_linux.display, w->window, pe->atom);
-		peak_clip_paste_store(peak_clip_incr_which, peak_clip_incr ? peak_clip_incr : "", peak_clip_incr_n);
-		free(peak_clip_incr);
-		peak_clip_incr = NULL;
-		peak_clip_incr_n = 0;
-		peak_clip_incr_on = 0;
-		peak_clip_req_on = 0;
+		peak_x11.XDeleteProperty(peak_linux.display, window, pe->atom);
+		peak_clip_paste_store(which, peak_clip_incr ? peak_clip_incr : "", peak_clip_incr_n);
+		peak_linux_clip_done();
 		ev->type = PEAK_EVENT_CLIP;
-		ev->clip.which = peak_clip_incr_which;
+		ev->clip.which = which;
 		ev->clip.n = peak_clip.paste_n;
 		return 1;
 	}
 	peak_linux_clip_incr_add((const char *)data, (size_t)nitems);
 	if (data)
 		peak_x11.XFree(data);
-	peak_x11.XDeleteProperty(peak_linux.display, w->window, pe->atom);
+	peak_x11.XDeleteProperty(peak_linux.display, window, pe->atom);
 	return 0;
+}
+
+static void
+peak_platform_window_set_class(PeakWindowInternal *intern, const char *name)
+{
+	struct peak_linux_win *w;
+	char buf[512];
+	size_t n;
+	Atom atom;
+
+	if (peak_linux_kind == PEAK_LINUX_WAYLAND) {
+		peak_wayland_window_set_class(intern, name);
+		return;
+	}
+	w = intern ? intern->w : NULL;
+	if (!w || !w->window || !peak_linux.display || !name || !name[0])
+		return;
+	n = strlen(name);
+	if (n > 200)
+		n = 200;
+	memcpy(buf, name, n);
+	buf[n] = 0;
+	memcpy(buf + n + 1, name, n);
+	buf[n + 1 + n] = 0;
+	atom = peak_x11.XInternAtom(peak_linux.display, "WM_CLASS", False);
+	peak_x11.XChangeProperty(peak_linux.display, w->window, atom, XA_STRING, 8,
+		PropModeReplace, (const unsigned char *)buf, (int)(n + n + 2));
+	peak_x11.XFlush(peak_linux.display);
+}
+
+static void
+peak_platform_window_set_opacity(PeakWindowInternal *intern, uint8_t alpha)
+{
+	struct peak_linux_win *w;
+	unsigned long val;
+	Atom atom;
+
+	if (peak_linux_kind == PEAK_LINUX_WAYLAND) {
+		peak_wayland_window_set_opacity(intern, alpha);
+		return;
+	}
+	w = intern ? intern->w : NULL;
+	if (!w || !w->window || !peak_linux.display)
+		return;
+	val = (unsigned long)alpha * 0x01010101ul;
+	atom = peak_x11.XInternAtom(peak_linux.display, "_NET_WM_WINDOW_OPACITY", False);
+	peak_x11.XChangeProperty(peak_linux.display, w->window, atom, XA_CARDINAL, 32,
+		PropModeReplace, (const unsigned char *)&val, 1);
+	peak_x11.XFlush(peak_linux.display);
 }
 
 static void
@@ -6318,8 +8117,11 @@ peak_platform_window_cursor(PeakWindowInternal *intern, int on)
 		return;
 	w->cursor_on = on;
 	if (on) {
-		if (peak_x11.XUndefineCursor)
+		if (w->glyph && peak_x11.XDefineCursor)
+			peak_x11.XDefineCursor(peak_linux.display, w->window, w->glyph);
+		else if (peak_x11.XUndefineCursor)
 			peak_x11.XUndefineCursor(peak_linux.display, w->window);
+		peak_x11.XFlush(peak_linux.display);
 		return;
 	}
 	if (!w->blank && peak_x11.XCreatePixmap && peak_x11.XCreatePixmapCursor) {
@@ -6330,6 +8132,46 @@ peak_platform_window_cursor(PeakWindowInternal *intern, int on)
 	}
 	if (w->blank)
 		peak_x11.XDefineCursor(peak_linux.display, w->window, w->blank);
+	peak_x11.XFlush(peak_linux.display);
+}
+
+static unsigned
+peak_x11_cursor_glyph(int shape)
+{
+	switch (shape) {
+	case 1: return 152; /* XC_xterm */
+	case 2: return 60;  /* XC_hand2 */
+	case 3: return 150; /* XC_watch */
+	case 4: return 34;  /* XC_crosshair */
+	case 5: return 0;   /* XC_X_cursor */
+	case 6: return 92;  /* XC_question_arrow */
+	default: return 68; /* XC_left_ptr */
+	}
+}
+
+static void
+peak_platform_window_cursor_shape(PeakWindowInternal *intern, int shape)
+{
+	struct peak_linux_win *w;
+	Cursor cur;
+
+	if (peak_linux_kind == PEAK_LINUX_WAYLAND) {
+		peak_wayland_window_cursor_shape(intern, shape);
+		return;
+	}
+	w = intern ? intern->w : NULL;
+	if (!w || !w->window || !peak_linux.display || !peak_x11.XCreateFontCursor)
+		return;
+	cur = peak_x11.XCreateFontCursor(peak_linux.display, peak_x11_cursor_glyph(shape));
+	if (!cur)
+		return;
+	if (w->glyph && peak_x11.XFreeCursor)
+		peak_x11.XFreeCursor(peak_linux.display, w->glyph);
+	w->glyph = cur;
+	if (w->cursor_on && peak_x11.XDefineCursor) {
+		peak_x11.XDefineCursor(peak_linux.display, w->window, w->glyph);
+		peak_x11.XFlush(peak_linux.display);
+	}
 }
 
 static void
@@ -6345,10 +8187,11 @@ peak_platform_window_pointer_relative(PeakWindowInternal *intern, int on)
 	if (!w || !w->window || !peak_linux.display)
 		return;
 	w->relative = on;
+	/* confine_to the window trapped the cursor and ate clicks meant for other apps. */
 	if (on && peak_x11.XGrabPointer)
 		peak_x11.XGrabPointer(peak_linux.display, w->window, True,
 			PointerMotionMask | ButtonPressMask | ButtonReleaseMask,
-			GrabModeAsync, GrabModeAsync, w->window, None, CurrentTime);
+			GrabModeAsync, GrabModeAsync, None, None, CurrentTime);
 	else if (!on && peak_x11.XUngrabPointer)
 		peak_x11.XUngrabPointer(peak_linux.display, CurrentTime);
 }
@@ -6402,14 +8245,8 @@ peak_platform_clip_request(PeakWindowInternal *intern, PeakClip which)
 	if (!w || !w->window || !peak_linux.display)
 		return 0;
 	peak_linux_clip_atoms();
-	peak_clip_req_on = 1;
-	peak_clip_req_which = which;
-	peak_clip_req_xa = 0;
-	peak_clip_incr_on = 0;
-	peak_x11.XConvertSelection(peak_linux.display, peak_linux_clip_atom(which),
-		peak_linux.clip_utf8, peak_linux.clip_prop, w->window, CurrentTime);
-	peak_x11.XFlush(peak_linux.display);
-	return 1;
+	peak_linux_clip_cancel();
+	return peak_linux_clip_start(w, which);
 }
 
 static void
@@ -6507,7 +8344,12 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 			ev->key.key = peak_internal_x11_key_map(ks ? ks : peak_x11.XLookupKeysym(&xev.xkey, 0));
 			ev->key.mod = peak_internal_x11_mod_map(xev.xkey.state);
 			ev->key.code = (n > 0) ? (uint32_t)(unsigned char)buf[0] : 0;
-			if (xev.type == KeyPress && n > 0 && (unsigned char)buf[0] >= 32) {
+			if (ev->key.key == PEAK_KEY_UNKNOWN && n == 1 && (unsigned char)buf[0] == 0x7f)
+				ev->key.key = PEAK_KEY_DELETE;
+			/* DEL is tty erase, not forward delete. Do not emit it as text. */
+			if (xev.type == KeyPress && n > 0 && (unsigned char)buf[0] >= 32
+				&& (unsigned char)buf[0] != 0x7f
+				&& ev->key.key != PEAK_KEY_DELETE && ev->key.key != PEAK_KEY_BACKSPACE) {
 				peak_text_store(buf, (size_t)n);
 				w->extra_on = 1;
 				memset(&w->extra, 0, sizeof w->extra);
@@ -6553,6 +8395,21 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 				peak_x11.XWarpPointer(peak_linux.display, None, w->window, 0, 0, 0, 0,
 					(int)w->width / 2, (int)w->height / 2);
 			return 1;
+		case FocusIn:
+			ev->type = PEAK_EVENT_FOCUS;
+			ev->focus.on = 1;
+			return 1;
+		case FocusOut:
+			if (w->relative && peak_x11.XUngrabPointer)
+				peak_x11.XUngrabPointer(peak_linux.display, CurrentTime);
+			ev->type = PEAK_EVENT_FOCUS;
+			ev->focus.on = 0;
+			return 1;
+		case Expose:
+			if (xev.xexpose.count != 0)
+				continue;
+			ev->type = PEAK_EVENT_EXPOSE;
+			return 1;
 		case ConfigureNotify: {
 			uint32_t width = (uint32_t)xev.xconfigure.width;
 			uint32_t height = (uint32_t)xev.xconfigure.height;
@@ -6583,18 +8440,21 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 					continue;
 				}
 				if (peak_x11.XGetWindowProperty(peak_linux.display, w->window, xev.xselection.property,
-						0, 0x10000, True, AnyPropertyType, &type, &fmt, &nitems, &after, &data) == Success && data) {
+						0, (long)((PEAK_TRANSFER_CAP + 7 + 3) / 4), True, AnyPropertyType, &type, &fmt, &nitems, &after, &data) == Success && data && fmt == 8) {
 					p = (const char *)data;
-					if (!strncmp(p, "file://", 7))
+					if (nitems >= 7 && !memcmp(p, "file://", 7)) {
 						p += 7;
-					nl = strchr(p, '\n');
+						nitems -= 7;
+					}
+					nl = memchr(p, '\n', nitems);
 					nitems = nl ? (unsigned long)(nl - p) : nitems;
 					while (nitems && (p[nitems - 1] == '\r' || p[nitems - 1] == '\n'))
 						nitems--;
 					peak_drop_store(p, (size_t)nitems);
 					ev->type = PEAK_EVENT_DROP;
-					ev->drop.n = (size_t)nitems;
+					ev->drop.n = peak_xfer.drop_n;
 					peak_x11.XFree(data);
+					peak_x11.XDeleteProperty(peak_linux.display, w->window, xev.xselection.property);
 					peak_linux_xdnd_finished(w, 1);
 					return 1;
 				}
@@ -6603,7 +8463,10 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 				peak_linux_xdnd_finished(w, 0);
 				continue;
 			}
-			if (!peak_clip_req_on)
+			if (!peak_clip_req_on || xev.xselection.requestor != peak_clip_req_window ||
+				xev.xselection.selection != peak_linux_clip_atom(peak_clip_req_which) ||
+				xev.xselection.target != (peak_clip_req_xa ? XA_STRING : peak_linux.clip_utf8) ||
+				(xev.xselection.property != None && xev.xselection.property != peak_linux.clip_prop))
 				continue;
 			if (xev.xselection.property == None) {
 				if (!peak_clip_req_xa) {
@@ -6611,14 +8474,14 @@ peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 					peak_clip_req_xa = 1;
 					peak_x11.XConvertSelection(peak_linux.display,
 						peak_linux_clip_atom(peak_clip_req_which), XA_STRING,
-						peak_linux.clip_prop, w->window, CurrentTime);
+						peak_linux.clip_prop, peak_clip_req_window, CurrentTime);
 					peak_x11.XFlush(peak_linux.display);
 				} else {
-					peak_clip_req_on = 0;
+					peak_linux_clip_done();
 				}
 				continue;
 			}
-			if (peak_linux_clip_take_prop(w->window, xev.xselection.property,
+			if (peak_linux_clip_take_prop(peak_clip_req_window, xev.xselection.property,
 					peak_clip_req_which, ev))
 				return 1;
 			continue;
@@ -6882,7 +8745,7 @@ peak_pointer_pid(PeakWindow *win)
 	unsigned int n;
 	int pid;
 
-	(void)win;
+	if (!peak_window_valid(win)) return 0;
 	if (peak_linux_kind != PEAK_LINUX_X11 || !peak_linux.display || !peak_x11.XQueryPointer
 			|| !peak_x11.XQueryTree)
 		return 0;
@@ -6930,7 +8793,7 @@ peak_pointer_local(PeakWindow *win, int *x, int *y)
 	unsigned int mask;
 	int pid;
 
-	if (!win || !win->internal.w)
+	if (!peak_window_valid(win))
 		return 0;
 	if (peak_linux_kind == PEAK_LINUX_WAYLAND) {
 		ww = win->internal.w;
@@ -6967,1644 +8830,7 @@ peak_pointer_local(PeakWindow *win, int *x, int *y)
 }
 
 #define PEAK_HAS_POINTER_PID 1
-/* END p_linux.c */
-#elif defined(PEAK_MACOS)
-/* BEGIN p_macos.c */
-/*
- * macOS window, input, CALayer present, Metal WSI, and AudioQueue.
- * AppKit is Objective-C. Compile the implementation as ObjC (clang -x objective-c).
- *
- * * 0.6.0 - @vasco - macos
- */
-
-#include <AppKit/AppKit.h>
-#include <AudioToolbox/AudioToolbox.h>
-#include <CoreGraphics/CoreGraphics.h>
-#include <QuartzCore/CAMetalLayer.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
-#ifdef PEAK_VULKAN
-#define VK_USE_PLATFORM_METAL_EXT
-#include <vulkan/vulkan.h>
-#endif
-
-#define PEAK_AUDIO_FRAMES 256
-#define PEAK_AUDIO_BUFFERS 3
-
-struct peak_macos_win {
-	NSWindow *window;
-	NSView *view;
-	CAMetalLayer *layer;
-	id delegate;
-	uint32_t *buffer;
-	uint32_t width;
-	uint32_t height;
-	int force_close;
-	int flags;
-	int cursor_on;
-	int relative;
-	int touch_n;
-	float last_x, last_y;
-	PeakQ q;
-};
-
-typedef struct {
-	volatile int run;
-	AudioQueueRef queue;
-	AudioQueueBufferRef buf[PEAK_AUDIO_BUFFERS];
-	uint32_t channels;
-	uint32_t bytes;
-	void (*fill)(int16_t *out, size_t frames, void *userdata);
-	void *userdata;
-} PeakAudio;
-
-@interface PeakMacDelegate : NSObject <NSWindowDelegate>
-@property(nonatomic, assign) struct peak_macos_win *w;
-@end
-
-@interface PeakMacView : NSView
-@property(nonatomic, assign) struct peak_macos_win *w;
-@end
-
-static int peak_internal_macos_buffer(struct peak_macos_win *w, uint32_t width, uint32_t height);
-static PeakKeyCode peak_internal_macos_key_map(unsigned short kc);
-static PeakKeyMod peak_internal_macos_mod_map(NSEventModifierFlags flags);
-static void peak_internal_macos_translate(struct peak_macos_win *w, NSEvent *ev);
-static void peak_internal_macos_pump(struct peak_macos_win *w);
-static void peak_internal_macos_audio_cb(void *ud, AudioQueueRef q, AudioQueueBufferRef buf);
-static int peak_platform_init(void);
-static void peak_platform_quit(void);
-static PeakWindowInternal peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uint32_t flags);
-static void peak_platform_window_close(PeakWindowInternal *intern);
-static uint32_t *peak_platform_window_buffer(PeakWindowInternal *intern, size_t *width, size_t *height);
-static void peak_platform_window_present(PeakWindowInternal *intern);
-static bool peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev);
-static int peak_platform_fd(PeakWindowInternal *intern);
-static int peak_platform_pending(PeakWindowInternal *intern);
-static int peak_platform_audio_start(uint32_t channels, uint32_t rate, void (*fill)(int16_t *out, size_t frames, void *userdata), void *userdata);
-static void peak_platform_audio_stop(void);
-static uint64_t peak_platform_get_time(void);
-static void peak_platform_sleep_ns(int64_t ns);
-static const char **peak_platform_vulkan_get_extensions(uint32_t *count);
-static int peak_platform_vulkan_create_surface(PeakWindowInternal *intern, void *instance, const void *allocator, void *out_surface);
-static void peak_platform_window_set_title(PeakWindowInternal *intern, const char *name);
-static void peak_platform_window_set_size(PeakWindowInternal *intern, uint32_t width, uint32_t height);
-static void peak_platform_window_fullscreen(PeakWindowInternal *intern, int on);
-static void peak_platform_window_cursor(PeakWindowInternal *intern, int on);
-static void peak_platform_window_pointer_relative(PeakWindowInternal *intern, int on);
-static float peak_platform_window_scale(PeakWindowInternal *intern);
-
-static NSApplication *peak_macos_app;
-static PeakAudio peak_audio;
-
-@implementation PeakMacDelegate
-- (BOOL)windowShouldClose:(NSWindow *)sender
-{
-	struct peak_macos_win *w;
-	PeakEvent ev;
-
-	(void)sender;
-	w = self.w;
-	if (!w)
-		return YES;
-	if (w->force_close)
-		return YES;
-	memset(&ev, 0, sizeof ev);
-	ev.type = PEAK_EVENT_WINDOW_CLOSE;
-	peak_q_push(&w->q, ev);
-	return NO;
-}
-@end
-
-@implementation PeakMacView
-- (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender
-{
-	(void)sender;
-	return NSDragOperationCopy;
-}
-- (BOOL)performDragOperation:(id<NSDraggingInfo>)sender
-{
-	NSArray *files;
-	NSString *p;
-	const char *u;
-	PeakEvent ev;
-	size_t n;
-
-	files = [[sender draggingPasteboard] propertyListForType:NSFilenamesPboardType];
-	if (!files || ![files count] || !self.w)
-		return NO;
-	p = [files objectAtIndex:0];
-	u = [p UTF8String];
-	if (!u)
-		return NO;
-	n = strlen(u);
-	peak_drop_store(u, n);
-	memset(&ev, 0, sizeof ev);
-	ev.type = PEAK_EVENT_DROP;
-	ev.drop.n = n;
-	peak_q_push(&self.w->q, ev);
-	return YES;
-}
-@end
-
-static int
-peak_internal_macos_buffer(struct peak_macos_win *w, uint32_t width, uint32_t height)
-{
-	uint32_t *buffer;
-
-	if (!width || !height)
-		return 0;
-	if (!(buffer = calloc((size_t)width * height, sizeof *buffer)))
-		return 0;
-	free(w->buffer);
-	w->buffer = buffer;
-	w->width = width;
-	w->height = height;
-	return 1;
-}
-
-static PeakKeyCode
-peak_internal_macos_key_map(unsigned short kc)
-{
-	switch (kc) {
-	case 0x00: return PEAK_KEY_A;
-	case 0x0B: return PEAK_KEY_B;
-	case 0x08: return PEAK_KEY_C;
-	case 0x02: return PEAK_KEY_D;
-	case 0x0E: return PEAK_KEY_E;
-	case 0x03: return PEAK_KEY_F;
-	case 0x05: return PEAK_KEY_G;
-	case 0x04: return PEAK_KEY_H;
-	case 0x22: return PEAK_KEY_I;
-	case 0x26: return PEAK_KEY_J;
-	case 0x28: return PEAK_KEY_K;
-	case 0x25: return PEAK_KEY_L;
-	case 0x2E: return PEAK_KEY_M;
-	case 0x2D: return PEAK_KEY_N;
-	case 0x1F: return PEAK_KEY_O;
-	case 0x23: return PEAK_KEY_P;
-	case 0x0C: return PEAK_KEY_Q;
-	case 0x0F: return PEAK_KEY_R;
-	case 0x01: return PEAK_KEY_S;
-	case 0x11: return PEAK_KEY_T;
-	case 0x20: return PEAK_KEY_U;
-	case 0x09: return PEAK_KEY_V;
-	case 0x0D: return PEAK_KEY_W;
-	case 0x07: return PEAK_KEY_X;
-	case 0x10: return PEAK_KEY_Y;
-	case 0x06: return PEAK_KEY_Z;
-	case 0x1D: return PEAK_KEY_0;
-	case 0x12: return PEAK_KEY_1;
-	case 0x13: return PEAK_KEY_2;
-	case 0x14: return PEAK_KEY_3;
-	case 0x15: return PEAK_KEY_4;
-	case 0x17: return PEAK_KEY_5;
-	case 0x16: return PEAK_KEY_6;
-	case 0x1A: return PEAK_KEY_7;
-	case 0x1C: return PEAK_KEY_8;
-	case 0x19: return PEAK_KEY_9;
-	case 0x7E: return PEAK_KEY_UP;
-	case 0x7D: return PEAK_KEY_DOWN;
-	case 0x7B: return PEAK_KEY_LEFT;
-	case 0x7C: return PEAK_KEY_RIGHT;
-	case 0x31: return PEAK_KEY_SPACE;
-	case 0x35: return PEAK_KEY_ESCAPE;
-	case 0x24: return PEAK_KEY_ENTER;
-	case 0x4C: return PEAK_KEY_ENTER;
-	case 0x33: return PEAK_KEY_BACKSPACE;
-	case 0x30: return PEAK_KEY_TAB;
-	case 0x75: return PEAK_KEY_DELETE;
-	case 0x72: return PEAK_KEY_INSERT;
-	case 0x73: return PEAK_KEY_HOME;
-	case 0x77: return PEAK_KEY_END;
-	case 0x74: return PEAK_KEY_PAGEUP;
-	case 0x79: return PEAK_KEY_PAGEDOWN;
-	case 0x7A: return PEAK_KEY_F1;
-	case 0x78: return PEAK_KEY_F2;
-	case 0x63: return PEAK_KEY_F3;
-	case 0x76: return PEAK_KEY_F4;
-	case 0x60: return PEAK_KEY_F5;
-	case 0x61: return PEAK_KEY_F6;
-	case 0x62: return PEAK_KEY_F7;
-	case 0x64: return PEAK_KEY_F8;
-	case 0x65: return PEAK_KEY_F9;
-	case 0x6D: return PEAK_KEY_F10;
-	case 0x67: return PEAK_KEY_F11;
-	case 0x6F: return PEAK_KEY_F12;
-	default: return PEAK_KEY_UNKNOWN;
-	}
-}
-
-static PeakKeyMod
-peak_internal_macos_mod_map(NSEventModifierFlags flags)
-{
-	PeakKeyMod m;
-
-	m = 0;
-	if (flags & NSEventModifierFlagShift)
-		m |= PEAK_KEYMOD_SHIFT;
-	if (flags & NSEventModifierFlagControl)
-		m |= PEAK_KEYMOD_CTRL;
-	if (flags & NSEventModifierFlagCommand)
-		m |= PEAK_KEYMOD_SUPER;
-	if (flags & NSEventModifierFlagOption)
-		m |= PEAK_KEYMOD_ALT;
-	if (flags & NSEventModifierFlagCapsLock)
-		m |= PEAK_KEYMOD_CAPS;
-	return m;
-}
-
-static void
-peak_internal_macos_translate(struct peak_macos_win *w, NSEvent *ev)
-{
-	PeakEvent out;
-	NSPoint pt;
-	const char *utf8;
-
-	memset(&out, 0, sizeof out);
-	pt = [ev locationInWindow];
-	switch ([ev type]) {
-	case NSEventTypeKeyDown:
-	case NSEventTypeKeyUp:
-		out.type = ([ev type] == NSEventTypeKeyDown) ? PEAK_EVENT_KEY_DOWN : PEAK_EVENT_KEY_UP;
-		out.key.key = peak_internal_macos_key_map([ev keyCode]);
-		out.key.mod = peak_internal_macos_mod_map([ev modifierFlags]);
-		utf8 = [[ev characters] UTF8String];
-		out.key.code = (utf8 && utf8[0]) ? (uint32_t)(unsigned char)utf8[0] : 0;
-		peak_q_push(&w->q, out);
-		if ([ev type] == NSEventTypeKeyDown && utf8 && utf8[0] && (unsigned char)utf8[0] >= 32) {
-			PeakEvent tev;
-			size_t n;
-
-			n = strlen(utf8);
-			peak_text_store(utf8, n);
-			memset(&tev, 0, sizeof tev);
-			tev.type = PEAK_EVENT_TEXT;
-			tev.text.n = n;
-			peak_q_push(&w->q, tev);
-		}
-		break;
-	case NSEventTypeScrollWheel:
-		out.type = PEAK_EVENT_POINTER;
-		out.pointer.state = PEAK_POINTER_PRESSED;
-		out.pointer.type = ([ev deltaY] < 0) ? PEAK_POINTER_WHEEL_DOWN : PEAK_POINTER_WHEEL_UP;
-		out.pointer.x = (float)pt.x;
-		out.pointer.y = (float)((double)w->height - pt.y);
-		out.pointer.mod = peak_internal_macos_mod_map([ev modifierFlags]);
-		peak_q_push(&w->q, out);
-		break;
-	case NSEventTypeLeftMouseDown:
-	case NSEventTypeRightMouseDown:
-	case NSEventTypeOtherMouseDown:
-	case NSEventTypeLeftMouseUp:
-	case NSEventTypeRightMouseUp:
-	case NSEventTypeOtherMouseUp:
-	case NSEventTypeMouseMoved:
-	case NSEventTypeLeftMouseDragged:
-	case NSEventTypeRightMouseDragged:
-		out.type = PEAK_EVENT_POINTER;
-		out.pointer.x = (float)pt.x;
-		out.pointer.y = (float)((double)w->height - pt.y);
-		if (w->relative && ([ev type] == NSEventTypeMouseMoved || [ev type] == NSEventTypeLeftMouseDragged
-		    || [ev type] == NSEventTypeRightMouseDragged)) {
-			out.pointer.x -= w->last_x;
-			out.pointer.y -= w->last_y;
-		}
-		w->last_x = (float)pt.x;
-		w->last_y = (float)((double)w->height - pt.y);
-		out.pointer.mod = peak_internal_macos_mod_map([ev modifierFlags]);
-		if ([ev type] == NSEventTypeMouseMoved || [ev type] == NSEventTypeLeftMouseDragged
-		    || [ev type] == NSEventTypeRightMouseDragged) {
-			out.pointer.state = PEAK_POINTER_MOVED;
-			out.pointer.type = ([ev type] == NSEventTypeRightMouseDragged)
-				? PEAK_POINTER_RIGHT : PEAK_POINTER_LEFT;
-		} else if ([ev type] == NSEventTypeLeftMouseDown || [ev type] == NSEventTypeRightMouseDown
-		    || [ev type] == NSEventTypeOtherMouseDown) {
-			out.pointer.state = PEAK_POINTER_PRESSED;
-			out.pointer.type = ([ev type] == NSEventTypeRightMouseDown) ? PEAK_POINTER_RIGHT :
-			                   ([ev type] == NSEventTypeOtherMouseDown) ? PEAK_POINTER_MIDDLE : PEAK_POINTER_LEFT;
-		} else {
-			out.pointer.state = PEAK_POINTER_RELEASED;
-			out.pointer.type = ([ev type] == NSEventTypeRightMouseUp) ? PEAK_POINTER_RIGHT :
-			                   ([ev type] == NSEventTypeOtherMouseUp) ? PEAK_POINTER_MIDDLE : PEAK_POINTER_LEFT;
-		}
-		peak_q_push(&w->q, out);
-		break;
-	default:
-		break;
-	}
-}
-
-static void
-peak_internal_macos_pump(struct peak_macos_win *w)
-{
-	NSEvent *ev;
-	NSRect bounds;
-	CGFloat scale;
-	uint32_t width, height;
-
-	if (!peak_macos_app || !w->window)
-		return;
-	for (;;) {
-		ev = [peak_macos_app nextEventMatchingMask:NSEventMaskAny
-			untilDate:[NSDate distantPast]
-			inMode:NSDefaultRunLoopMode
-			dequeue:YES];
-		if (!ev)
-			break;
-		peak_internal_macos_translate(w, ev);
-	}
-	bounds = [w->view bounds];
-	scale = [w->window backingScaleFactor];
-	if (scale < 1.0)
-		scale = 1.0;
-	width = (uint32_t)(bounds.size.width * scale);
-	height = (uint32_t)(bounds.size.height * scale);
-	if (width && height && (width != w->width || height != w->height)) {
-		PeakEvent evr;
-
-		if (peak_internal_macos_buffer(w, width, height)) {
-			memset(&evr, 0, sizeof evr);
-			evr.type = PEAK_EVENT_WINDOW_RESIZE;
-			evr.resize.width = w->width;
-			evr.resize.height = w->height;
-			peak_q_push(&w->q, evr);
-			w->layer.drawableSize = CGSizeMake((CGFloat)w->width, (CGFloat)w->height);
-		}
-	}
-}
-
-static int
-peak_platform_init(void)
-{
-	if (peak_macos_app)
-		return 1;
-	peak_macos_app = [NSApplication sharedApplication];
-	if (!peak_macos_app) {
-		fputs("Failed to get NSApplication. What system are you fucking using and abusing?", stderr);
-		return 0;
-	}
-	[peak_macos_app setActivationPolicy:NSApplicationActivationPolicyRegular];
-	[peak_macos_app finishLaunching];
-	return 1;
-}
-
-static void
-peak_platform_quit(void)
-{
-	peak_macos_app = nil;
-}
-
-static PeakWindowInternal
-peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uint32_t flags)
-{
-	PeakWindowInternal intern = {0};
-	struct peak_macos_win *w;
-	PeakMacDelegate *del;
-	NSRect rect;
-
-	if (!peak_macos_app && !peak_platform_init())
-		return intern;
-	if (!(w = calloc(1, sizeof *w)))
-		return intern;
-	if (!peak_internal_macos_buffer(w, width, height)) {
-		free(w);
-		return intern;
-	}
-
-	rect = NSMakeRect(0, 0, (CGFloat)width, (CGFloat)height);
-	w->window = [[NSWindow alloc]
-		initWithContentRect:rect
-		styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable
-			| NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable)
-		backing:NSBackingStoreBuffered
-		defer:NO];
-	if (!w->window) {
-		free(w->buffer);
-		free(w);
-		return intern;
-	}
-	[w->window setTitle:[NSString stringWithUTF8String:name]];
-	w->flags = (int)flags;
-	w->cursor_on = 1;
-	if (flags & PEAK_WINDOW_TRANSPARENT) {
-		[w->window setOpaque:NO];
-		[w->window setBackgroundColor:[NSColor clearColor]];
-		[w->window setHasShadow:NO];
-	}
-	if (flags & PEAK_WINDOW_FULLSCREEN)
-		[w->window toggleFullScreen:nil];
-	[w->window registerForDraggedTypes:[NSArray arrayWithObject:NSFilenamesPboardType]];
-	{
-		PeakMacView *view;
-
-		view = [[PeakMacView alloc] initWithFrame:rect];
-		view.w = w;
-		[w->window setContentView:view];
-		w->view = view;
-	}
-	w->layer = [CAMetalLayer new];
-	[w->view setLayer:w->layer];
-	[w->view setWantsLayer:YES];
-	if (flags & PEAK_WINDOW_TRANSPARENT)
-		w->layer.opaque = NO;
-	w->layer.drawableSize = CGSizeMake((CGFloat)width, (CGFloat)height);
-	del = [PeakMacDelegate new];
-	del.w = w;
-	w->delegate = del;
-	[w->window setDelegate:del];
-	[w->window makeKeyAndOrderFront:nil];
-	[peak_macos_app activateIgnoringOtherApps:YES];
-	intern.w = w;
-	return intern;
-}
-
-static void
-peak_platform_window_close(PeakWindowInternal *intern)
-{
-	struct peak_macos_win *w;
-
-	w = intern ? intern->w : NULL;
-	if (!w)
-		return;
-	w->force_close = 1;
-	if (w->window) {
-		[w->window setDelegate:nil];
-		[w->window close];
-		[w->window release];
-	}
-	if (w->layer)
-		[w->layer release];
-	if (w->delegate)
-		[w->delegate release];
-	free(w->buffer);
-	free(w);
-	intern->w = NULL;
-}
-
-static uint32_t *
-peak_platform_window_buffer(PeakWindowInternal *intern, size_t *width, size_t *height)
-{
-	struct peak_macos_win *w;
-
-	w = intern ? intern->w : NULL;
-	if (!w) {
-		*width = 0;
-		*height = 0;
-		return NULL;
-	}
-	*width = w->width;
-	*height = w->height;
-	return w->buffer;
-}
-
-static void
-peak_platform_window_present(PeakWindowInternal *intern)
-{
-	struct peak_macos_win *w;
-	CGColorSpaceRef cs;
-	CGDataProviderRef prov;
-	CGImageRef img;
-	size_t nbytes;
-
-	w = intern ? intern->w : NULL;
-	if (!w || !w->layer || !w->buffer)
-		return;
-	nbytes = (size_t)w->width * w->height * 4;
-	cs = CGColorSpaceCreateDeviceRGB();
-	prov = CGDataProviderCreateWithData(NULL, w->buffer, nbytes, NULL);
-	img = CGImageCreate((size_t)w->width, (size_t)w->height, 8, 32, (size_t)w->width * 4, cs,
-		kCGBitmapByteOrder32Little | ((w->flags & PEAK_WINDOW_TRANSPARENT)
-			? kCGImageAlphaPremultipliedFirst : kCGImageAlphaNoneSkipFirst),
-		prov, NULL, false, kCGRenderingIntentDefault);
-	w->layer.contents = (id)img;
-	if (img)
-		CGImageRelease(img);
-	if (prov)
-		CGDataProviderRelease(prov);
-	if (cs)
-		CGColorSpaceRelease(cs);
-}
-
-static int
-peak_platform_drop_drag(PeakWindowInternal *intern, const char *utf8, size_t n)
-{
-	(void)intern;
-	(void)utf8;
-	(void)n;
-	return 0;
-}
-
-static int
-peak_platform_clip_set(PeakWindowInternal *intern, PeakClip which, const char *utf8, size_t n)
-{
-	NSPasteboard *pb;
-	NSString *s;
-	char *z;
-
-	(void)intern;
-	(void)which;
-	z = malloc(n + 1);
-	if (!z)
-		return 0;
-	if (n)
-		memcpy(z, utf8, n);
-	z[n] = 0;
-	s = [[NSString alloc] initWithUTF8String:z];
-	free(z);
-	if (!s)
-		return 0;
-	pb = [NSPasteboard generalPasteboard];
-	[pb clearContents];
-	[pb setString:s forType:NSPasteboardTypeString];
-	[s release];
-	return 1;
-}
-
-static int
-peak_platform_clip_request(PeakWindowInternal *intern, PeakClip which)
-{
-	struct peak_macos_win *w;
-	NSPasteboard *pb;
-	NSString *s;
-	const char *utf8;
-	size_t n;
-	PeakEvent ev;
-
-	w = intern ? intern->w : NULL;
-	if (!w)
-		return 0;
-	pb = [NSPasteboard generalPasteboard];
-	s = [pb stringForType:NSPasteboardTypeString];
-	utf8 = s ? [s UTF8String] : "";
-	n = utf8 ? strlen(utf8) : 0;
-	if (n > PEAK_CLIP_MAX)
-		n = PEAK_CLIP_MAX;
-	peak_clip_paste_store(which, utf8, n);
-	memset(&ev, 0, sizeof ev);
-	ev.type = PEAK_EVENT_CLIP;
-	ev.clip.which = which;
-	ev.clip.n = n;
-	peak_q_push(&w->q, ev);
-	return 1;
-}
-
-static bool
-peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
-{
-	struct peak_macos_win *w;
-
-	w = intern ? intern->w : NULL;
-	if (!w || !w->window)
-		return 0;
-	if (peak_q_pop(&w->q, ev))
-		return 1;
-	peak_internal_macos_pump(w);
-	return peak_q_pop(&w->q, ev);
-}
-
-static int
-peak_platform_fd(PeakWindowInternal *intern)
-{
-	(void)intern;
-	return -1;
-}
-
-static int
-peak_platform_pending(PeakWindowInternal *intern)
-{
-	struct peak_macos_win *w;
-	NSEvent *ev;
-
-	w = intern ? intern->w : NULL;
-	if (!w)
-		return 0;
-	if (w->q.n)
-		return (int)w->q.n;
-	if (!peak_macos_app)
-		return 0;
-	ev = [peak_macos_app nextEventMatchingMask:NSEventMaskAny
-		untilDate:[NSDate distantPast]
-		inMode:NSDefaultRunLoopMode
-		dequeue:NO];
-	return ev ? 1 : 0;
-}
-
-static void
-peak_internal_macos_audio_cb(void *ud, AudioQueueRef q, AudioQueueBufferRef buf)
-{
-	(void)ud;
-	if (!peak_audio.run)
-		return;
-	memset(buf->mAudioData, 0, buf->mAudioDataByteSize);
-	if (peak_audio.fill)
-		peak_audio.fill((int16_t *)buf->mAudioData,
-			(size_t)buf->mAudioDataByteSize / (peak_audio.channels * sizeof(int16_t)),
-			peak_audio.userdata);
-	AudioQueueEnqueueBuffer(q, buf, 0, NULL);
-}
-
-static int
-peak_platform_audio_start(uint32_t channels, uint32_t rate, void (*fill)(int16_t *out, size_t frames, void *userdata), void *userdata)
-{
-	AudioStreamBasicDescription fmt;
-	int i;
-
-	if (channels > 32)
-		return 0;
-	memset(&fmt, 0, sizeof fmt);
-	fmt.mSampleRate = (Float64)rate;
-	fmt.mFormatID = kAudioFormatLinearPCM;
-	fmt.mFormatFlags = kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked;
-	fmt.mBytesPerPacket = channels * 2;
-	fmt.mFramesPerPacket = 1;
-	fmt.mBytesPerFrame = channels * 2;
-	fmt.mChannelsPerFrame = channels;
-	fmt.mBitsPerChannel = 16;
-	peak_audio.channels = channels;
-	peak_audio.bytes = channels * PEAK_AUDIO_FRAMES * 2;
-	peak_audio.fill = fill;
-	peak_audio.userdata = userdata;
-	peak_audio.run = 1;
-	if (AudioQueueNewOutput(&fmt, peak_internal_macos_audio_cb, NULL, NULL, NULL, 0, &peak_audio.queue) != 0)
-		goto fail;
-	for (i = 0; i < PEAK_AUDIO_BUFFERS; i++) {
-		if (AudioQueueAllocateBuffer(peak_audio.queue, peak_audio.bytes, &peak_audio.buf[i]) != 0)
-			goto fail;
-		peak_audio.buf[i]->mAudioDataByteSize = peak_audio.bytes;
-		peak_internal_macos_audio_cb(NULL, peak_audio.queue, peak_audio.buf[i]);
-	}
-	if (AudioQueueStart(peak_audio.queue, NULL) != 0)
-		goto fail;
-	return 1;
-fail:
-	peak_platform_audio_stop();
-	return 0;
-}
-
-static void
-peak_platform_audio_stop(void)
-{
-	int i;
-
-	peak_audio.run = 0;
-	if (peak_audio.queue) {
-		AudioQueueStop(peak_audio.queue, 1);
-		for (i = 0; i < PEAK_AUDIO_BUFFERS; i++)
-			peak_audio.buf[i] = NULL;
-		AudioQueueDispose(peak_audio.queue, 1);
-		peak_audio.queue = NULL;
-	}
-	peak_audio.fill = NULL;
-	peak_audio.userdata = NULL;
-}
-
-static uint64_t
-peak_platform_get_time(void)
-{
-	struct timespec ts;
-
-	clock_gettime(CLOCK_MONOTONIC, &ts);
-	return (uint64_t)ts.tv_sec * NANOS_PER_SEC + (uint64_t)ts.tv_nsec;
-}
-
-static void
-peak_platform_sleep_ns(int64_t ns)
-{
-	struct timespec ts;
-
-	if (ns <= 0)
-		return;
-	ts.tv_sec = ns / 1000000000ll;
-	ts.tv_nsec = ns % 1000000000ll;
-	nanosleep(&ts, NULL);
-}
-
-static const char **
-peak_platform_vulkan_get_extensions(uint32_t *count)
-{
-	static const char *exts[] = {
-		"VK_KHR_surface",
-		"VK_EXT_metal_surface",
-		"VK_KHR_portability_enumeration",
-	};
-	if (count)
-		*count = 3;
-	return exts;
-}
-
-static int
-peak_platform_vulkan_create_surface(PeakWindowInternal *intern, void *instance, const void *allocator, void *out_surface)
-{
-#ifdef PEAK_VULKAN
-	struct peak_macos_win *w;
-	VkMetalSurfaceCreateInfoEXT ci;
-
-	w = intern ? intern->w : NULL;
-	if (!w || !w->layer)
-		return 0;
-	memset(&ci, 0, sizeof ci);
-	ci.sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
-	ci.pLayer = (const void *)w->layer;
-	return vkCreateMetalSurfaceEXT((VkInstance)instance, &ci,
-		(const VkAllocationCallbacks *)allocator, (VkSurfaceKHR *)out_surface) == VK_SUCCESS;
-#else
-	(void)intern;
-	(void)instance;
-	(void)allocator;
-	(void)out_surface;
-	return 0;
-#endif
-}
-
-static void
-peak_platform_window_set_title(PeakWindowInternal *intern, const char *name)
-{
-	struct peak_macos_win *w;
-
-	w = intern ? intern->w : NULL;
-	if (!w || !w->window || !name)
-		return;
-	[w->window setTitle:[NSString stringWithUTF8String:name]];
-}
-
-static void
-peak_platform_window_set_size(PeakWindowInternal *intern, uint32_t width, uint32_t height)
-{
-	struct peak_macos_win *w;
-	NSRect r;
-
-	w = intern ? intern->w : NULL;
-	if (!w || !w->window)
-		return;
-	r = [w->window frame];
-	r.size.width = (CGFloat)width;
-	r.size.height = (CGFloat)height;
-	[w->window setFrame:r display:YES];
-}
-
-static void
-peak_platform_window_fullscreen(PeakWindowInternal *intern, int on)
-{
-	struct peak_macos_win *w;
-	int isfs;
-
-	w = intern ? intern->w : NULL;
-	if (!w || !w->window)
-		return;
-	isfs = ([w->window styleMask] & NSWindowStyleMaskFullScreen) != 0;
-	if ((on && !isfs) || (!on && isfs))
-		[w->window toggleFullScreen:nil];
-}
-
-static void
-peak_platform_window_cursor(PeakWindowInternal *intern, int on)
-{
-	struct peak_macos_win *w;
-
-	w = intern ? intern->w : NULL;
-	if (!w)
-		return;
-	w->cursor_on = on;
-	if (on)
-		[NSCursor unhide];
-	else
-		[NSCursor hide];
-}
-
-static void
-peak_platform_window_pointer_relative(PeakWindowInternal *intern, int on)
-{
-	struct peak_macos_win *w;
-
-	w = intern ? intern->w : NULL;
-	if (!w)
-		return;
-	w->relative = on;
-	if (on)
-		CGAssociateMouseAndMouseCursorPosition(false);
-	else
-		CGAssociateMouseAndMouseCursorPosition(true);
-}
-
-static float
-peak_platform_window_scale(PeakWindowInternal *intern)
-{
-	struct peak_macos_win *w;
-	CGFloat s;
-
-	w = intern ? intern->w : NULL;
-	if (!w || !w->window)
-		return 1.f;
-	s = [w->window backingScaleFactor];
-	return s > 0 ? (float)s : 1.f;
-}
-
-/* END p_macos.c */
-#elif defined(PEAK_WEB)
-/* BEGIN p_emscripten.c */
-#include <emscripten.h>
-#include <emscripten/html5.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
-EM_JS(void, peak_web_dom_open, (const char *id, int w, int h), {
-	var name = UTF8ToString(id);
-	var c = document.getElementById(name);
-	if (!c) {
-		c = document.createElement('canvas');
-		c.id = name;
-		document.body.appendChild(c);
-	}
-	c.width = w;
-	c.height = h;
-	c.tabIndex = 0;
-	c.focus();
-});
-
-EM_JS(void, peak_web_dom_present, (const char *id, int w, int h, uintptr_t pixels), {
-	var c = document.getElementById(UTF8ToString(id));
-	if (!c) return;
-	var ctx = c.getContext('2d');
-	if (c.width !== w || c.height !== h) {
-		c.width = w;
-		c.height = h;
-	}
-	var img = ctx.createImageData(w, h);
-	img.data.set(HEAPU8.subarray(pixels, pixels + w * h * 4));
-	ctx.putImageData(img, 0, 0);
-});
-
-struct peak_web_win {
-	char name[64];
-	uint32_t width, height;
-	PeakQ q;
-	uint32_t buffer[];
-};
-
-
-static void
-peak_web_sel(const char *name, char *out, size_t n)
-{
-	out[0] = '#';
-	strncpy(out + 1, name, n - 2);
-	out[n - 1] = 0;
-}
-
-static PeakKeyCode
-peak_web_key_map(const char *code)
-{
-	if (code[0] == 'K' && code[1] == 'e' && code[2] == 'y' && code[3] >= 'A' && code[3] <= 'Z' && code[4] == 0)
-		return (PeakKeyCode)(PEAK_KEY_A + (code[3] - 'A'));
-	if (!strcmp(code, "ArrowUp")) return PEAK_KEY_UP;
-	if (!strcmp(code, "ArrowDown")) return PEAK_KEY_DOWN;
-	if (!strcmp(code, "ArrowLeft")) return PEAK_KEY_LEFT;
-	if (!strcmp(code, "ArrowRight")) return PEAK_KEY_RIGHT;
-	if (!strcmp(code, "Space")) return PEAK_KEY_SPACE;
-	if (!strcmp(code, "Escape")) return PEAK_KEY_ESCAPE;
-	if (!strcmp(code, "Enter")) return PEAK_KEY_ENTER;
-	if (!strcmp(code, "Backspace")) return PEAK_KEY_BACKSPACE;
-	if (!strcmp(code, "Tab")) return PEAK_KEY_TAB;
-	if (!strcmp(code, "Delete")) return PEAK_KEY_DELETE;
-	if (!strcmp(code, "Insert")) return PEAK_KEY_INSERT;
-	if (!strcmp(code, "Home")) return PEAK_KEY_HOME;
-	if (!strcmp(code, "End")) return PEAK_KEY_END;
-	if (!strcmp(code, "PageUp")) return PEAK_KEY_PAGEUP;
-	if (!strcmp(code, "PageDown")) return PEAK_KEY_PAGEDOWN;
-	if (code[0] == 'F' && code[1] >= '1' && code[1] <= '9' && code[2] == 0)
-		return (PeakKeyCode)(PEAK_KEY_F1 + (code[1] - '1'));
-	if (!strcmp(code, "F10")) return PEAK_KEY_F10;
-	if (!strcmp(code, "F11")) return PEAK_KEY_F11;
-	if (!strcmp(code, "F12")) return PEAK_KEY_F12;
-	if (code[0] == 'D' && code[1] == 'i' && code[2] == 'g' && code[3] == 'i' && code[4] == 't' &&
-	    code[5] >= '0' && code[5] <= '9' && code[6] == 0)
-		return (PeakKeyCode)(PEAK_KEY_0 + (code[5] - '0'));
-	return PEAK_KEY_UNKNOWN;
-}
-
-static EM_BOOL
-peak_web_key(int type, const EmscriptenKeyboardEvent *e, void *ud)
-{
-	PeakEvent ev = {0};
-	ev.type = (type == EMSCRIPTEN_EVENT_KEYDOWN) ? PEAK_EVENT_KEY_DOWN : PEAK_EVENT_KEY_UP;
-	ev.key.key = peak_web_key_map(e->code);
-	ev.key.mod = (e->shiftKey ? PEAK_KEYMOD_SHIFT : 0) | (e->ctrlKey ? PEAK_KEYMOD_CTRL : 0) | (e->altKey ? PEAK_KEYMOD_ALT : 0) | (e->metaKey ? PEAK_KEYMOD_SUPER : 0);
-	peak_q_push(&((struct peak_web_win *)ud)->q, ev);
-	if (type == EMSCRIPTEN_EVENT_KEYDOWN && e->key[0] && (unsigned char)e->key[0] >= 32 && e->key[1] == 0) {
-		PeakEvent tev = {0};
-		peak_text_store(e->key, 1);
-		tev.type = PEAK_EVENT_TEXT;
-		tev.text.n = 1;
-		peak_q_push(&((struct peak_web_win *)ud)->q, tev);
-	}
-	return EM_TRUE;
-}
-
-static EM_BOOL
-peak_web_mouse(int type, const EmscriptenMouseEvent *e, void *ud)
-{
-	PeakEvent ev = {0};
-	ev.type = PEAK_EVENT_POINTER;
-	ev.pointer.x = (float)e->targetX;
-	ev.pointer.y = (float)e->targetY;
-	if (type == EMSCRIPTEN_EVENT_MOUSEDOWN)
-		ev.pointer.state = PEAK_POINTER_PRESSED;
-	else if (type == EMSCRIPTEN_EVENT_MOUSEUP)
-		ev.pointer.state = PEAK_POINTER_RELEASED;
-	else
-		ev.pointer.state = PEAK_POINTER_MOVED;
-	if (type == EMSCRIPTEN_EVENT_MOUSEMOVE) {
-		ev.pointer.type = (e->buttons & 4) ? PEAK_POINTER_MIDDLE :
-		                  (e->buttons & 2) ? PEAK_POINTER_RIGHT : PEAK_POINTER_LEFT;
-	} else {
-		ev.pointer.type = (e->button == 1) ? PEAK_POINTER_MIDDLE :
-		                  (e->button == 2) ? PEAK_POINTER_RIGHT : PEAK_POINTER_LEFT;
-	}
-	ev.pointer.mod = (e->shiftKey ? PEAK_KEYMOD_SHIFT : 0) | (e->ctrlKey ? PEAK_KEYMOD_CTRL : 0) | (e->altKey ? PEAK_KEYMOD_ALT : 0);
-	peak_q_push(&((struct peak_web_win *)ud)->q, ev);
-	return EM_TRUE;
-}
-
-static void
-peak_web_listen(struct peak_web_win *w, int on)
-{
-	char sel[66];
-	peak_web_sel(w->name, sel, sizeof sel);
-	emscripten_set_keydown_callback(sel, w, EM_TRUE, on ? peak_web_key : NULL);
-	emscripten_set_keyup_callback(sel, w, EM_TRUE, on ? peak_web_key : NULL);
-	emscripten_set_mousedown_callback(sel, w, EM_TRUE, on ? peak_web_mouse : NULL);
-	emscripten_set_mouseup_callback(sel, w, EM_TRUE, on ? peak_web_mouse : NULL);
-	emscripten_set_mousemove_callback(sel, w, EM_TRUE, on ? peak_web_mouse : NULL);
-}
-
-static int
-peak_platform_init(void)
-{
-	return 1;
-}
-
-static void
-peak_platform_quit(void)
-{
-}
-
-static PeakWindowInternal
-peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uint32_t flags)
-{
-	PeakWindowInternal intern = {0};
-	struct peak_web_win *w;
-
-	(void)flags;
-
-	w = calloc(1, sizeof *w + (size_t)width * height * sizeof *w->buffer);
-	if (!w)
-		return intern;
-	strncpy(w->name, name, sizeof w->name - 1);
-	w->width = width;
-	w->height = height;
-
-	peak_web_dom_open(w->name, (int)width, (int)height);
-
-	peak_web_listen(w, 1);
-	intern.w = w;
-	return intern;
-}
-
-static void
-peak_platform_window_close(PeakWindowInternal *intern)
-{
-	struct peak_web_win *w;
-	if (!intern || !intern->w)
-		return;
-	w = intern->w;
-	peak_web_listen(w, 0);
-	free(w);
-	intern->w = NULL;
-}
-
-static uint32_t *
-peak_platform_window_buffer(PeakWindowInternal *intern, size_t *width, size_t *height)
-{
-	struct peak_web_win *w = intern ? intern->w : NULL;
-	if (!w) {
-		*width = 0;
-		*height = 0;
-		return NULL;
-	}
-	*width = w->width;
-	*height = w->height;
-	return w->buffer;
-}
-
-static void
-peak_platform_window_present(PeakWindowInternal *intern)
-{
-	struct peak_web_win *w = intern ? intern->w : NULL;
-	if (!w)
-		return;
-	peak_web_dom_present(w->name, (int)w->width, (int)w->height, (uintptr_t)w->buffer);
-}
-
-static int
-peak_platform_drop_drag(PeakWindowInternal *intern, const char *utf8, size_t n)
-{
-	(void)intern;
-	(void)utf8;
-	(void)n;
-	return 0;
-}
-
-static int
-peak_platform_clip_set(PeakWindowInternal *intern, PeakClip which, const char *utf8, size_t n)
-{
-	(void)intern;
-	(void)which;
-	(void)utf8;
-	(void)n;
-	return 1;
-}
-
-static int
-peak_platform_clip_request(PeakWindowInternal *intern, PeakClip which)
-{
-	struct peak_web_win *w;
-	const char *p;
-	size_t n;
-	PeakEvent ev;
-
-	w = intern ? intern->w : NULL;
-	if (!w || !peak_clip_own_get(which, &p, &n))
-		return 0;
-	peak_clip_paste_store(which, p, n);
-	memset(&ev, 0, sizeof ev);
-	ev.type = PEAK_EVENT_CLIP;
-	ev.clip.which = which;
-	ev.clip.n = n;
-	peak_q_push(&w->q, ev);
-	return 1;
-}
-
-static bool
-peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
-{
-	struct peak_web_win *w = intern ? intern->w : NULL;
-	return w ? peak_q_pop(&w->q, ev) : 0;
-}
-
-static int
-peak_platform_fd(PeakWindowInternal *intern)
-{
-	(void)intern;
-	return -1;
-}
-
-static int
-peak_platform_pending(PeakWindowInternal *intern)
-{
-	struct peak_web_win *w = intern ? intern->w : NULL;
-	return w ? (int)w->q.n : 0;
-}
-
-static void
-peak_platform_window_set_title(PeakWindowInternal *intern, const char *name)
-{
-	(void)intern;
-	if (name)
-		emscripten_set_window_title(name);
-}
-
-static void
-peak_platform_window_set_size(PeakWindowInternal *intern, uint32_t width, uint32_t height)
-{
-	struct peak_web_win *w = intern ? intern->w : NULL;
-	if (!w || !width || !height)
-		return;
-	w->width = width;
-	w->height = height;
-	peak_web_dom_open(w->name, (int)width, (int)height);
-}
-
-static void
-peak_platform_window_fullscreen(PeakWindowInternal *intern, int on)
-{
-	struct peak_web_win *w = intern ? intern->w : NULL;
-	char sel[66];
-	if (!w)
-		return;
-	peak_web_sel(w->name, sel, sizeof sel);
-	if (on)
-		emscripten_request_fullscreen(sel, EM_TRUE);
-	else
-		emscripten_exit_fullscreen();
-}
-
-static void
-peak_platform_window_cursor(PeakWindowInternal *intern, int on)
-{
-	(void)intern;
-	emscripten_hide_mouse();
-	(void)on;
-}
-
-static void
-peak_platform_window_pointer_relative(PeakWindowInternal *intern, int on)
-{
-	(void)intern;
-	(void)on;
-}
-
-static float
-peak_platform_window_scale(PeakWindowInternal *intern)
-{
-	(void)intern;
-	return 1.f;
-}
-
-#define PEAK_AUDIO_FRAMES 1024
-
-static struct {
-	int run;
-	uint32_t channels;
-	int16_t *buf;
-	void (*fill)(int16_t *out, size_t frames, void *userdata);
-	void *userdata;
-} peak_web_audio;
-
-void EMSCRIPTEN_KEEPALIVE
-peak_internal_web_audio_fill(int16_t *out, int frames)
-{
-	size_t n;
-
-	if (!peak_web_audio.run || !out || frames <= 0)
-		return;
-	n = (size_t)frames * peak_web_audio.channels;
-	memset(out, 0, n * sizeof(int16_t));
-	if (peak_web_audio.fill)
-		peak_web_audio.fill(out, (size_t)frames, peak_web_audio.userdata);
-}
-
-EM_JS(int, peak_web_audio_dom_start, (int channels, int rate, int frames, uintptr_t ptr), {
-	var AC = window.AudioContext || window.webkitAudioContext;
-	var ctx, proc, i, c, heap, off, ch;
-	if (!AC || Module._peak_web_audio)
-		return 0;
-	ctx = new AC({ sampleRate: rate });
-	if (ctx.sampleRate !== rate) {
-		ctx.close();
-		return 0;
-	}
-	proc = ctx.createScriptProcessor(frames, 0, channels);
-	proc.onaudioprocess = function(e) {
-		Module._peak_internal_web_audio_fill(ptr, frames);
-		heap = Module.HEAP16;
-		off = ptr >> 1;
-		for (c = 0; c < channels; c++) {
-			ch = e.outputBuffer.getChannelData(c);
-			for (i = 0; i < frames; i++)
-				ch[i] = heap[off + i * channels + c] / 32768.0;
-		}
-	};
-	proc.connect(ctx.destination);
-	ctx.resume();
-	Module._peak_web_audio = { ctx: ctx, proc: proc };
-	return 1;
-});
-
-EM_JS(void, peak_web_audio_dom_stop, (void), {
-	var a = Module._peak_web_audio;
-	if (!a)
-		return;
-	a.proc.disconnect();
-	a.ctx.close();
-	Module._peak_web_audio = null;
-});
-
-static int
-peak_platform_audio_start(uint32_t channels, uint32_t rate, void (*fill)(int16_t *out, size_t frames, void *userdata), void *userdata)
-{
-	if (channels > 32)
-		return 0;
-	if (!(peak_web_audio.buf = calloc((size_t)channels * PEAK_AUDIO_FRAMES, sizeof(int16_t))))
-		return 0;
-	peak_web_audio.fill = fill;
-	peak_web_audio.userdata = userdata;
-	peak_web_audio.channels = channels;
-	peak_web_audio.run = 1;
-	if (!peak_web_audio_dom_start((int)channels, (int)rate, PEAK_AUDIO_FRAMES, (uintptr_t)peak_web_audio.buf)) {
-		free(peak_web_audio.buf);
-		peak_web_audio.buf = NULL;
-		peak_web_audio.run = 0;
-		peak_web_audio.fill = NULL;
-		return 0;
-	}
-	return 1;
-}
-
-static uint64_t
-peak_platform_get_time(void)
-{
-	return (uint64_t)(emscripten_get_now() * 1000000.0);
-}
-
-static void
-peak_platform_sleep_ns(int64_t ns)
-{
-	if (ns <= 0) return;
-	emscripten_sleep((unsigned)(ns / 1000000));
-}
-
-static const char **
-peak_platform_vulkan_get_extensions(uint32_t *count)
-{
-	if (count) *count = 0;
-	return NULL;
-}
-
-static int
-peak_platform_vulkan_create_surface(PeakWindowInternal *w, void *instance, const void *allocator, void *out_surface)
-{
-	(void)w; (void)instance; (void)allocator; (void)out_surface;
-	return 0;
-}
-
-static void
-peak_platform_audio_stop(void)
-{
-	peak_web_audio.run = 0;
-	peak_web_audio_dom_stop();
-	free(peak_web_audio.buf);
-	peak_web_audio.buf = NULL;
-	peak_web_audio.fill = NULL;
-	peak_web_audio.userdata = NULL;
-}
-
-static PeakProc
-peak_internal_proc_fail(void)
-{
-	PeakProc p;
-
-	p.fd = PEAK_HANDLE_INVALID;
-	p.pid = 0;
-	return p;
-}
-
-PeakProc
-peak_pty_spawn(const char *file, const char **argv, uint32_t cols, uint32_t rows, uint32_t xpixel, uint32_t ypixel)
-{
-	(void)file; (void)argv; (void)cols; (void)rows; (void)xpixel; (void)ypixel;
-	return peak_internal_proc_fail();
-}
-
-void
-peak_pty_resize(PeakProc *pty, uint32_t cols, uint32_t rows, uint32_t xpixel, uint32_t ypixel)
-{
-	(void)pty; (void)cols; (void)rows; (void)xpixel; (void)ypixel;
-}
-
-int
-peak_pty_reap(PeakProc *pty)
-{
-	(void)pty;
-	return 0;
-}
-
-void
-peak_pty_close(PeakProc *pty)
-{
-	if (!pty)
-		return;
-	pty->fd = PEAK_HANDLE_INVALID;
-	pty->pid = 0;
-}
-
-int
-peak_wait(PeakWindow *win, const PEAK_HANDLE *fds, uint32_t n, int timeout_ms)
-{
-	(void)win; (void)fds; (void)n; (void)timeout_ms;
-	return 0;
-}
-
-int
-peak_runtime_dir(char *buf, size_t cap, const char *app)
-{
-	(void)buf; (void)cap; (void)app;
-	return 0;
-}
-
-PEAK_HANDLE
-peak_sock_listen(const char *path)
-{
-	(void)path;
-	return PEAK_HANDLE_INVALID;
-}
-
-PEAK_HANDLE
-peak_sock_connect(const char *path)
-{
-	(void)path;
-	return PEAK_HANDLE_INVALID;
-}
-
-int
-peak_sock_send(PEAK_HANDLE sock, const void *buf, size_t n, PEAK_HANDLE pass)
-{
-	(void)sock; (void)buf; (void)n; (void)pass;
-	return 0;
-}
-
-int
-peak_sock_recv(PEAK_HANDLE sock, void *buf, size_t n, PEAK_HANDLE *pass)
-{
-	if (pass)
-		*pass = PEAK_HANDLE_INVALID;
-	(void)sock; (void)buf; (void)n;
-	return -1;
-}
-
-int
-peak_pointer_pid(PeakWindow *win)
-{
-	(void)win;
-	return 0;
-}
-
-int
-peak_pointer_local(PeakWindow *win, int *x, int *y)
-{
-	(void)win;
-	(void)x;
-	(void)y;
-	return 0;
-}
-
-int
-peak_filesystem_mkdir(const char *path)
-{
-	if (!path || !path[0])
-		return 0;
-	return mkdir(path, 0777) == 0;
-}
-
-int
-peak_filesystem_rm(const char *path)
-{
-	if (!path || !path[0])
-		return 0;
-	if (unlink(path) == 0)
-		return 1;
-	return rmdir(path) == 0;
-}
-
-int
-peak_filesystem_cwd(char *buf, size_t cap)
-{
-	if (!buf || cap < 2)
-		return 0;
-	return getcwd(buf, cap) != NULL;
-}
-
-int
-peak_filesystem_chdir(const char *path)
-{
-	if (!path || !path[0])
-		return 0;
-	return chdir(path) == 0;
-}
-
-int
-peak_filesystem_rename(const char *from, const char *to)
-{
-	if (!from || !from[0] || !to || !to[0])
-		return 0;
-	return rename(from, to) == 0;
-}
-
-int
-peak_pid(void)
-{
-	return (int)getpid();
-}
-
-int
-peak_env_set(const char *name, const char *value)
-{
-	if (!name || !name[0])
-		return 0;
-	if (value)
-		return setenv(name, value, 1) == 0;
-	return unsetenv(name) == 0;
-}
-
-int
-peak_env_get(const char *name, char *buf, size_t cap)
-{
-	const char *v;
-	size_t n;
-
-	if (!name || !name[0] || !buf || cap < 2)
-		return 0;
-	v = getenv(name);
-	if (!v || !v[0])
-		return 0;
-	n = strlen(v);
-	if (n >= cap)
-		return 0;
-	memcpy(buf, v, n + 1);
-	return 1;
-}
-
-int
-peak_filesystem_list(const char *path, int (*fn)(const char *name, void *ud), void *ud)
-{
-	(void)path;
-	(void)fn;
-	(void)ud;
-	return 0;
-}
-
-int
-peak_filesystem_symlink(const char *target, const char *path)
-{
-	(void)target;
-	(void)path;
-	return 0;
-}
-
-int
-peak_filesystem_readlink(const char *path, char *dst, size_t cap)
-{
-	(void)path;
-	(void)dst;
-	(void)cap;
-	return 0;
-}
-
-int
-peak_child_arm(void)
-{
-	return 1;
-}
-
-void
-peak_child_disarm(void)
-{
-}
-
-PEAK_HANDLE
-peak_child_fd(void)
-{
-	return PEAK_HANDLE_INVALID;
-}
-
-void
-peak_child_ack(void)
-{
-}
-
-int
-peak_usr1_arm(void)
-{
-	return 1;
-}
-
-void
-peak_usr1_disarm(void)
-{
-}
-
-PEAK_HANDLE
-peak_usr1_fd(void)
-{
-	return PEAK_HANDLE_INVALID;
-}
-
-int
-peak_usr1_ack(void)
-{
-	return 0;
-}
-
-int
-peak_child_reap(int *pid, int *code)
-{
-	(void)pid;
-	(void)code;
-	return 0;
-}
-
-int
-peak_stdout_silence(void)
-{
-	return 0;
-}
-
-int
-peak_stdout_restore(void)
-{
-	return 0;
-}
-
-PEAK_HANDLE
-peak_sock_accept(PEAK_HANDLE listen_fd)
-{
-	(void)listen_fd;
-	return PEAK_HANDLE_INVALID;
-}
-
-int
-peak_fd_read(PEAK_HANDLE fd, void *buf, size_t n)
-{
-	(void)fd; (void)buf; (void)n;
-	return 0;
-}
-
-int
-peak_fd_write(PEAK_HANDLE fd, const void *buf, size_t n)
-{
-	(void)fd; (void)buf; (void)n;
-	return 0;
-}
-
-void
-peak_fd_close(PEAK_HANDLE fd)
-{
-	(void)fd;
-}
-
-size_t
-peak_pipe_capacity(PEAK_HANDLE fd)
-{
-	(void)fd;
-	return 0;
-}
-
-size_t
-peak_pipe_set_capacity(PEAK_HANDLE fd, size_t n)
-{
-	(void)fd;
-	(void)n;
-	return 0;
-}
-
-PeakProc
-peak_job_run(const char *cmd, const char *cwd)
-{
-	(void)cmd; (void)cwd;
-	return peak_internal_proc_fail();
-}
-
-int
-peak_job_reap(PeakProc *job, int *code)
-{
-	(void)job; (void)code;
-	return 0;
-}
-
-void
-peak_job_kill(PeakProc *job)
-{
-	if (!job)
-		return;
-	job->fd = PEAK_HANDLE_INVALID;
-	job->pid = 0;
-}
-
-int
-peak_pid_cwd(int pid, char *buf, size_t cap)
-{
-	(void)pid; (void)buf; (void)cap;
-	return 0;
-}
-
-size_t
-peak_page_size(void)
-{
-	return 4096;
-}
-
-void *
-peak_mirror_map(size_t size)
-{
-	(void)size;
-	return NULL;
-}
-
-void
-peak_mirror_unmap(void *p, size_t size)
-{
-	(void)p; (void)size;
-}
-/* END p_emscripten.c */
-#endif
-
-#if defined(PEAK_LINUX) || defined(PEAK_MACOS)
-/* BEGIN p_posix.c */
+/* Embedded p_posix.c. */
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -8652,6 +8878,7 @@ static PeakProcRec peak_procs[PEAK_PROC_MAX];
 
 static int peak_internal_nb(int fd);
 static PeakProc peak_internal_proc_fail(void);
+static void peak_internal_put_size(uint32_t cols, uint32_t rows);
 static int peak_internal_memfd(void);
 static size_t peak_internal_io_n(size_t n);
 static PeakProcRec *peak_internal_proc_find(int fd);
@@ -8659,7 +8886,7 @@ static PeakProcRec *peak_internal_proc_slot(void);
 static void peak_internal_proc_clear(PeakProcRec *r);
 static void peak_internal_proc_bind(int out, int tty);
 static int peak_internal_read(int fd, void *buf, size_t n);
-static void peak_internal_tty_no_opost(int fd);
+static void peak_internal_tty_unix(int fd);
 static int peak_internal_status_code(int status);
 static void peak_internal_sigchld(int sig);
 static void peak_internal_sigusr1(int sig);
@@ -8694,6 +8921,22 @@ peak_internal_proc_fail(void)
 	p.fd = PEAK_HANDLE_INVALID;
 	p.pid = 0;
 	return p;
+}
+
+static void
+peak_internal_put_size(uint32_t cols, uint32_t rows)
+{
+	char col[16];
+	char row[16];
+
+	if (!cols)
+		cols = 80;
+	if (!rows)
+		rows = 24;
+	snprintf(col, sizeof col, "%u", cols);
+	snprintf(row, sizeof row, "%u", rows);
+	setenv("COLUMNS", col, 1);
+	setenv("LINES", row, 1);
 }
 
 static int
@@ -8799,8 +9042,10 @@ peak_internal_read(int fd, void *buf, size_t n)
 	}
 }
 
-void
-peak_internal_tty_no_opost(int fd)
+/* Cooked Unix tty: kernel turns NL into CR NL (ONLCR). Raw apps (nvim) clear
+ * OPOST themselves and send LF as terminfo cud1 (index, same column). */
+static void
+peak_internal_tty_unix(int fd)
 {
 	struct termios tio;
 
@@ -8808,7 +9053,7 @@ peak_internal_tty_no_opost(int fd)
 		return;
 	if (tcgetattr(fd, &tio) < 0)
 		return;
-	tio.c_oflag &= ~OPOST;
+	tio.c_oflag |= OPOST | ONLCR;
 	(void)tcsetattr(fd, TCSANOW, &tio);
 }
 
@@ -8866,7 +9111,7 @@ peak_pty_spawn(const char *file, const char **argv, uint32_t cols, uint32_t rows
 	ws.ws_ypixel = (unsigned short)ypixel;
 	if (openpty(&master, &slave, NULL, NULL, &ws) < 0)
 		return peak_internal_proc_fail();
-	peak_internal_tty_no_opost(slave);
+	peak_internal_tty_unix(slave);
 	pid = fork();
 	if (pid < 0) {
 		close(master);
@@ -8883,6 +9128,7 @@ peak_pty_spawn(const char *file, const char **argv, uint32_t cols, uint32_t rows
 		dup2(slave, STDERR_FILENO);
 		if (slave > STDERR_FILENO)
 			close(slave);
+		peak_internal_put_size(cols, rows);
 		execvp(file, (char *const *)argv);
 		_Exit(127);
 	}
@@ -9777,19 +10023,2887 @@ peak_mirror_unmap(void *p, size_t size)
 		return;
 	munmap(p, size * 2);
 }
-/* END p_posix.c */
-#endif
 
-/* BEGIN p_log.c */
+#elif defined(PEAK_MACOS)
+/* Embedded p_macos.c. */
 /*
- * Logging!
+ * macOS window, input, CALayer present, Metal WSI, and AudioQueue.
+ * AppKit is Objective-C. This file is compiled as ObjC (clang -x objective-c).
+ *
+ * * 0.6.0 - @vasco - macos
  */
 
+#include <AppKit/AppKit.h>
+#include <AudioToolbox/AudioToolbox.h>
+#include <CoreGraphics/CoreGraphics.h>
+#include <QuartzCore/CAMetalLayer.h>
 #include <stdio.h>
-#include <stdarg.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#ifdef PEAK_VULKAN
+#define VK_USE_PLATFORM_METAL_EXT
+#include <vulkan/vulkan.h>
+#endif
 
+#define PEAK_AUDIO_FRAMES 256
+#define PEAK_AUDIO_BUFFERS 3
+
+struct peak_macos_win {
+	NSWindow *window;
+	NSView *view;
+	CAMetalLayer *layer;
+	id delegate;
+	uint32_t *buffer;
+	uint32_t width;
+	uint32_t height;
+	int force_close;
+	int flags;
+	int cursor_on;
+	int relative;
+	int touch_n;
+	float last_x, last_y;
+	PeakQ q;
+};
+
+typedef struct {
+	volatile int run;
+	AudioQueueRef queue;
+	AudioQueueBufferRef buf[PEAK_AUDIO_BUFFERS];
+	uint32_t channels;
+	uint32_t bytes;
+	void (*fill)(int16_t *out, size_t frames, void *userdata);
+	void *userdata;
+} PeakAudio;
+
+@interface PeakMacDelegate : NSObject <NSWindowDelegate>
+@property(nonatomic, assign) struct peak_macos_win *w;
+@end
+
+@interface PeakMacView : NSView
+@property(nonatomic, assign) struct peak_macos_win *w;
+@end
+
+static int peak_internal_macos_buffer(struct peak_macos_win *w, uint32_t width, uint32_t height);
+static PeakKeyCode peak_internal_macos_key_map(unsigned short kc);
+static PeakKeyMod peak_internal_macos_mod_map(NSEventModifierFlags flags);
+static void peak_internal_macos_translate(struct peak_macos_win *w, NSEvent *ev);
+static void peak_internal_macos_pump(struct peak_macos_win *w);
+static void peak_internal_macos_audio_cb(void *ud, AudioQueueRef q, AudioQueueBufferRef buf);
+static int peak_platform_init(void);
+static void peak_platform_quit(void);
+static PeakWindowInternal peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uint32_t flags);
+static void peak_platform_window_close(PeakWindowInternal *intern);
+static uint32_t *peak_platform_window_buffer(PeakWindowInternal *intern, size_t *width, size_t *height);
+static void peak_platform_window_present(PeakWindowInternal *intern);
+static bool peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev);
+static int peak_platform_fd(PeakWindowInternal *intern);
+static int peak_platform_pending(PeakWindowInternal *intern);
+static int peak_platform_audio_start(uint32_t channels, uint32_t rate, void (*fill)(int16_t *out, size_t frames, void *userdata), void *userdata);
+static void peak_platform_audio_stop(void);
+static uint64_t peak_platform_get_time(void);
+static void peak_platform_sleep_ns(int64_t ns);
+static const char **peak_platform_vulkan_get_extensions(uint32_t *count);
+static int peak_platform_vulkan_create_surface(PeakWindowInternal *intern, void *instance, const void *allocator, void *out_surface);
+static void peak_platform_window_set_title(PeakWindowInternal *intern, const char *name);
+static void peak_platform_window_set_size(PeakWindowInternal *intern, uint32_t width, uint32_t height);
+static void peak_platform_window_fullscreen(PeakWindowInternal *intern, int on);
+static void peak_platform_window_cursor(PeakWindowInternal *intern, int on);
+static void peak_platform_window_cursor_shape(PeakWindowInternal *intern, int shape);
+static void peak_platform_window_pointer_relative(PeakWindowInternal *intern, int on);
+static float peak_platform_window_scale(PeakWindowInternal *intern);
+
+static NSApplication *peak_macos_app;
+static PeakAudio peak_audio;
+
+@implementation PeakMacDelegate
+- (BOOL)windowShouldClose:(NSWindow *)sender
+{
+	struct peak_macos_win *w;
+	PeakEvent ev;
+
+	(void)sender;
+	w = self.w;
+	if (!w)
+		return YES;
+	if (w->force_close)
+		return YES;
+	memset(&ev, 0, sizeof ev);
+	ev.type = PEAK_EVENT_WINDOW_CLOSE;
+	peak_q_push(&w->q, ev);
+	return NO;
+}
+@end
+
+@implementation PeakMacView
+- (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender
+{
+	(void)sender;
+	return NSDragOperationCopy;
+}
+- (BOOL)performDragOperation:(id<NSDraggingInfo>)sender
+{
+	NSArray *files;
+	NSString *p;
+	const char *u;
+	PeakEvent ev;
+	size_t n;
+
+	files = [[sender draggingPasteboard] propertyListForType:NSFilenamesPboardType];
+	if (!files || ![files count] || !self.w)
+		return NO;
+	p = [files objectAtIndex:0];
+	u = [p UTF8String];
+	if (!u)
+		return NO;
+	n = strlen(u);
+	peak_drop_store(u, n);
+	memset(&ev, 0, sizeof ev);
+	ev.type = PEAK_EVENT_DROP;
+	ev.drop.n = n;
+	peak_q_push(&self.w->q, ev);
+	return YES;
+}
+@end
+
+static int
+peak_internal_macos_buffer(struct peak_macos_win *w, uint32_t width, uint32_t height)
+{
+	uint32_t *buffer;
+
+	if (!width || !height)
+		return 0;
+	if (!(buffer = calloc((size_t)width * height, sizeof *buffer)))
+		return 0;
+	free(w->buffer);
+	w->buffer = buffer;
+	w->width = width;
+	w->height = height;
+	return 1;
+}
+
+static PeakKeyCode
+peak_internal_macos_key_map(unsigned short kc)
+{
+	switch (kc) {
+	case 0x00: return PEAK_KEY_A;
+	case 0x0B: return PEAK_KEY_B;
+	case 0x08: return PEAK_KEY_C;
+	case 0x02: return PEAK_KEY_D;
+	case 0x0E: return PEAK_KEY_E;
+	case 0x03: return PEAK_KEY_F;
+	case 0x05: return PEAK_KEY_G;
+	case 0x04: return PEAK_KEY_H;
+	case 0x22: return PEAK_KEY_I;
+	case 0x26: return PEAK_KEY_J;
+	case 0x28: return PEAK_KEY_K;
+	case 0x25: return PEAK_KEY_L;
+	case 0x2E: return PEAK_KEY_M;
+	case 0x2D: return PEAK_KEY_N;
+	case 0x1F: return PEAK_KEY_O;
+	case 0x23: return PEAK_KEY_P;
+	case 0x0C: return PEAK_KEY_Q;
+	case 0x0F: return PEAK_KEY_R;
+	case 0x01: return PEAK_KEY_S;
+	case 0x11: return PEAK_KEY_T;
+	case 0x20: return PEAK_KEY_U;
+	case 0x09: return PEAK_KEY_V;
+	case 0x0D: return PEAK_KEY_W;
+	case 0x07: return PEAK_KEY_X;
+	case 0x10: return PEAK_KEY_Y;
+	case 0x06: return PEAK_KEY_Z;
+	case 0x1D: return PEAK_KEY_0;
+	case 0x12: return PEAK_KEY_1;
+	case 0x13: return PEAK_KEY_2;
+	case 0x14: return PEAK_KEY_3;
+	case 0x15: return PEAK_KEY_4;
+	case 0x17: return PEAK_KEY_5;
+	case 0x16: return PEAK_KEY_6;
+	case 0x1A: return PEAK_KEY_7;
+	case 0x1C: return PEAK_KEY_8;
+	case 0x19: return PEAK_KEY_9;
+	case 0x7E: return PEAK_KEY_UP;
+	case 0x7D: return PEAK_KEY_DOWN;
+	case 0x7B: return PEAK_KEY_LEFT;
+	case 0x7C: return PEAK_KEY_RIGHT;
+	case 0x31: return PEAK_KEY_SPACE;
+	case 0x35: return PEAK_KEY_ESCAPE;
+	case 0x24: return PEAK_KEY_ENTER;
+	case 0x4C: return PEAK_KEY_ENTER;
+	case 0x33: return PEAK_KEY_BACKSPACE;
+	case 0x30: return PEAK_KEY_TAB;
+	case 0x75: return PEAK_KEY_DELETE;
+	case 0x72: return PEAK_KEY_INSERT;
+	case 0x73: return PEAK_KEY_HOME;
+	case 0x77: return PEAK_KEY_END;
+	case 0x74: return PEAK_KEY_PAGEUP;
+	case 0x79: return PEAK_KEY_PAGEDOWN;
+	case 0x7A: return PEAK_KEY_F1;
+	case 0x78: return PEAK_KEY_F2;
+	case 0x63: return PEAK_KEY_F3;
+	case 0x76: return PEAK_KEY_F4;
+	case 0x60: return PEAK_KEY_F5;
+	case 0x61: return PEAK_KEY_F6;
+	case 0x62: return PEAK_KEY_F7;
+	case 0x64: return PEAK_KEY_F8;
+	case 0x65: return PEAK_KEY_F9;
+	case 0x6D: return PEAK_KEY_F10;
+	case 0x67: return PEAK_KEY_F11;
+	case 0x6F: return PEAK_KEY_F12;
+	default: return PEAK_KEY_UNKNOWN;
+	}
+}
+
+static PeakKeyMod
+peak_internal_macos_mod_map(NSEventModifierFlags flags)
+{
+	PeakKeyMod m;
+
+	m = 0;
+	if (flags & NSEventModifierFlagShift)
+		m |= PEAK_KEYMOD_SHIFT;
+	if (flags & NSEventModifierFlagControl)
+		m |= PEAK_KEYMOD_CTRL;
+	if (flags & NSEventModifierFlagCommand)
+		m |= PEAK_KEYMOD_SUPER;
+	if (flags & NSEventModifierFlagOption)
+		m |= PEAK_KEYMOD_ALT;
+	if (flags & NSEventModifierFlagCapsLock)
+		m |= PEAK_KEYMOD_CAPS;
+	return m;
+}
+
+static void
+peak_internal_macos_translate(struct peak_macos_win *w, NSEvent *ev)
+{
+	PeakEvent out;
+	NSPoint pt;
+	const char *utf8;
+
+	memset(&out, 0, sizeof out);
+	pt = [ev locationInWindow];
+	switch ([ev type]) {
+	case NSEventTypeKeyDown:
+	case NSEventTypeKeyUp:
+		out.type = ([ev type] == NSEventTypeKeyDown) ? PEAK_EVENT_KEY_DOWN : PEAK_EVENT_KEY_UP;
+		out.key.key = peak_internal_macos_key_map([ev keyCode]);
+		out.key.mod = peak_internal_macos_mod_map([ev modifierFlags]);
+		utf8 = [[ev characters] UTF8String];
+		out.key.code = (utf8 && utf8[0]) ? (uint32_t)(unsigned char)utf8[0] : 0;
+		peak_q_push(&w->q, out);
+		if ([ev type] == NSEventTypeKeyDown && utf8 && utf8[0] && (unsigned char)utf8[0] >= 32) {
+			PeakEvent tev;
+			size_t n;
+
+			n = strlen(utf8);
+			peak_text_store(utf8, n);
+			memset(&tev, 0, sizeof tev);
+			tev.type = PEAK_EVENT_TEXT;
+			tev.text.n = n;
+			peak_q_push(&w->q, tev);
+		}
+		break;
+	case NSEventTypeScrollWheel:
+		out.type = PEAK_EVENT_POINTER;
+		out.pointer.state = PEAK_POINTER_PRESSED;
+		out.pointer.type = ([ev deltaY] < 0) ? PEAK_POINTER_WHEEL_DOWN : PEAK_POINTER_WHEEL_UP;
+		out.pointer.x = (float)pt.x;
+		out.pointer.y = (float)((double)w->height - pt.y);
+		out.pointer.mod = peak_internal_macos_mod_map([ev modifierFlags]);
+		peak_q_push(&w->q, out);
+		break;
+	case NSEventTypeLeftMouseDown:
+	case NSEventTypeRightMouseDown:
+	case NSEventTypeOtherMouseDown:
+	case NSEventTypeLeftMouseUp:
+	case NSEventTypeRightMouseUp:
+	case NSEventTypeOtherMouseUp:
+	case NSEventTypeMouseMoved:
+	case NSEventTypeLeftMouseDragged:
+	case NSEventTypeRightMouseDragged:
+		out.type = PEAK_EVENT_POINTER;
+		out.pointer.x = (float)pt.x;
+		out.pointer.y = (float)((double)w->height - pt.y);
+		if (w->relative && ([ev type] == NSEventTypeMouseMoved || [ev type] == NSEventTypeLeftMouseDragged
+		    || [ev type] == NSEventTypeRightMouseDragged)) {
+			out.pointer.x -= w->last_x;
+			out.pointer.y -= w->last_y;
+		}
+		w->last_x = (float)pt.x;
+		w->last_y = (float)((double)w->height - pt.y);
+		out.pointer.mod = peak_internal_macos_mod_map([ev modifierFlags]);
+		if ([ev type] == NSEventTypeMouseMoved || [ev type] == NSEventTypeLeftMouseDragged
+		    || [ev type] == NSEventTypeRightMouseDragged) {
+			out.pointer.state = PEAK_POINTER_MOVED;
+			out.pointer.type = ([ev type] == NSEventTypeRightMouseDragged)
+				? PEAK_POINTER_RIGHT : PEAK_POINTER_LEFT;
+		} else if ([ev type] == NSEventTypeLeftMouseDown || [ev type] == NSEventTypeRightMouseDown
+		    || [ev type] == NSEventTypeOtherMouseDown) {
+			out.pointer.state = PEAK_POINTER_PRESSED;
+			out.pointer.type = ([ev type] == NSEventTypeRightMouseDown) ? PEAK_POINTER_RIGHT :
+			                   ([ev type] == NSEventTypeOtherMouseDown) ? PEAK_POINTER_MIDDLE : PEAK_POINTER_LEFT;
+		} else {
+			out.pointer.state = PEAK_POINTER_RELEASED;
+			out.pointer.type = ([ev type] == NSEventTypeRightMouseUp) ? PEAK_POINTER_RIGHT :
+			                   ([ev type] == NSEventTypeOtherMouseUp) ? PEAK_POINTER_MIDDLE : PEAK_POINTER_LEFT;
+		}
+		peak_q_push(&w->q, out);
+		break;
+	default:
+		break;
+	}
+}
+
+static void
+peak_internal_macos_pump(struct peak_macos_win *w)
+{
+	NSEvent *ev;
+	NSRect bounds;
+	CGFloat scale;
+	uint32_t width, height;
+
+	if (!peak_macos_app || !w->window)
+		return;
+	for (;;) {
+		ev = [peak_macos_app nextEventMatchingMask:NSEventMaskAny
+			untilDate:[NSDate distantPast]
+			inMode:NSDefaultRunLoopMode
+			dequeue:YES];
+		if (!ev)
+			break;
+		peak_internal_macos_translate(w, ev);
+	}
+	bounds = [w->view bounds];
+	scale = [w->window backingScaleFactor];
+	if (scale < 1.0)
+		scale = 1.0;
+	width = (uint32_t)(bounds.size.width * scale);
+	height = (uint32_t)(bounds.size.height * scale);
+	if (width && height && (width != w->width || height != w->height)) {
+		PeakEvent evr;
+
+		if (peak_internal_macos_buffer(w, width, height)) {
+			memset(&evr, 0, sizeof evr);
+			evr.type = PEAK_EVENT_WINDOW_RESIZE;
+			evr.resize.width = w->width;
+			evr.resize.height = w->height;
+			peak_q_push(&w->q, evr);
+			w->layer.drawableSize = CGSizeMake((CGFloat)w->width, (CGFloat)w->height);
+		}
+	}
+}
+
+static int
+peak_platform_init(void)
+{
+	if (peak_macos_app)
+		return 1;
+	peak_macos_app = [NSApplication sharedApplication];
+	if (!peak_macos_app) {
+		fputs("Failed to get NSApplication. What system are you fucking using and abusing?", stderr);
+		return 0;
+	}
+	[peak_macos_app setActivationPolicy:NSApplicationActivationPolicyRegular];
+	[peak_macos_app finishLaunching];
+	return 1;
+}
+
+static void
+peak_platform_quit(void)
+{
+	peak_macos_app = nil;
+}
+
+static PeakWindowInternal
+peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uint32_t flags)
+{
+	PeakWindowInternal intern = {0};
+	struct peak_macos_win *w;
+	PeakMacDelegate *del;
+	NSRect rect;
+
+	if (!peak_macos_app && !peak_platform_init())
+		return intern;
+	if (!(w = calloc(1, sizeof *w)))
+		return intern;
+	if (!peak_internal_macos_buffer(w, width, height)) {
+		free(w);
+		return intern;
+	}
+
+	rect = NSMakeRect(0, 0, (CGFloat)width, (CGFloat)height);
+	w->window = [[NSWindow alloc]
+		initWithContentRect:rect
+		styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable
+			| NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable)
+		backing:NSBackingStoreBuffered
+		defer:NO];
+	if (!w->window) {
+		free(w->buffer);
+		free(w);
+		return intern;
+	}
+	[w->window setTitle:[NSString stringWithUTF8String:name]];
+	w->flags = (int)flags;
+	w->cursor_on = 1;
+	if (flags & PEAK_WINDOW_TRANSPARENT) {
+		[w->window setOpaque:NO];
+		[w->window setBackgroundColor:[NSColor clearColor]];
+		[w->window setHasShadow:NO];
+	}
+	if (flags & PEAK_WINDOW_FULLSCREEN)
+		[w->window toggleFullScreen:nil];
+	[w->window registerForDraggedTypes:[NSArray arrayWithObject:NSFilenamesPboardType]];
+	{
+		PeakMacView *view;
+
+		view = [[PeakMacView alloc] initWithFrame:rect];
+		view.w = w;
+		[w->window setContentView:view];
+		w->view = view;
+	}
+	w->layer = [CAMetalLayer new];
+	[w->view setLayer:w->layer];
+	[w->view setWantsLayer:YES];
+	if (flags & PEAK_WINDOW_TRANSPARENT)
+		w->layer.opaque = NO;
+	w->layer.drawableSize = CGSizeMake((CGFloat)width, (CGFloat)height);
+	del = [PeakMacDelegate new];
+	del.w = w;
+	w->delegate = del;
+	[w->window setDelegate:del];
+	[w->window makeKeyAndOrderFront:nil];
+	[peak_macos_app activateIgnoringOtherApps:YES];
+	intern.w = w;
+	return intern;
+}
+
+static void
+peak_platform_window_close(PeakWindowInternal *intern)
+{
+	struct peak_macos_win *w;
+
+	w = intern ? intern->w : NULL;
+	if (!w)
+		return;
+	w->force_close = 1;
+	if (w->window) {
+		[w->window setDelegate:nil];
+		[w->window close];
+		[w->window release];
+	}
+	if (w->layer)
+		[w->layer release];
+	if (w->delegate)
+		[w->delegate release];
+	free(w->buffer);
+	free(w);
+	intern->w = NULL;
+}
+
+static uint32_t *
+peak_platform_window_buffer(PeakWindowInternal *intern, size_t *width, size_t *height)
+{
+	struct peak_macos_win *w;
+
+	w = intern ? intern->w : NULL;
+	if (!w) {
+		*width = 0;
+		*height = 0;
+		return NULL;
+	}
+	*width = w->width;
+	*height = w->height;
+	return w->buffer;
+}
+
+static void
+peak_platform_window_present(PeakWindowInternal *intern)
+{
+	struct peak_macos_win *w;
+	CGColorSpaceRef cs;
+	CGDataProviderRef prov;
+	CGImageRef img;
+	size_t nbytes;
+
+	w = intern ? intern->w : NULL;
+	if (!w || !w->layer || !w->buffer)
+		return;
+	nbytes = (size_t)w->width * w->height * 4;
+	cs = CGColorSpaceCreateDeviceRGB();
+	prov = CGDataProviderCreateWithData(NULL, w->buffer, nbytes, NULL);
+	img = CGImageCreate((size_t)w->width, (size_t)w->height, 8, 32, (size_t)w->width * 4, cs,
+		kCGBitmapByteOrder32Little | ((w->flags & PEAK_WINDOW_TRANSPARENT)
+			? kCGImageAlphaPremultipliedFirst : kCGImageAlphaNoneSkipFirst),
+		prov, NULL, false, kCGRenderingIntentDefault);
+	w->layer.contents = (id)img;
+	if (img)
+		CGImageRelease(img);
+	if (prov)
+		CGDataProviderRelease(prov);
+	if (cs)
+		CGColorSpaceRelease(cs);
+}
+
+static int
+peak_platform_drop_drag(PeakWindowInternal *intern, const char *utf8, size_t n)
+{
+	(void)intern;
+	(void)utf8;
+	(void)n;
+	return 0;
+}
+
+static int
+peak_platform_clip_set(PeakWindowInternal *intern, PeakClip which, const char *utf8, size_t n)
+{
+	NSPasteboard *pb;
+	NSString *s;
+	char *z;
+
+	(void)intern;
+	(void)which;
+	z = malloc(n + 1);
+	if (!z)
+		return 0;
+	if (n)
+		memcpy(z, utf8, n);
+	z[n] = 0;
+	s = [[NSString alloc] initWithUTF8String:z];
+	free(z);
+	if (!s)
+		return 0;
+	pb = [NSPasteboard generalPasteboard];
+	[pb clearContents];
+	[pb setString:s forType:NSPasteboardTypeString];
+	[s release];
+	return 1;
+}
+
+static int
+peak_platform_clip_request(PeakWindowInternal *intern, PeakClip which)
+{
+	struct peak_macos_win *w;
+	NSPasteboard *pb;
+	NSString *s;
+	const char *utf8;
+	size_t n;
+	PeakEvent ev;
+
+	w = intern ? intern->w : NULL;
+	if (!w)
+		return 0;
+	pb = [NSPasteboard generalPasteboard];
+	s = [pb stringForType:NSPasteboardTypeString];
+	utf8 = s ? [s UTF8String] : "";
+	n = utf8 ? strlen(utf8) : 0;
+	if (n > PEAK_CLIP_MAX)
+		n = PEAK_CLIP_MAX;
+	peak_clip_paste_store(which, utf8, n);
+	memset(&ev, 0, sizeof ev);
+	ev.type = PEAK_EVENT_CLIP;
+	ev.clip.which = which;
+	ev.clip.n = n;
+	peak_q_push(&w->q, ev);
+	return 1;
+}
+
+static bool
+peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
+{
+	struct peak_macos_win *w;
+
+	w = intern ? intern->w : NULL;
+	if (!w || !w->window)
+		return 0;
+	if (peak_q_pop(&w->q, ev))
+		return 1;
+	peak_internal_macos_pump(w);
+	return peak_q_pop(&w->q, ev);
+}
+
+static int
+peak_platform_fd(PeakWindowInternal *intern)
+{
+	(void)intern;
+	return -1;
+}
+
+static int
+peak_platform_pending(PeakWindowInternal *intern)
+{
+	struct peak_macos_win *w;
+	NSEvent *ev;
+
+	w = intern ? intern->w : NULL;
+	if (!w)
+		return 0;
+	if (w->q.n)
+		return (int)w->q.n;
+	if (!peak_macos_app)
+		return 0;
+	ev = [peak_macos_app nextEventMatchingMask:NSEventMaskAny
+		untilDate:[NSDate distantPast]
+		inMode:NSDefaultRunLoopMode
+		dequeue:NO];
+	return ev ? 1 : 0;
+}
+
+static void
+peak_internal_macos_audio_cb(void *ud, AudioQueueRef q, AudioQueueBufferRef buf)
+{
+	(void)ud;
+	if (!peak_audio.run)
+		return;
+	memset(buf->mAudioData, 0, buf->mAudioDataByteSize);
+	if (peak_audio.fill)
+		peak_audio.fill((int16_t *)buf->mAudioData,
+			(size_t)buf->mAudioDataByteSize / (peak_audio.channels * sizeof(int16_t)),
+			peak_audio.userdata);
+	AudioQueueEnqueueBuffer(q, buf, 0, NULL);
+}
+
+static int
+peak_platform_audio_start(uint32_t channels, uint32_t rate, void (*fill)(int16_t *out, size_t frames, void *userdata), void *userdata)
+{
+	AudioStreamBasicDescription fmt;
+	int i;
+
+	if (channels > 32)
+		return 0;
+	memset(&fmt, 0, sizeof fmt);
+	fmt.mSampleRate = (Float64)rate;
+	fmt.mFormatID = kAudioFormatLinearPCM;
+	fmt.mFormatFlags = kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked;
+	fmt.mBytesPerPacket = channels * 2;
+	fmt.mFramesPerPacket = 1;
+	fmt.mBytesPerFrame = channels * 2;
+	fmt.mChannelsPerFrame = channels;
+	fmt.mBitsPerChannel = 16;
+	peak_audio.channels = channels;
+	peak_audio.bytes = channels * PEAK_AUDIO_FRAMES * 2;
+	peak_audio.fill = fill;
+	peak_audio.userdata = userdata;
+	peak_audio.run = 1;
+	if (AudioQueueNewOutput(&fmt, peak_internal_macos_audio_cb, NULL, NULL, NULL, 0, &peak_audio.queue) != 0)
+		goto fail;
+	for (i = 0; i < PEAK_AUDIO_BUFFERS; i++) {
+		if (AudioQueueAllocateBuffer(peak_audio.queue, peak_audio.bytes, &peak_audio.buf[i]) != 0)
+			goto fail;
+		peak_audio.buf[i]->mAudioDataByteSize = peak_audio.bytes;
+		peak_internal_macos_audio_cb(NULL, peak_audio.queue, peak_audio.buf[i]);
+	}
+	if (AudioQueueStart(peak_audio.queue, NULL) != 0)
+		goto fail;
+	return 1;
+fail:
+	peak_platform_audio_stop();
+	return 0;
+}
+
+static void
+peak_platform_audio_stop(void)
+{
+	int i;
+
+	peak_audio.run = 0;
+	if (peak_audio.queue) {
+		AudioQueueStop(peak_audio.queue, 1);
+		for (i = 0; i < PEAK_AUDIO_BUFFERS; i++)
+			peak_audio.buf[i] = NULL;
+		AudioQueueDispose(peak_audio.queue, 1);
+		peak_audio.queue = NULL;
+	}
+	peak_audio.fill = NULL;
+	peak_audio.userdata = NULL;
+}
+
+static uint64_t
+peak_platform_get_time(void)
+{
+	struct timespec ts;
+
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (uint64_t)ts.tv_sec * NANOS_PER_SEC + (uint64_t)ts.tv_nsec;
+}
+
+static void
+peak_platform_sleep_ns(int64_t ns)
+{
+	struct timespec ts;
+
+	if (ns <= 0)
+		return;
+	ts.tv_sec = ns / 1000000000ll;
+	ts.tv_nsec = ns % 1000000000ll;
+	nanosleep(&ts, NULL);
+}
+
+static const char **
+peak_platform_vulkan_get_extensions(uint32_t *count)
+{
+	static const char *exts[] = {
+		"VK_KHR_surface",
+		"VK_EXT_metal_surface",
+		"VK_KHR_portability_enumeration",
+	};
+	if (count)
+		*count = 3;
+	return exts;
+}
+
+static int
+peak_platform_vulkan_create_surface(PeakWindowInternal *intern, void *instance, const void *allocator, void *out_surface)
+{
+#ifdef PEAK_VULKAN
+	struct peak_macos_win *w;
+	VkMetalSurfaceCreateInfoEXT ci;
+
+	w = intern ? intern->w : NULL;
+	if (!w || !w->layer)
+		return 0;
+	memset(&ci, 0, sizeof ci);
+	ci.sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
+	ci.pLayer = (const void *)w->layer;
+	return vkCreateMetalSurfaceEXT((VkInstance)instance, &ci,
+		(const VkAllocationCallbacks *)allocator, (VkSurfaceKHR *)out_surface) == VK_SUCCESS;
+#else
+	(void)intern;
+	(void)instance;
+	(void)allocator;
+	(void)out_surface;
+	return 0;
+#endif
+}
+
+static void
+peak_platform_window_set_class(PeakWindowInternal *intern, const char *name)
+{
+	(void)intern;
+	(void)name;
+}
+
+static void
+peak_platform_window_set_opacity(PeakWindowInternal *intern, uint8_t alpha)
+{
+	(void)intern;
+	(void)alpha;
+}
+
+static void
+peak_platform_window_set_title(PeakWindowInternal *intern, const char *name)
+{
+	struct peak_macos_win *w;
+
+	w = intern ? intern->w : NULL;
+	if (!w || !w->window || !name)
+		return;
+	[w->window setTitle:[NSString stringWithUTF8String:name]];
+}
+
+static void
+peak_platform_window_set_size(PeakWindowInternal *intern, uint32_t width, uint32_t height)
+{
+	struct peak_macos_win *w;
+	NSRect r;
+
+	w = intern ? intern->w : NULL;
+	if (!w || !w->window)
+		return;
+	r = [w->window frame];
+	r.size.width = (CGFloat)width;
+	r.size.height = (CGFloat)height;
+	[w->window setFrame:r display:YES];
+}
+
+static void
+peak_platform_window_fullscreen(PeakWindowInternal *intern, int on)
+{
+	struct peak_macos_win *w;
+	int isfs;
+
+	w = intern ? intern->w : NULL;
+	if (!w || !w->window)
+		return;
+	isfs = ([w->window styleMask] & NSWindowStyleMaskFullScreen) != 0;
+	if ((on && !isfs) || (!on && isfs))
+		[w->window toggleFullScreen:nil];
+}
+
+static void
+peak_platform_window_cursor(PeakWindowInternal *intern, int on)
+{
+	struct peak_macos_win *w;
+
+	w = intern ? intern->w : NULL;
+	if (!w)
+		return;
+	w->cursor_on = on;
+	if (on)
+		[NSCursor unhide];
+	else
+		[NSCursor hide];
+}
+
+static void
+peak_platform_window_cursor_shape(PeakWindowInternal *intern, int shape)
+{
+	(void)intern;
+	(void)shape;
+}
+
+static void
+peak_platform_window_pointer_relative(PeakWindowInternal *intern, int on)
+{
+	struct peak_macos_win *w;
+
+	w = intern ? intern->w : NULL;
+	if (!w)
+		return;
+	w->relative = on;
+	if (on)
+		CGAssociateMouseAndMouseCursorPosition(false);
+	else
+		CGAssociateMouseAndMouseCursorPosition(true);
+}
+
+static float
+peak_platform_window_scale(PeakWindowInternal *intern)
+{
+	struct peak_macos_win *w;
+	CGFloat s;
+
+	w = intern ? intern->w : NULL;
+	if (!w || !w->window)
+		return 1.f;
+	s = [w->window backingScaleFactor];
+	return s > 0 ? (float)s : 1.f;
+}
+
+/* Embedded p_posix.c. */
+#include <dirent.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <poll.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/un.h>
+#include <sys/wait.h>
+#include <termios.h>
+#include <unistd.h>
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#include <util.h>
+#else
+#include <pty.h>
+#endif
+#ifdef __linux__
+#include <sys/syscall.h>
+long syscall(long number, ...);
+#ifndef F_SETPIPE_SZ
+#define F_SETPIPE_SZ 1031
+#endif
+#ifndef F_GETPIPE_SZ
+#define F_GETPIPE_SZ 1032
+#endif
+#endif
+
+#define PEAK_WAIT_MAX 64
+#define PEAK_PROC_MAX 32
+
+typedef struct PeakProcRec {
+	int used;
+	int out;
+	int tty;
+} PeakProcRec;
+
+static PeakProcRec peak_procs[PEAK_PROC_MAX];
+
+static int peak_internal_nb(int fd);
+static PeakProc peak_internal_proc_fail(void);
+static void peak_internal_put_size(uint32_t cols, uint32_t rows);
+static int peak_internal_memfd(void);
+static size_t peak_internal_io_n(size_t n);
+static PeakProcRec *peak_internal_proc_find(int fd);
+static PeakProcRec *peak_internal_proc_slot(void);
+static void peak_internal_proc_clear(PeakProcRec *r);
+static void peak_internal_proc_bind(int out, int tty);
+static int peak_internal_read(int fd, void *buf, size_t n);
+static void peak_internal_tty_unix(int fd);
+static int peak_internal_status_code(int status);
+static void peak_internal_sigchld(int sig);
+static void peak_internal_sigusr1(int sig);
+
+static int peak_child_r = -1;
+static int peak_child_w = -1;
+static int peak_usr1_r = -1;
+static int peak_usr1_w = -1;
+static int peak_stdout_saved = -1;
+
+static int
+peak_internal_nb(int fd)
+{
+	int flags;
+
+	if (fd < 0)
+		return -1;
+	flags = fcntl(fd, F_GETFL);
+	if (flags >= 0)
+		fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+	flags = fcntl(fd, F_GETFD);
+	if (flags >= 0)
+		fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
+	return fd;
+}
+
+static PeakProc
+peak_internal_proc_fail(void)
+{
+	PeakProc p;
+
+	p.fd = PEAK_HANDLE_INVALID;
+	p.pid = 0;
+	return p;
+}
+
+static void
+peak_internal_put_size(uint32_t cols, uint32_t rows)
+{
+	char col[16];
+	char row[16];
+
+	if (!cols)
+		cols = 80;
+	if (!rows)
+		rows = 24;
+	snprintf(col, sizeof col, "%u", cols);
+	snprintf(row, sizeof row, "%u", rows);
+	setenv("COLUMNS", col, 1);
+	setenv("LINES", row, 1);
+}
+
+static int
+peak_internal_memfd(void)
+{
+#ifdef __linux__
+	return (int)syscall(SYS_memfd_create, "peak", 0);
+#else
+	char name[64];
+	int fd;
+
+	snprintf(name, sizeof name, "/peak.%d.%d", (int)getpid(), rand());
+	fd = shm_open(name, O_RDWR | O_CREAT | O_EXCL, 0600);
+	if (fd >= 0)
+		shm_unlink(name);
+	return fd;
+#endif
+}
+
+static size_t
+peak_internal_io_n(size_t n)
+{
+	if (n > (size_t)0x40000000)
+		return (size_t)0x40000000;
+	return n;
+}
+
+static PeakProcRec *
+peak_internal_proc_find(int fd)
+{
+	int i;
+
+	if (fd < 0)
+		return NULL;
+	for (i = 0; i < PEAK_PROC_MAX; i++) {
+		if (peak_procs[i].used && peak_procs[i].out == fd)
+			return &peak_procs[i];
+	}
+	return NULL;
+}
+
+static PeakProcRec *
+peak_internal_proc_slot(void)
+{
+	int i;
+
+	for (i = 0; i < PEAK_PROC_MAX; i++) {
+		if (!peak_procs[i].used)
+			return &peak_procs[i];
+	}
+	return NULL;
+}
+
+static void
+peak_internal_proc_clear(PeakProcRec *r)
+{
+	if (!r)
+		return;
+	if (r->out >= 0)
+		close(r->out);
+	if (r->tty >= 0 && r->tty != r->out)
+		close(r->tty);
+	r->out = -1;
+	r->tty = -1;
+	r->used = 0;
+}
+
+static void
+peak_internal_proc_bind(int out, int tty)
+{
+	PeakProcRec *r;
+
+	if (out < 0 || tty < 0)
+		return;
+	r = peak_internal_proc_find(out);
+	if (!r)
+		r = peak_internal_proc_slot();
+	if (!r)
+		return;
+	r->out = out;
+	r->tty = tty;
+	r->used = 1;
+}
+
+static int
+peak_internal_read(int fd, void *buf, size_t n)
+{
+	ssize_t r;
+
+	if (fd < 0 || !buf)
+		return 0;
+	for (;;) {
+		r = read(fd, buf, n);
+		if (r > 0)
+			return (int)r;
+		if (r == 0)
+			return 0;
+		if (errno == EINTR)
+			continue;
+		if (errno == EAGAIN || errno == EWOULDBLOCK)
+			return -1;
+		return 0;
+	}
+}
+
+/* Cooked Unix tty: kernel turns NL into CR NL (ONLCR). Raw apps (nvim) clear
+ * OPOST themselves and send LF as terminfo cud1 (index, same column). */
+static void
+peak_internal_tty_unix(int fd)
+{
+	struct termios tio;
+
+	if (fd < 0)
+		return;
+	if (tcgetattr(fd, &tio) < 0)
+		return;
+	tio.c_oflag |= OPOST | ONLCR;
+	(void)tcsetattr(fd, TCSANOW, &tio);
+}
+
+static int
+peak_internal_status_code(int status)
+{
+	if (WIFEXITED(status))
+		return WEXITSTATUS(status);
+	if (WIFSIGNALED(status))
+		return 128 + WTERMSIG(status);
+	return 1;
+}
+
+static void
+peak_internal_sigchld(int sig)
+{
+	int saved;
+	char x;
+
+	(void)sig;
+	saved = errno;
+	x = 0;
+	if (peak_child_w >= 0)
+		(void)write(peak_child_w, &x, 1);
+	errno = saved;
+}
+
+static void
+peak_internal_sigusr1(int sig)
+{
+	int saved;
+	char x;
+
+	(void)sig;
+	saved = errno;
+	x = 0;
+	if (peak_usr1_w >= 0)
+		(void)write(peak_usr1_w, &x, 1);
+	errno = saved;
+}
+
+PeakProc
+peak_pty_spawn(const char *file, const char **argv, uint32_t cols, uint32_t rows, uint32_t xpixel, uint32_t ypixel)
+{
+	PeakProc p;
+	struct winsize ws;
+	int master, slave, pid;
+
+	if (!file || !argv)
+		return peak_internal_proc_fail();
+	memset(&ws, 0, sizeof ws);
+	ws.ws_row = (unsigned short)rows;
+	ws.ws_col = (unsigned short)cols;
+	ws.ws_xpixel = (unsigned short)xpixel;
+	ws.ws_ypixel = (unsigned short)ypixel;
+	if (openpty(&master, &slave, NULL, NULL, &ws) < 0)
+		return peak_internal_proc_fail();
+	peak_internal_tty_unix(slave);
+	pid = fork();
+	if (pid < 0) {
+		close(master);
+		close(slave);
+		return peak_internal_proc_fail();
+	}
+	if (pid == 0) {
+		close(master);
+		setsid();
+		if (ioctl(slave, TIOCSCTTY, NULL) < 0)
+			_Exit(1);
+		dup2(slave, STDIN_FILENO);
+		dup2(slave, STDOUT_FILENO);
+		dup2(slave, STDERR_FILENO);
+		if (slave > STDERR_FILENO)
+			close(slave);
+		peak_internal_put_size(cols, rows);
+		execvp(file, (char *const *)argv);
+		_Exit(127);
+	}
+	close(slave);
+	p.fd = peak_internal_nb(master);
+	p.pid = pid;
+	(void)peak_pipe_set_capacity(p.fd, (size_t)1 << 20);
+	return p;
+}
+
+void
+peak_pty_resize(PeakProc *pty, uint32_t cols, uint32_t rows, uint32_t xpixel, uint32_t ypixel)
+{
+	struct winsize ws;
+	PeakProcRec *r;
+	int fd;
+
+	if (!pty || pty->fd < 0)
+		return;
+	fd = pty->fd;
+	r = peak_internal_proc_find(fd);
+	if (r && r->tty >= 0)
+		fd = r->tty;
+	memset(&ws, 0, sizeof ws);
+	ws.ws_row = (unsigned short)rows;
+	ws.ws_col = (unsigned short)cols;
+	ws.ws_xpixel = (unsigned short)xpixel;
+	ws.ws_ypixel = (unsigned short)ypixel;
+	ioctl(fd, TIOCSWINSZ, &ws);
+}
+
+int
+peak_pty_reap(PeakProc *pty)
+{
+	int r;
+
+	if (!pty || pty->pid <= 0)
+		return 0;
+	r = waitpid(pty->pid, NULL, WNOHANG);
+	if (r <= 0)
+		return 0;
+	pty->pid = 0;
+	return 1;
+}
+
+void
+peak_pty_close(PeakProc *pty)
+{
+	PeakProcRec *r;
+
+	if (!pty)
+		return;
+	if (pty->fd >= 0) {
+		r = peak_internal_proc_find(pty->fd);
+		if (r)
+			peak_internal_proc_clear(r);
+		else
+			close(pty->fd);
+		pty->fd = PEAK_HANDLE_INVALID;
+	}
+	if (pty->pid > 0) {
+		waitpid(pty->pid, NULL, 0);
+		pty->pid = 0;
+	}
+}
+
+int
+peak_wait(PeakWindow *win, const PEAK_HANDLE *fds, uint32_t n, int timeout_ms)
+{
+	struct pollfd pfd[PEAK_WAIT_MAX];
+	PeakProcRec *rec;
+	uint32_t i, np;
+	int xfd;
+
+	np = 0;
+	if (n > PEAK_WAIT_MAX - 2)
+		n = PEAK_WAIT_MAX - 2;
+	if (win) {
+		xfd = peak_window_fd(win);
+		if (xfd >= 0) {
+			pfd[np].fd = xfd;
+			pfd[np].events = POLLIN;
+			np++;
+		}
+		if (peak_window_pending(win) > 0)
+			timeout_ms = 0;
+	}
+	for (i = 0; i < n; i++) {
+		if (!fds || fds[i] < 0)
+			continue;
+		if (np >= PEAK_WAIT_MAX)
+			break;
+		pfd[np].fd = fds[i];
+		pfd[np].events = POLLIN | POLLHUP | POLLERR;
+		np++;
+		rec = peak_internal_proc_find(fds[i]);
+		if (rec && rec->tty >= 0 && rec->tty != fds[i] && np < PEAK_WAIT_MAX) {
+			pfd[np].fd = rec->tty;
+			pfd[np].events = POLLIN | POLLHUP | POLLERR;
+			np++;
+		}
+	}
+	if (!np)
+		return 0;
+	return poll(pfd, (nfds_t)np, timeout_ms) > 0;
+}
+
+int
+peak_runtime_dir(char *buf, size_t cap, const char *app)
+{
+	const char *rt;
+	int n;
+
+	if (!buf || cap < 2 || !app || !app[0])
+		return 0;
+	rt = getenv("XDG_RUNTIME_DIR");
+	if (rt && rt[0])
+		n = snprintf(buf, cap, "%s/%s", rt, app);
+	else
+		n = snprintf(buf, cap, "/tmp/%s-%d", app, (int)getuid());
+	if (n < 0 || (size_t)n >= cap)
+		return 0;
+	if (mkdir(buf, 0700) < 0 && errno != EEXIST)
+		return 0;
+	return 1;
+}
+
+PEAK_HANDLE
+peak_sock_listen(const char *path)
+{
+	struct sockaddr_un addr;
+	int fd;
+	size_t n;
+
+	if (!path || !path[0])
+		return PEAK_HANDLE_INVALID;
+	n = strlen(path);
+	if (n >= sizeof addr.sun_path)
+		return PEAK_HANDLE_INVALID;
+	fd = socket(AF_UNIX, SOCK_STREAM, 0);
+	if (fd < 0)
+		return PEAK_HANDLE_INVALID;
+	peak_internal_nb(fd);
+	memset(&addr, 0, sizeof addr);
+	addr.sun_family = AF_UNIX;
+	memcpy(addr.sun_path, path, n + 1);
+	unlink(path);
+	if (bind(fd, (struct sockaddr *)&addr, sizeof addr) < 0) {
+		close(fd);
+		return PEAK_HANDLE_INVALID;
+	}
+	if (chmod(path, 0600) < 0 || listen(fd, 8) < 0) {
+		unlink(path);
+		close(fd);
+		return PEAK_HANDLE_INVALID;
+	}
+	return fd;
+}
+
+PEAK_HANDLE
+peak_sock_accept(PEAK_HANDLE listen_fd)
+{
+	int fd;
+
+	if (listen_fd < 0)
+		return PEAK_HANDLE_INVALID;
+	for (;;) {
+		fd = accept(listen_fd, NULL, NULL);
+		if (fd >= 0)
+			return peak_internal_nb(fd);
+		if (errno == EINTR)
+			continue;
+		return PEAK_HANDLE_INVALID;
+	}
+}
+
+PEAK_HANDLE
+peak_sock_connect(const char *path)
+{
+	struct sockaddr_un addr;
+	int fd;
+	size_t n;
+
+	if (!path || !path[0])
+		return PEAK_HANDLE_INVALID;
+	n = strlen(path);
+	if (n >= sizeof addr.sun_path)
+		return PEAK_HANDLE_INVALID;
+	fd = socket(AF_UNIX, SOCK_STREAM, 0);
+	if (fd < 0)
+		return PEAK_HANDLE_INVALID;
+	memset(&addr, 0, sizeof addr);
+	addr.sun_family = AF_UNIX;
+	memcpy(addr.sun_path, path, n + 1);
+	if (connect(fd, (struct sockaddr *)&addr, sizeof addr) < 0) {
+		close(fd);
+		return PEAK_HANDLE_INVALID;
+	}
+	return peak_internal_nb(fd);
+}
+
+int
+peak_sock_send(PEAK_HANDLE sock, const void *buf, size_t n, PEAK_HANDLE pass)
+{
+	struct msghdr msg;
+	struct iovec iov;
+	union {
+		struct cmsghdr c;
+		char b[CMSG_SPACE(sizeof(int) * 2)];
+	} u;
+	struct cmsghdr *c;
+	PeakProcRec *rec;
+	int fds[2];
+	int nf;
+	ssize_t r;
+
+	if (sock < 0 || !buf || !n)
+		return 0;
+	memset(&msg, 0, sizeof msg);
+	iov.iov_base = (void *)buf;
+	iov.iov_len = n;
+	msg.msg_iov = &iov;
+	msg.msg_iovlen = 1;
+	if (pass != PEAK_HANDLE_INVALID) {
+		nf = 1;
+		fds[0] = (int)pass;
+		rec = peak_internal_proc_find(pass);
+		if (rec && rec->tty >= 0) {
+			fds[1] = rec->tty;
+			nf = 2;
+		}
+		memset(&u, 0, sizeof u);
+		msg.msg_control = u.b;
+		msg.msg_controllen = CMSG_SPACE(sizeof(int) * (size_t)nf);
+		c = CMSG_FIRSTHDR(&msg);
+		if (!c)
+			return 0;
+		c->cmsg_level = SOL_SOCKET;
+		c->cmsg_type = SCM_RIGHTS;
+		c->cmsg_len = CMSG_LEN(sizeof(int) * (size_t)nf);
+		memcpy(CMSG_DATA(c), fds, sizeof(int) * (size_t)nf);
+	}
+	for (;;) {
+		r = sendmsg(sock, &msg, 0);
+		if (r > 0)
+			return 1;
+		if (r == 0)
+			return 0;
+		if (errno == EINTR)
+			continue;
+		return 0;
+	}
+}
+
+int
+peak_sock_recv(PEAK_HANDLE sock, void *buf, size_t n, PEAK_HANDLE *pass)
+{
+	struct msghdr msg;
+	struct iovec iov;
+	union {
+		struct cmsghdr c;
+		char b[CMSG_SPACE(sizeof(int) * 2)];
+	} u;
+	struct cmsghdr *c;
+	ssize_t r;
+	int fds[2];
+	int nf;
+	int out;
+	int tty;
+
+	if (pass)
+		*pass = PEAK_HANDLE_INVALID;
+	if (sock < 0 || !buf || !n)
+		return -1;
+	memset(&msg, 0, sizeof msg);
+	memset(&u, 0, sizeof u);
+	iov.iov_base = buf;
+	iov.iov_len = peak_internal_io_n(n);
+	msg.msg_iov = &iov;
+	msg.msg_iovlen = 1;
+	msg.msg_control = u.b;
+	msg.msg_controllen = sizeof u.b;
+	for (;;) {
+		r = recvmsg(sock, &msg, 0);
+		if (r > 0)
+			break;
+		if (r == 0)
+			return 0;
+		if (errno == EINTR)
+			continue;
+		if (errno == EAGAIN || errno == EWOULDBLOCK)
+			return -1;
+		return 0;
+	}
+	for (c = CMSG_FIRSTHDR(&msg); c; c = CMSG_NXTHDR(&msg, c)) {
+		if (c->cmsg_level != SOL_SOCKET || c->cmsg_type != SCM_RIGHTS)
+			continue;
+		if (c->cmsg_len < CMSG_LEN(sizeof(int)))
+			continue;
+		nf = c->cmsg_len >= CMSG_LEN(sizeof(int) * 2) ? 2 : 1;
+		memcpy(fds, CMSG_DATA(c), sizeof(int) * (size_t)nf);
+		if (fds[0] < 0)
+			continue;
+		out = peak_internal_nb(fds[0]);
+		if (pass && *pass == PEAK_HANDLE_INVALID)
+			*pass = out;
+		else
+			close(out);
+		if (nf < 2 || fds[1] < 0)
+			continue;
+		tty = peak_internal_nb(fds[1]);
+		if (pass && *pass == out)
+			peak_internal_proc_bind(out, tty);
+		else
+			close(tty);
+	}
+	return (int)r;
+}
+
+#ifndef PEAK_HAS_POINTER_PID
+int
+peak_pointer_pid(PeakWindow *win)
+{
+	(void)win;
+	return 0;
+}
+
+int
+peak_pointer_local(PeakWindow *win, int *x, int *y)
+{
+	(void)win;
+	(void)x;
+	(void)y;
+	return 0;
+}
+#endif
+
+int
+peak_filesystem_mkdir(const char *path)
+{
+	if (!path || !path[0])
+		return 0;
+	return mkdir(path, 0777) == 0;
+}
+
+int
+peak_filesystem_rm(const char *path)
+{
+	if (!path || !path[0])
+		return 0;
+	if (unlink(path) == 0)
+		return 1;
+	if (errno == EISDIR || errno == EPERM)
+		return rmdir(path) == 0;
+	return 0;
+}
+
+int
+peak_filesystem_cwd(char *buf, size_t cap)
+{
+	if (!buf || cap < 2)
+		return 0;
+	return getcwd(buf, cap) != NULL;
+}
+
+int
+peak_filesystem_chdir(const char *path)
+{
+	if (!path || !path[0])
+		return 0;
+	return chdir(path) == 0;
+}
+
+int
+peak_filesystem_rename(const char *from, const char *to)
+{
+	if (!from || !from[0] || !to || !to[0])
+		return 0;
+	return rename(from, to) == 0;
+}
+
+int
+peak_pid(void)
+{
+	return (int)getpid();
+}
+
+int
+peak_env_set(const char *name, const char *value)
+{
+	if (!name || !name[0])
+		return 0;
+	if (value)
+		return setenv(name, value, 1) == 0;
+	return unsetenv(name) == 0;
+}
+
+int
+peak_env_get(const char *name, char *buf, size_t cap)
+{
+	const char *v;
+	size_t n;
+
+	if (!name || !name[0] || !buf || cap < 2)
+		return 0;
+	v = getenv(name);
+	if (!v || !v[0])
+		return 0;
+	n = strlen(v);
+	if (n >= cap)
+		return 0;
+	memcpy(buf, v, n + 1);
+	return 1;
+}
+
+int
+peak_filesystem_list(const char *path, int (*fn)(const char *name, void *ud), void *ud)
+{
+	DIR *d;
+	struct dirent *e;
+
+	if (!path || !path[0] || !fn)
+		return 0;
+	d = opendir(path);
+	if (!d)
+		return 0;
+	while ((e = readdir(d))) {
+		if (!e->d_name[0])
+			continue;
+		if (fn(e->d_name, ud) == 0)
+			break;
+	}
+	closedir(d);
+	return 1;
+}
+
+int
+peak_filesystem_symlink(const char *target, const char *path)
+{
+	if (!target || !target[0] || !path || !path[0])
+		return 0;
+	return symlink(target, path) == 0;
+}
+
+int
+peak_filesystem_readlink(const char *path, char *dst, size_t cap)
+{
+	ssize_t n;
+
+	if (!path || !path[0] || !dst || cap < 2)
+		return 0;
+	n = readlink(path, dst, cap - 1);
+	if (n < 0)
+		return 0;
+	dst[n] = 0;
+	return 1;
+}
+
+int
+peak_child_arm(void)
+{
+	int p[2];
+	struct sigaction sa;
+
+	if (peak_child_r >= 0)
+		return 1;
+	if (pipe(p) < 0)
+		return 0;
+	peak_internal_nb(p[0]);
+	peak_internal_nb(p[1]);
+	memset(&sa, 0, sizeof sa);
+	sa.sa_handler = peak_internal_sigchld;
+	sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+	sigemptyset(&sa.sa_mask);
+	if (sigaction(SIGCHLD, &sa, NULL) != 0) {
+		close(p[0]);
+		close(p[1]);
+		return 0;
+	}
+	peak_child_r = p[0];
+	peak_child_w = p[1];
+	return 1;
+}
+
+void
+peak_child_disarm(void)
+{
+	struct sigaction sa;
+
+	memset(&sa, 0, sizeof sa);
+	sa.sa_handler = SIG_DFL;
+	sigemptyset(&sa.sa_mask);
+	sigaction(SIGCHLD, &sa, NULL);
+	if (peak_child_r >= 0) {
+		close(peak_child_r);
+		peak_child_r = -1;
+	}
+	if (peak_child_w >= 0) {
+		close(peak_child_w);
+		peak_child_w = -1;
+	}
+}
+
+PEAK_HANDLE
+peak_child_fd(void)
+{
+	return peak_child_r >= 0 ? peak_child_r : PEAK_HANDLE_INVALID;
+}
+
+void
+peak_child_ack(void)
+{
+	char buf[64];
+
+	if (peak_child_r < 0)
+		return;
+	while (read(peak_child_r, buf, sizeof buf) > 0)
+		;
+}
+
+int
+peak_usr1_arm(void)
+{
+	int p[2];
+	struct sigaction sa;
+
+	if (peak_usr1_r >= 0)
+		return 1;
+	if (pipe(p) < 0)
+		return 0;
+	peak_internal_nb(p[0]);
+	peak_internal_nb(p[1]);
+	memset(&sa, 0, sizeof sa);
+	sa.sa_handler = peak_internal_sigusr1;
+	sa.sa_flags = SA_RESTART;
+	sigemptyset(&sa.sa_mask);
+	if (sigaction(SIGUSR1, &sa, NULL) != 0) {
+		close(p[0]);
+		close(p[1]);
+		return 0;
+	}
+	peak_usr1_r = p[0];
+	peak_usr1_w = p[1];
+	return 1;
+}
+
+void
+peak_usr1_disarm(void)
+{
+	struct sigaction sa;
+
+	memset(&sa, 0, sizeof sa);
+	sa.sa_handler = SIG_DFL;
+	sigemptyset(&sa.sa_mask);
+	sigaction(SIGUSR1, &sa, NULL);
+	if (peak_usr1_r >= 0) {
+		close(peak_usr1_r);
+		peak_usr1_r = -1;
+	}
+	if (peak_usr1_w >= 0) {
+		close(peak_usr1_w);
+		peak_usr1_w = -1;
+	}
+}
+
+PEAK_HANDLE
+peak_usr1_fd(void)
+{
+	return peak_usr1_r >= 0 ? peak_usr1_r : PEAK_HANDLE_INVALID;
+}
+
+int
+peak_usr1_ack(void)
+{
+	char buf[64];
+	int n;
+	int hit;
+
+	if (peak_usr1_r < 0)
+		return 0;
+	hit = 0;
+	while ((n = (int)read(peak_usr1_r, buf, sizeof buf)) > 0)
+		hit = 1;
+	return hit;
+}
+
+int
+peak_child_reap(int *pid, int *code)
+{
+	int r, status;
+
+	r = waitpid(-1, &status, WNOHANG);
+	if (r <= 0)
+		return 0;
+	if (pid)
+		*pid = r;
+	if (code)
+		*code = peak_internal_status_code(status);
+	return 1;
+}
+
+int
+peak_stdout_silence(void)
+{
+	int nfd;
+
+	if (peak_stdout_saved >= 0)
+		return 1;
+	peak_stdout_saved = dup(STDOUT_FILENO);
+	if (peak_stdout_saved < 0)
+		return 0;
+	nfd = open("/dev/null", O_WRONLY);
+	if (nfd < 0) {
+		close(peak_stdout_saved);
+		peak_stdout_saved = -1;
+		return 0;
+	}
+	if (dup2(nfd, STDOUT_FILENO) < 0) {
+		close(nfd);
+		close(peak_stdout_saved);
+		peak_stdout_saved = -1;
+		return 0;
+	}
+	close(nfd);
+	return 1;
+}
+
+int
+peak_stdout_restore(void)
+{
+	if (peak_stdout_saved < 0)
+		return 0;
+	fflush(stdout);
+	dup2(peak_stdout_saved, STDOUT_FILENO);
+	close(peak_stdout_saved);
+	peak_stdout_saved = -1;
+	return 1;
+}
+
+int
+peak_fd_read(PEAK_HANDLE fd, void *buf, size_t n)
+{
+	PeakProcRec *r;
+	int got;
+	int tgot;
+
+	if (fd < 0 || !buf)
+		return 0;
+	n = peak_internal_io_n(n);
+	r = peak_internal_proc_find(fd);
+	got = peak_internal_read(fd, buf, n);
+	if (got > 0 || !r || r->tty < 0)
+		return got;
+	tgot = peak_internal_read(r->tty, buf, n);
+	if (tgot > 0)
+		return tgot;
+	if (got == 0)
+		return 0;
+	return tgot;
+}
+
+int
+peak_fd_write(PEAK_HANDLE fd, const void *buf, size_t n)
+{
+	PeakProcRec *rec;
+	ssize_t r;
+
+	if (fd < 0 || !buf)
+		return 0;
+	rec = peak_internal_proc_find(fd);
+	if (rec && rec->tty >= 0)
+		fd = rec->tty;
+	n = peak_internal_io_n(n);
+	for (;;) {
+		r = write(fd, buf, n);
+		if (r > 0)
+			return (int)r;
+		if (r == 0)
+			return 0;
+		if (errno == EINTR)
+			continue;
+		if (errno == EAGAIN || errno == EWOULDBLOCK)
+			return -1;
+		return 0;
+	}
+}
+
+void
+peak_fd_close(PEAK_HANDLE fd)
+{
+	PeakProcRec *r;
+
+	if (fd < 0)
+		return;
+	r = peak_internal_proc_find(fd);
+	if (r) {
+		peak_internal_proc_clear(r);
+		return;
+	}
+	close(fd);
+}
+
+size_t
+peak_pipe_capacity(PEAK_HANDLE fd)
+{
+#ifdef __linux__
+	int r;
+
+	if (fd < 0)
+		return 0;
+	r = fcntl(fd, F_GETPIPE_SZ);
+	if (r > 0)
+		return (size_t)r;
+#else
+	(void)fd;
+#endif
+	return 0;
+}
+
+size_t
+peak_pipe_set_capacity(PEAK_HANDLE fd, size_t n)
+{
+#ifdef __linux__
+	int want[4];
+	int i;
+	int r;
+
+	if (fd < 0)
+		return 0;
+	want[0] = n > (size_t)0x7fffffff ? 0x7fffffff : (int)n;
+	want[1] = 1 << 20;
+	want[2] = 65536;
+	want[3] = 0;
+	for (i = 0; i < 3; i++) {
+		if (want[i] < 4096)
+			continue;
+		r = fcntl(fd, F_SETPIPE_SZ, want[i]);
+		if (r > 0)
+			return (size_t)r;
+	}
+#else
+	(void)fd;
+	(void)n;
+#endif
+	return 0;
+}
+
+PeakProc
+peak_job_run(const char *cmd, const char *cwd)
+{
+	PeakProc p;
+	int pipefd[2], pid;
+
+	if (!cmd || !cmd[0])
+		return peak_internal_proc_fail();
+	if (pipe(pipefd) < 0)
+		return peak_internal_proc_fail();
+	pid = fork();
+	if (pid < 0) {
+		close(pipefd[0]);
+		close(pipefd[1]);
+		return peak_internal_proc_fail();
+	}
+	if (pid == 0) {
+		int nullfd;
+
+		close(pipefd[0]);
+		dup2(pipefd[1], STDOUT_FILENO);
+		dup2(pipefd[1], STDERR_FILENO);
+		if (pipefd[1] > STDERR_FILENO)
+			close(pipefd[1]);
+		nullfd = open("/dev/null", O_RDONLY);
+		if (nullfd >= 0) {
+			dup2(nullfd, STDIN_FILENO);
+			if (nullfd > STDERR_FILENO)
+				close(nullfd);
+		}
+		if (cwd && cwd[0] && chdir(cwd) < 0) {
+			/* inherit parent cwd */
+		}
+		execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
+		_Exit(127);
+	}
+	close(pipefd[1]);
+	(void)peak_pipe_set_capacity(pipefd[0], (size_t)1 << 20);
+	p.fd = peak_internal_nb(pipefd[0]);
+	p.pid = pid;
+	return p;
+}
+
+int
+peak_job_reap(PeakProc *job, int *code)
+{
+	int r, status;
+
+	if (!job || job->pid <= 0)
+		return 0;
+	r = waitpid(job->pid, &status, WNOHANG);
+	if (r <= 0)
+		return 0;
+	job->pid = 0;
+	if (code)
+		*code = peak_internal_status_code(status);
+	return 1;
+}
+
+void
+peak_job_kill(PeakProc *job)
+{
+	if (!job)
+		return;
+	if (job->fd >= 0) {
+		close(job->fd);
+		job->fd = PEAK_HANDLE_INVALID;
+	}
+	if (job->pid > 0) {
+		kill(job->pid, SIGKILL);
+		waitpid(job->pid, NULL, 0);
+		job->pid = 0;
+	}
+}
+
+int
+peak_pid_cwd(int pid, char *buf, size_t cap)
+{
+	char path[64];
+	ssize_t n;
+
+	if (pid <= 0 || !buf || cap < 2)
+		return 0;
+#ifdef __linux__
+	snprintf(path, sizeof path, "/proc/%d/cwd", pid);
+	n = readlink(path, buf, cap - 1);
+	if (n < 0)
+		return 0;
+	buf[n] = 0;
+	return 1;
+#else
+	(void)path;
+	(void)n;
+	if (pid != (int)getpid())
+		return 0;
+	return getcwd(buf, cap) != NULL;
+#endif
+}
+
+size_t
+peak_page_size(void)
+{
+	long n;
+
+	n = sysconf(_SC_PAGESIZE);
+	if (n <= 0)
+		return 4096;
+	return (size_t)n;
+}
+
+void *
+peak_mirror_map(size_t size)
+{
+	int fd;
+	char *base;
+	void *a, *b;
+
+	if (!size || size % peak_page_size())
+		return NULL;
+	fd = peak_internal_memfd();
+	if (fd < 0 || ftruncate(fd, (off_t)size) < 0) {
+		if (fd >= 0)
+			close(fd);
+		return NULL;
+	}
+	base = mmap(NULL, size * 2, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	if (base == MAP_FAILED) {
+		close(fd);
+		return NULL;
+	}
+	a = mmap(base, size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0);
+	b = mmap(base + size, size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0);
+	close(fd);
+	if (a == MAP_FAILED || b == MAP_FAILED) {
+		munmap(base, size * 2);
+		return NULL;
+	}
+	return base;
+}
+
+void
+peak_mirror_unmap(void *p, size_t size)
+{
+	if (!p || !size)
+		return;
+	munmap(p, size * 2);
+}
+
+#elif defined(PEAK_WEB)
+/* Embedded p_emscripten.c. */
+#include <emscripten.h>
+#include <emscripten/html5.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+EM_JS(void, peak_web_dom_open, (const char *id, int w, int h), {
+	var name = UTF8ToString(id);
+	var c = document.getElementById(name);
+	if (!c) {
+		c = document.createElement('canvas');
+		c.id = name;
+		document.body.appendChild(c);
+	}
+	c.width = w;
+	c.height = h;
+	c.tabIndex = 0;
+	c.focus();
+});
+
+EM_JS(void, peak_web_dom_present, (const char *id, int w, int h, uintptr_t pixels), {
+	var c = document.getElementById(UTF8ToString(id));
+	if (!c) return;
+	var ctx = c.getContext('2d');
+	if (c.width !== w || c.height !== h) {
+		c.width = w;
+		c.height = h;
+	}
+	var img = ctx.createImageData(w, h);
+	img.data.set(HEAPU8.subarray(pixels, pixels + w * h * 4));
+	ctx.putImageData(img, 0, 0);
+});
+
+struct peak_web_win {
+	char name[64];
+	uint32_t width, height;
+	PeakQ q;
+	uint32_t buffer[];
+};
+
+
+static void
+peak_web_sel(const char *name, char *out, size_t n)
+{
+	out[0] = '#';
+	strncpy(out + 1, name, n - 2);
+	out[n - 1] = 0;
+}
+
+static PeakKeyCode
+peak_web_key_map(const char *code)
+{
+	if (code[0] == 'K' && code[1] == 'e' && code[2] == 'y' && code[3] >= 'A' && code[3] <= 'Z' && code[4] == 0)
+		return (PeakKeyCode)(PEAK_KEY_A + (code[3] - 'A'));
+	if (!strcmp(code, "ArrowUp")) return PEAK_KEY_UP;
+	if (!strcmp(code, "ArrowDown")) return PEAK_KEY_DOWN;
+	if (!strcmp(code, "ArrowLeft")) return PEAK_KEY_LEFT;
+	if (!strcmp(code, "ArrowRight")) return PEAK_KEY_RIGHT;
+	if (!strcmp(code, "Space")) return PEAK_KEY_SPACE;
+	if (!strcmp(code, "Escape")) return PEAK_KEY_ESCAPE;
+	if (!strcmp(code, "Enter")) return PEAK_KEY_ENTER;
+	if (!strcmp(code, "Backspace")) return PEAK_KEY_BACKSPACE;
+	if (!strcmp(code, "Tab")) return PEAK_KEY_TAB;
+	if (!strcmp(code, "Delete")) return PEAK_KEY_DELETE;
+	if (!strcmp(code, "Insert")) return PEAK_KEY_INSERT;
+	if (!strcmp(code, "Home")) return PEAK_KEY_HOME;
+	if (!strcmp(code, "End")) return PEAK_KEY_END;
+	if (!strcmp(code, "PageUp")) return PEAK_KEY_PAGEUP;
+	if (!strcmp(code, "PageDown")) return PEAK_KEY_PAGEDOWN;
+	if (code[0] == 'F' && code[1] >= '1' && code[1] <= '9' && code[2] == 0)
+		return (PeakKeyCode)(PEAK_KEY_F1 + (code[1] - '1'));
+	if (!strcmp(code, "F10")) return PEAK_KEY_F10;
+	if (!strcmp(code, "F11")) return PEAK_KEY_F11;
+	if (!strcmp(code, "F12")) return PEAK_KEY_F12;
+	if (code[0] == 'D' && code[1] == 'i' && code[2] == 'g' && code[3] == 'i' && code[4] == 't' &&
+	    code[5] >= '0' && code[5] <= '9' && code[6] == 0)
+		return (PeakKeyCode)(PEAK_KEY_0 + (code[5] - '0'));
+	return PEAK_KEY_UNKNOWN;
+}
+
+static EM_BOOL
+peak_web_key(int type, const EmscriptenKeyboardEvent *e, void *ud)
+{
+	PeakEvent ev = {0};
+	ev.type = (type == EMSCRIPTEN_EVENT_KEYDOWN) ? PEAK_EVENT_KEY_DOWN : PEAK_EVENT_KEY_UP;
+	ev.key.key = peak_web_key_map(e->code);
+	ev.key.mod = (e->shiftKey ? PEAK_KEYMOD_SHIFT : 0) | (e->ctrlKey ? PEAK_KEYMOD_CTRL : 0) | (e->altKey ? PEAK_KEYMOD_ALT : 0) | (e->metaKey ? PEAK_KEYMOD_SUPER : 0);
+	peak_q_push(&((struct peak_web_win *)ud)->q, ev);
+	if (type == EMSCRIPTEN_EVENT_KEYDOWN && e->key[0] && (unsigned char)e->key[0] >= 32 && e->key[1] == 0) {
+		PeakEvent tev = {0};
+		peak_text_store(e->key, 1);
+		tev.type = PEAK_EVENT_TEXT;
+		tev.text.n = 1;
+		peak_q_push(&((struct peak_web_win *)ud)->q, tev);
+	}
+	return EM_TRUE;
+}
+
+static EM_BOOL
+peak_web_mouse(int type, const EmscriptenMouseEvent *e, void *ud)
+{
+	PeakEvent ev = {0};
+	ev.type = PEAK_EVENT_POINTER;
+	ev.pointer.x = (float)e->targetX;
+	ev.pointer.y = (float)e->targetY;
+	if (type == EMSCRIPTEN_EVENT_MOUSEDOWN)
+		ev.pointer.state = PEAK_POINTER_PRESSED;
+	else if (type == EMSCRIPTEN_EVENT_MOUSEUP)
+		ev.pointer.state = PEAK_POINTER_RELEASED;
+	else
+		ev.pointer.state = PEAK_POINTER_MOVED;
+	if (type == EMSCRIPTEN_EVENT_MOUSEMOVE) {
+		ev.pointer.type = (e->buttons & 4) ? PEAK_POINTER_MIDDLE :
+		                  (e->buttons & 2) ? PEAK_POINTER_RIGHT : PEAK_POINTER_LEFT;
+	} else {
+		ev.pointer.type = (e->button == 1) ? PEAK_POINTER_MIDDLE :
+		                  (e->button == 2) ? PEAK_POINTER_RIGHT : PEAK_POINTER_LEFT;
+	}
+	ev.pointer.mod = (e->shiftKey ? PEAK_KEYMOD_SHIFT : 0) | (e->ctrlKey ? PEAK_KEYMOD_CTRL : 0) | (e->altKey ? PEAK_KEYMOD_ALT : 0);
+	peak_q_push(&((struct peak_web_win *)ud)->q, ev);
+	return EM_TRUE;
+}
+
+static void
+peak_web_listen(struct peak_web_win *w, int on)
+{
+	char sel[66];
+	peak_web_sel(w->name, sel, sizeof sel);
+	emscripten_set_keydown_callback(sel, w, EM_TRUE, on ? peak_web_key : NULL);
+	emscripten_set_keyup_callback(sel, w, EM_TRUE, on ? peak_web_key : NULL);
+	emscripten_set_mousedown_callback(sel, w, EM_TRUE, on ? peak_web_mouse : NULL);
+	emscripten_set_mouseup_callback(sel, w, EM_TRUE, on ? peak_web_mouse : NULL);
+	emscripten_set_mousemove_callback(sel, w, EM_TRUE, on ? peak_web_mouse : NULL);
+}
+
+static int
+peak_platform_init(void)
+{
+	return 1;
+}
+
+static void
+peak_platform_quit(void)
+{
+}
+
+static PeakWindowInternal
+peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uint32_t flags)
+{
+	PeakWindowInternal intern = {0};
+	struct peak_web_win *w;
+
+	(void)flags;
+
+	w = calloc(1, sizeof *w + (size_t)width * height * sizeof *w->buffer);
+	if (!w)
+		return intern;
+	strncpy(w->name, name, sizeof w->name - 1);
+	w->width = width;
+	w->height = height;
+
+	peak_web_dom_open(w->name, (int)width, (int)height);
+
+	peak_web_listen(w, 1);
+	intern.w = w;
+	return intern;
+}
+
+static void
+peak_platform_window_close(PeakWindowInternal *intern)
+{
+	struct peak_web_win *w;
+	if (!intern || !intern->w)
+		return;
+	w = intern->w;
+	peak_web_listen(w, 0);
+	free(w);
+	intern->w = NULL;
+}
+
+static uint32_t *
+peak_platform_window_buffer(PeakWindowInternal *intern, size_t *width, size_t *height)
+{
+	struct peak_web_win *w = intern ? intern->w : NULL;
+	if (!w) {
+		*width = 0;
+		*height = 0;
+		return NULL;
+	}
+	*width = w->width;
+	*height = w->height;
+	return w->buffer;
+}
+
+static void
+peak_platform_window_present(PeakWindowInternal *intern)
+{
+	struct peak_web_win *w = intern ? intern->w : NULL;
+	if (!w)
+		return;
+	peak_web_dom_present(w->name, (int)w->width, (int)w->height, (uintptr_t)w->buffer);
+}
+
+static int
+peak_platform_drop_drag(PeakWindowInternal *intern, const char *utf8, size_t n)
+{
+	(void)intern;
+	(void)utf8;
+	(void)n;
+	return 0;
+}
+
+static int
+peak_platform_clip_set(PeakWindowInternal *intern, PeakClip which, const char *utf8, size_t n)
+{
+	(void)intern;
+	(void)which;
+	(void)utf8;
+	(void)n;
+	return 1;
+}
+
+static int
+peak_platform_clip_request(PeakWindowInternal *intern, PeakClip which)
+{
+	struct peak_web_win *w;
+	const char *p;
+	size_t n;
+	PeakEvent ev;
+
+	w = intern ? intern->w : NULL;
+	if (!w || !peak_clip_own_get(which, &p, &n))
+		return 0;
+	peak_clip_paste_store(which, p, n);
+	memset(&ev, 0, sizeof ev);
+	ev.type = PEAK_EVENT_CLIP;
+	ev.clip.which = which;
+	ev.clip.n = n;
+	peak_q_push(&w->q, ev);
+	return 1;
+}
+
+static bool
+peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
+{
+	struct peak_web_win *w = intern ? intern->w : NULL;
+	return w ? peak_q_pop(&w->q, ev) : 0;
+}
+
+static int
+peak_platform_fd(PeakWindowInternal *intern)
+{
+	(void)intern;
+	return -1;
+}
+
+static int
+peak_platform_pending(PeakWindowInternal *intern)
+{
+	struct peak_web_win *w = intern ? intern->w : NULL;
+	return w ? (int)w->q.n : 0;
+}
+
+static void
+peak_platform_window_set_class(PeakWindowInternal *intern, const char *name)
+{
+	(void)intern;
+	(void)name;
+}
+
+static void
+peak_platform_window_set_opacity(PeakWindowInternal *intern, uint8_t alpha)
+{
+	(void)intern;
+	(void)alpha;
+}
+
+static void
+peak_platform_window_set_title(PeakWindowInternal *intern, const char *name)
+{
+	(void)intern;
+	if (name)
+		emscripten_set_window_title(name);
+}
+
+static void
+peak_platform_window_set_size(PeakWindowInternal *intern, uint32_t width, uint32_t height)
+{
+	struct peak_web_win *w = intern ? intern->w : NULL;
+	if (!w || !width || !height)
+		return;
+	w->width = width;
+	w->height = height;
+	peak_web_dom_open(w->name, (int)width, (int)height);
+}
+
+static void
+peak_platform_window_fullscreen(PeakWindowInternal *intern, int on)
+{
+	struct peak_web_win *w = intern ? intern->w : NULL;
+	char sel[66];
+	if (!w)
+		return;
+	peak_web_sel(w->name, sel, sizeof sel);
+	if (on)
+		emscripten_request_fullscreen(sel, EM_TRUE);
+	else
+		emscripten_exit_fullscreen();
+}
+
+static void
+peak_platform_window_cursor(PeakWindowInternal *intern, int on)
+{
+	(void)intern;
+	emscripten_hide_mouse();
+	(void)on;
+}
+
+static void
+peak_platform_window_cursor_shape(PeakWindowInternal *intern, int shape)
+{
+	(void)intern;
+	(void)shape;
+}
+
+static void
+peak_platform_window_pointer_relative(PeakWindowInternal *intern, int on)
+{
+	(void)intern;
+	(void)on;
+}
+
+static float
+peak_platform_window_scale(PeakWindowInternal *intern)
+{
+	(void)intern;
+	return 1.f;
+}
+
+#define PEAK_AUDIO_FRAMES 1024
+
+static struct {
+	int run;
+	uint32_t channels;
+	int16_t *buf;
+	void (*fill)(int16_t *out, size_t frames, void *userdata);
+	void *userdata;
+} peak_web_audio;
+
+void EMSCRIPTEN_KEEPALIVE
+peak_internal_web_audio_fill(int16_t *out, int frames)
+{
+	size_t n;
+
+	if (!peak_web_audio.run || !out || frames <= 0)
+		return;
+	n = (size_t)frames * peak_web_audio.channels;
+	memset(out, 0, n * sizeof(int16_t));
+	if (peak_web_audio.fill)
+		peak_web_audio.fill(out, (size_t)frames, peak_web_audio.userdata);
+}
+
+EM_JS(int, peak_web_audio_dom_start, (int channels, int rate, int frames, uintptr_t ptr), {
+	var AC = window.AudioContext || window.webkitAudioContext;
+	var ctx, proc, i, c, heap, off, ch;
+	if (!AC || Module._peak_web_audio)
+		return 0;
+	ctx = new AC({ sampleRate: rate });
+	if (ctx.sampleRate !== rate) {
+		ctx.close();
+		return 0;
+	}
+	proc = ctx.createScriptProcessor(frames, 0, channels);
+	proc.onaudioprocess = function(e) {
+		Module._peak_internal_web_audio_fill(ptr, frames);
+		heap = Module.HEAP16;
+		off = ptr >> 1;
+		for (c = 0; c < channels; c++) {
+			ch = e.outputBuffer.getChannelData(c);
+			for (i = 0; i < frames; i++)
+				ch[i] = heap[off + i * channels + c] / 32768.0;
+		}
+	};
+	proc.connect(ctx.destination);
+	ctx.resume();
+	Module._peak_web_audio = { ctx: ctx, proc: proc };
+	return 1;
+});
+
+EM_JS(void, peak_web_audio_dom_stop, (void), {
+	var a = Module._peak_web_audio;
+	if (!a)
+		return;
+	a.proc.disconnect();
+	a.ctx.close();
+	Module._peak_web_audio = null;
+});
+
+static int
+peak_platform_audio_start(uint32_t channels, uint32_t rate, void (*fill)(int16_t *out, size_t frames, void *userdata), void *userdata)
+{
+	if (channels > 32)
+		return 0;
+	if (!(peak_web_audio.buf = calloc((size_t)channels * PEAK_AUDIO_FRAMES, sizeof(int16_t))))
+		return 0;
+	peak_web_audio.fill = fill;
+	peak_web_audio.userdata = userdata;
+	peak_web_audio.channels = channels;
+	peak_web_audio.run = 1;
+	if (!peak_web_audio_dom_start((int)channels, (int)rate, PEAK_AUDIO_FRAMES, (uintptr_t)peak_web_audio.buf)) {
+		free(peak_web_audio.buf);
+		peak_web_audio.buf = NULL;
+		peak_web_audio.run = 0;
+		peak_web_audio.fill = NULL;
+		return 0;
+	}
+	return 1;
+}
+
+static uint64_t
+peak_platform_get_time(void)
+{
+	return (uint64_t)(emscripten_get_now() * 1000000.0);
+}
+
+static void
+peak_platform_sleep_ns(int64_t ns)
+{
+	if (ns <= 0) return;
+	emscripten_sleep((unsigned)(ns / 1000000));
+}
+
+static const char **
+peak_platform_vulkan_get_extensions(uint32_t *count)
+{
+	if (count) *count = 0;
+	return NULL;
+}
+
+static int
+peak_platform_vulkan_create_surface(PeakWindowInternal *w, void *instance, const void *allocator, void *out_surface)
+{
+	(void)w; (void)instance; (void)allocator; (void)out_surface;
+	return 0;
+}
+
+static void
+peak_platform_audio_stop(void)
+{
+	peak_web_audio.run = 0;
+	peak_web_audio_dom_stop();
+	free(peak_web_audio.buf);
+	peak_web_audio.buf = NULL;
+	peak_web_audio.fill = NULL;
+	peak_web_audio.userdata = NULL;
+}
+
+static PeakProc
+peak_internal_proc_fail(void)
+{
+	PeakProc p;
+
+	p.fd = PEAK_HANDLE_INVALID;
+	p.pid = 0;
+	return p;
+}
+
+PeakProc
+peak_pty_spawn(const char *file, const char **argv, uint32_t cols, uint32_t rows, uint32_t xpixel, uint32_t ypixel)
+{
+	(void)file; (void)argv; (void)cols; (void)rows; (void)xpixel; (void)ypixel;
+	return peak_internal_proc_fail();
+}
+
+void
+peak_pty_resize(PeakProc *pty, uint32_t cols, uint32_t rows, uint32_t xpixel, uint32_t ypixel)
+{
+	(void)pty; (void)cols; (void)rows; (void)xpixel; (void)ypixel;
+}
+
+int
+peak_pty_reap(PeakProc *pty)
+{
+	(void)pty;
+	return 0;
+}
+
+void
+peak_pty_close(PeakProc *pty)
+{
+	if (!pty)
+		return;
+	pty->fd = PEAK_HANDLE_INVALID;
+	pty->pid = 0;
+}
+
+int
+peak_wait(PeakWindow *win, const PEAK_HANDLE *fds, uint32_t n, int timeout_ms)
+{
+	(void)win; (void)fds; (void)n; (void)timeout_ms;
+	return 0;
+}
+
+int
+peak_runtime_dir(char *buf, size_t cap, const char *app)
+{
+	(void)buf; (void)cap; (void)app;
+	return 0;
+}
+
+PEAK_HANDLE
+peak_sock_listen(const char *path)
+{
+	(void)path;
+	return PEAK_HANDLE_INVALID;
+}
+
+PEAK_HANDLE
+peak_sock_connect(const char *path)
+{
+	(void)path;
+	return PEAK_HANDLE_INVALID;
+}
+
+int
+peak_sock_send(PEAK_HANDLE sock, const void *buf, size_t n, PEAK_HANDLE pass)
+{
+	(void)sock; (void)buf; (void)n; (void)pass;
+	return 0;
+}
+
+int
+peak_sock_recv(PEAK_HANDLE sock, void *buf, size_t n, PEAK_HANDLE *pass)
+{
+	if (pass)
+		*pass = PEAK_HANDLE_INVALID;
+	(void)sock; (void)buf; (void)n;
+	return -1;
+}
+
+int
+peak_pointer_pid(PeakWindow *win)
+{
+	(void)win;
+	return 0;
+}
+
+int
+peak_pointer_local(PeakWindow *win, int *x, int *y)
+{
+	(void)win;
+	(void)x;
+	(void)y;
+	return 0;
+}
+
+int
+peak_filesystem_mkdir(const char *path)
+{
+	if (!path || !path[0])
+		return 0;
+	return mkdir(path, 0777) == 0;
+}
+
+int
+peak_filesystem_rm(const char *path)
+{
+	if (!path || !path[0])
+		return 0;
+	if (unlink(path) == 0)
+		return 1;
+	return rmdir(path) == 0;
+}
+
+int
+peak_filesystem_cwd(char *buf, size_t cap)
+{
+	if (!buf || cap < 2)
+		return 0;
+	return getcwd(buf, cap) != NULL;
+}
+
+int
+peak_filesystem_chdir(const char *path)
+{
+	if (!path || !path[0])
+		return 0;
+	return chdir(path) == 0;
+}
+
+int
+peak_filesystem_rename(const char *from, const char *to)
+{
+	if (!from || !from[0] || !to || !to[0])
+		return 0;
+	return rename(from, to) == 0;
+}
+
+int
+peak_pid(void)
+{
+	return (int)getpid();
+}
+
+int
+peak_env_set(const char *name, const char *value)
+{
+	if (!name || !name[0])
+		return 0;
+	if (value)
+		return setenv(name, value, 1) == 0;
+	return unsetenv(name) == 0;
+}
+
+int
+peak_env_get(const char *name, char *buf, size_t cap)
+{
+	const char *v;
+	size_t n;
+
+	if (!name || !name[0] || !buf || cap < 2)
+		return 0;
+	v = getenv(name);
+	if (!v || !v[0])
+		return 0;
+	n = strlen(v);
+	if (n >= cap)
+		return 0;
+	memcpy(buf, v, n + 1);
+	return 1;
+}
+
+int
+peak_filesystem_list(const char *path, int (*fn)(const char *name, void *ud), void *ud)
+{
+	(void)path;
+	(void)fn;
+	(void)ud;
+	return 0;
+}
+
+int
+peak_filesystem_symlink(const char *target, const char *path)
+{
+	(void)target;
+	(void)path;
+	return 0;
+}
+
+int
+peak_filesystem_readlink(const char *path, char *dst, size_t cap)
+{
+	(void)path;
+	(void)dst;
+	(void)cap;
+	return 0;
+}
+
+int
+peak_child_arm(void)
+{
+	return 1;
+}
+
+void
+peak_child_disarm(void)
+{
+}
+
+PEAK_HANDLE
+peak_child_fd(void)
+{
+	return PEAK_HANDLE_INVALID;
+}
+
+void
+peak_child_ack(void)
+{
+}
+
+int
+peak_usr1_arm(void)
+{
+	return 1;
+}
+
+void
+peak_usr1_disarm(void)
+{
+}
+
+PEAK_HANDLE
+peak_usr1_fd(void)
+{
+	return PEAK_HANDLE_INVALID;
+}
+
+int
+peak_usr1_ack(void)
+{
+	return 0;
+}
+
+int
+peak_child_reap(int *pid, int *code)
+{
+	(void)pid;
+	(void)code;
+	return 0;
+}
+
+int
+peak_stdout_silence(void)
+{
+	return 0;
+}
+
+int
+peak_stdout_restore(void)
+{
+	return 0;
+}
+
+PEAK_HANDLE
+peak_sock_accept(PEAK_HANDLE listen_fd)
+{
+	(void)listen_fd;
+	return PEAK_HANDLE_INVALID;
+}
+
+int
+peak_fd_read(PEAK_HANDLE fd, void *buf, size_t n)
+{
+	(void)fd; (void)buf; (void)n;
+	return 0;
+}
+
+int
+peak_fd_write(PEAK_HANDLE fd, const void *buf, size_t n)
+{
+	(void)fd; (void)buf; (void)n;
+	return 0;
+}
+
+void
+peak_fd_close(PEAK_HANDLE fd)
+{
+	(void)fd;
+}
+
+size_t
+peak_pipe_capacity(PEAK_HANDLE fd)
+{
+	(void)fd;
+	return 0;
+}
+
+size_t
+peak_pipe_set_capacity(PEAK_HANDLE fd, size_t n)
+{
+	(void)fd;
+	(void)n;
+	return 0;
+}
+
+PeakProc
+peak_job_run(const char *cmd, const char *cwd)
+{
+	(void)cmd; (void)cwd;
+	return peak_internal_proc_fail();
+}
+
+int
+peak_job_reap(PeakProc *job, int *code)
+{
+	(void)job; (void)code;
+	return 0;
+}
+
+void
+peak_job_kill(PeakProc *job)
+{
+	if (!job)
+		return;
+	job->fd = PEAK_HANDLE_INVALID;
+	job->pid = 0;
+}
+
+int
+peak_pid_cwd(int pid, char *buf, size_t cap)
+{
+	(void)pid; (void)buf; (void)cap;
+	return 0;
+}
+
+size_t
+peak_page_size(void)
+{
+	return 4096;
+}
+
+void *
+peak_mirror_map(size_t size)
+{
+	(void)size;
+	return NULL;
+}
+
+void
+peak_mirror_unmap(void *p, size_t size)
+{
+	(void)p; (void)size;
+}
+
+#endif
+
+/* Embedded p_log.c. */
+/* Logging and bounded, process-lifetime backing-request diagnostics. */
+#include <inttypes.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define PEAK_MAX_PRINTF 1024
 static const char *p_prefix[P_COUNT_LOG_LEVEL] = {
     [P_LOG_LEVEL_FATAL] = "[FATAL]",
     [P_LOG_LEVEL_ERROR] = "[ERROR]",
@@ -9798,152 +12912,485 @@ static const char *p_prefix[P_COUNT_LOG_LEVEL] = {
     [P_LOG_LEVEL_DEBUG] = "[DEBUG]",
     [P_LOG_LEVEL_TRACE] = "[TRACE]",
 };
-
-#define PEAK_MAX_PRINTF 1024
+#ifndef PEAK_MAX_ALLOCS
 #define PEAK_MAX_ALLOCS 512
+#endif
+#ifndef PEAK_DEBUG_MEMORY_TRACE
+#define PEAK_DEBUG_MEMORY_TRACE 0
+#endif
+#if PEAK_DEBUG_MEMORY_TRACE
+#define PEAK_MEMORY_TRACE(...) printf(__VA_ARGS__)
+#else
+#define PEAK_MEMORY_TRACE(...) ((void)0)
+#endif
 
 typedef struct {
-    void *ptr;
-    size_t size;
-    const char *file;
-    const char *func;
-    int line;
+	void *ptr;
+	size_t size;
+	const char *file;
+	const char *func;
+	int line;
 } PeakDebugMemoryInfo;
 
-static uint64_t peak_alloc_count = 0;
-static PeakDebugMemoryInfo peak_ptr_array[PEAK_MAX_ALLOCS];
+static PeakMemoryDomain peak_memory_domain(PeakMemoryDomain domain);
+static void peak_memory_add(PeakMemoryStats *stats, uint64_t *counter, uint64_t n);
+static void peak_memory_sub(PeakMemoryStats *stats, uint64_t *counter, uint64_t n);
+static PeakDebugMemoryInfo *peak_memory_find(void *ptr, PeakMemoryDomain *domain);
+static void peak_memory_unknown(PeakMemoryDomain domain, void *ptr);
+static void peak_memory_insert(void *ptr, size_t size, PeakMemoryDomain domain, const char *file, int line, const char *func);
+static void peak_memory_resize(PeakMemoryStats *stats, size_t old_size, size_t new_size);
+
+/* Separate tables ensure driver pressure cannot evict core leak evidence. */
+static PeakDebugMemoryInfo peak_ptr_array[PEAK_MEMORY_DOMAIN_COUNT][PEAK_MAX_ALLOCS];
+static PeakMemoryStats peak_memory_counters[PEAK_MEMORY_DOMAIN_COUNT] = {
+	{ .tracking_complete = 1, .accounting_complete = 1 },
+	{ .tracking_complete = 1, .accounting_complete = 1 }
+};
 
 void
 peak_log_printf(PeakLogLevel level, const char *src, ...)
 {
-    char out[PEAK_MAX_PRINTF];
-    va_list ap;
-    int len;
-    size_t offset = P_PREFIX_LEN + 1;
+	char out[PEAK_MAX_PRINTF];
+	va_list ap;
+	int len;
+	size_t offset = P_PREFIX_LEN + 1;
 
-    if (level < 0 || level >= P_COUNT_LOG_LEVEL)
-        level = P_LOG_LEVEL_ERROR;
-    memcpy(out, p_prefix[level], P_PREFIX_LEN);
-    out[P_PREFIX_LEN] = ' ';
-    va_start(ap, src);
-    len = vsnprintf(out + offset, PEAK_MAX_PRINTF - offset, src, ap);
-    va_end(ap);
-    if (len < 0) len = 0;
-    if (offset + (size_t)len >= PEAK_MAX_PRINTF)
-        len = (int)(PEAK_MAX_PRINTF - offset - 1);
-    out[offset + (size_t)len] = '\n';
-    fwrite(out, 1, offset + (size_t)len + 1, (level <= P_LOG_LEVEL_ERROR) ? stderr : stdout);
+	if (level < 0 || level >= P_COUNT_LOG_LEVEL)
+		level = P_LOG_LEVEL_ERROR;
+	memcpy(out, p_prefix[level], P_PREFIX_LEN);
+	out[P_PREFIX_LEN] = ' ';
+	va_start(ap, src);
+	len = vsnprintf(out + offset, PEAK_MAX_PRINTF - offset, src, ap);
+	va_end(ap);
+	if (len < 0) len = 0;
+	if (offset + (size_t)len >= PEAK_MAX_PRINTF)
+		len = (int)(PEAK_MAX_PRINTF - offset - 1);
+	out[offset + (size_t)len] = '\n';
+	fwrite(out, 1, offset + (size_t)len + 1, (level <= P_LOG_LEVEL_ERROR) ? stderr : stdout);
+}
+
+PeakMemoryDomain
+peak_memory_domain(PeakMemoryDomain domain)
+{
+	if (domain >= PEAK_MEMORY_NON_DRIVER && domain < PEAK_MEMORY_DOMAIN_COUNT)
+		return domain;
+	fprintf(stderr, "[ERROR] Invalid Peak memory domain %d; using non-driver\n", (int)domain);
+	peak_memory_counters[PEAK_MEMORY_NON_DRIVER].accounting_complete = 0;
+	return PEAK_MEMORY_NON_DRIVER;
+}
+
+void
+peak_memory_add(PeakMemoryStats *stats, uint64_t *counter, uint64_t n)
+{
+	if (n > UINT64_MAX - *counter) {
+		*counter = UINT64_MAX;
+		stats->accounting_complete = 0;
+	} else {
+		*counter += n;
+	}
+}
+
+void
+peak_memory_sub(PeakMemoryStats *stats, uint64_t *counter, uint64_t n)
+{
+	if (n > *counter) {
+		*counter = 0;
+		stats->accounting_complete = 0;
+	} else {
+		*counter -= n;
+	}
+}
+
+PeakDebugMemoryInfo *
+peak_memory_find(void *ptr, PeakMemoryDomain *domain)
+{
+	for (int d = 0; d < PEAK_MEMORY_DOMAIN_COUNT; ++d) {
+		for (size_t i = 0; i < PEAK_MAX_ALLOCS; ++i) {
+			PeakDebugMemoryInfo *entry = &peak_ptr_array[d][i];
+			if (entry->ptr != ptr)
+				continue;
+			if (*domain != (PeakMemoryDomain)d) {
+				peak_memory_add(&peak_memory_counters[d], &peak_memory_counters[d].domain_errors, 1);
+				fprintf(stderr, "[ERROR] Peak memory domain mismatch for %p: supplied %d, original %d\n", ptr, (int)*domain, d);
+			}
+			*domain = (PeakMemoryDomain)d;
+			return entry;
+		}
+	}
+	return NULL;
+}
+
+void
+peak_memory_unknown(PeakMemoryDomain domain, void *ptr)
+{
+	PeakMemoryStats *stats = &peak_memory_counters[domain];
+	peak_memory_add(stats, &stats->unknown_operations, 1);
+	/* Original ownership is unknowable, so neither domain may claim completeness.
+	 * This does not invalidate otherwise complete leak lists in the other domain. */
+	for (int d = 0; d < PEAK_MEMORY_DOMAIN_COUNT; ++d)
+		peak_memory_counters[d].accounting_complete = 0;
+	stats->tracking_complete = 0;
+	fprintf(stderr, "[WARNING] Peak release/realloc of untracked pointer %p; original domain unknown\n", ptr);
+}
+
+void
+peak_memory_insert(void *ptr, size_t size, PeakMemoryDomain domain, const char *file, int line, const char *func)
+{
+	PeakMemoryStats *stats = &peak_memory_counters[domain];
+	peak_memory_add(stats, &stats->live_blocks, 1);
+	peak_memory_resize(stats, 0, size);
+	for (size_t i = 0; i < PEAK_MAX_ALLOCS; ++i) {
+		if (peak_ptr_array[domain][i].ptr)
+			continue;
+		peak_ptr_array[domain][i] = (PeakDebugMemoryInfo){ ptr, size, file, func, line };
+		return;
+	}
+	if (stats->tracking_complete)
+		fprintf(stderr, "[ERROR] Peak domain %d live tracking capacity (%d) exceeded\n", (int)domain, PEAK_MAX_ALLOCS);
+	stats->tracking_complete = 0;
+}
+
+void
+peak_memory_resize(PeakMemoryStats *stats, size_t old_size, size_t new_size)
+{
+	peak_memory_sub(stats, &stats->live_bytes, old_size);
+	peak_memory_add(stats, &stats->live_bytes, new_size);
+	if (stats->live_bytes > stats->peak_bytes)
+		stats->peak_bytes = stats->live_bytes;
+}
+
+void *
+peak_debug_malloc_domain_impl(size_t size, PeakMemoryDomain domain, const char *file, int line, const char *func)
+{
+	void *ptr = (malloc)(size);
+	PeakMemoryStats *stats;
+	domain = peak_memory_domain(domain);
+	stats = &peak_memory_counters[domain];
+	PEAK_MEMORY_TRACE("[ALLOC] %p (%zu bytes) -> %s:%d %s()\n", ptr, size, file, line, func);
+	peak_memory_add(stats, ptr ? &stats->allocation_requests : &stats->failed_requests, 1);
+	if (ptr)
+		peak_memory_insert(ptr, size, domain, file, line, func);
+	return ptr;
+}
+
+void *
+peak_debug_calloc_domain_impl(size_t count, size_t size, PeakMemoryDomain domain, const char *file, int line, const char *func)
+{
+	void *ptr;
+	domain = peak_memory_domain(domain);
+	if (size && count > SIZE_MAX / size) {
+		PeakMemoryStats *stats = &peak_memory_counters[domain];
+		peak_memory_add(stats, &stats->failed_requests, 1);
+		return NULL;
+	}
+	ptr = peak_debug_malloc_domain_impl(count * size, domain, file, line, func);
+	if (ptr)
+		memset(ptr, 0, count * size);
+	return ptr;
+}
+
+void
+peak_debug_free_domain_impl(void *ptr, PeakMemoryDomain domain, const char *file, int line, const char *func)
+{
+	PeakDebugMemoryInfo *entry;
+	PeakMemoryStats *stats;
+	/* file/line/func only used by optional tracing. */
+	(void)file; (void)line; (void)func;
+	if (!ptr)
+		return;
+	domain = peak_memory_domain(domain);
+	entry = peak_memory_find(ptr, &domain);
+	stats = &peak_memory_counters[domain];
+	PEAK_MEMORY_TRACE("[FREE] %p -> %s:%d %s()\n", ptr, file, line, func);
+	if (entry) {
+		peak_memory_add(stats, &stats->released_blocks, 1);
+		peak_memory_sub(stats, &stats->live_blocks, 1);
+		peak_memory_sub(stats, &stats->live_bytes, entry->size);
+		entry->ptr = NULL;
+	} else {
+		peak_memory_unknown(domain, ptr);
+	}
+	(free)(ptr);
+}
+
+void *
+peak_debug_realloc_domain_impl(void *ptr, size_t size, PeakMemoryDomain domain, const char *file, int line, const char *func)
+{
+	PeakDebugMemoryInfo *entry = NULL;
+	PeakMemoryStats *stats;
+	void *new_ptr;
+
+	domain = peak_memory_domain(domain);
+	if (ptr)
+		entry = peak_memory_find(ptr, &domain);
+	stats = &peak_memory_counters[domain];
+	peak_memory_add(stats, &stats->realloc_requests, 1);
+	/* Deterministic zero-size policy, including NULL: no backing request. */
+	if (!ptr)
+		return size ? peak_debug_malloc_domain_impl(size, domain, file, line, func) : NULL;
+	if (!entry)
+		peak_memory_unknown(domain, ptr);
+	if (!size) {
+		/* Avoid a second lookup/mismatch diagnostic for this single operation. */
+		if (entry) {
+			peak_memory_add(stats, &stats->released_blocks, 1);
+			peak_memory_sub(stats, &stats->live_blocks, 1);
+			peak_memory_sub(stats, &stats->live_bytes, entry->size);
+			entry->ptr = NULL;
+		}
+		(free)(ptr);
+		return NULL;
+	}
+	/* Locate metadata before realloc: old pointer is invalid on success. */
+	new_ptr = (realloc)(ptr, size);
+	PEAK_MEMORY_TRACE("[REALLOC] %p (%zu bytes) -> %s:%d %s()\n", new_ptr, size, file, line, func);
+	peak_memory_add(stats, new_ptr ? &stats->allocation_requests : &stats->failed_requests, 1);
+	if (!new_ptr)
+		return NULL;
+	if (entry) {
+		peak_memory_resize(stats, entry->size, size);
+		*entry = (PeakDebugMemoryInfo){ new_ptr, size, file, func, line };
+	} else {
+		peak_memory_insert(new_ptr, size, domain, file, line, func);
+	}
+	return new_ptr;
 }
 
 void *
 peak_debug_malloc_impl(size_t size, const char *file, int line, const char *func)
 {
-    void *ptr = malloc(size);
-    printf("[ALLOC] %p (%zu bytes) -> %s:%d %s()\n", ptr, size, file, line, func);
-
-    if (ptr) {
-        if (peak_alloc_count < PEAK_MAX_ALLOCS) {
-            peak_ptr_array[peak_alloc_count++] = (PeakDebugMemoryInfo){
-                .ptr = ptr,
-                .size = size,
-                .file = file,
-                .func = func,
-                .line = line
-            };
-        } else {
-            fprintf(stderr, "[ERROR] Debug allocator tracking capacity (%d) exceeded!\n", PEAK_MAX_ALLOCS);
-        }
-    }
-    return ptr;
+	return peak_debug_malloc_domain_impl(size, PEAK_MEMORY_NON_DRIVER, file, line, func);
 }
 
-void
-peak_debug_free_impl(void *ptr, const char *file, int line, const char *func)
+void *
+peak_debug_calloc_impl(size_t count, size_t size, const char *file, int line, const char *func)
 {
-    printf("[FREE]  %p -> %s:%d %s()\n", ptr, file, line, func);
-
-    if (!ptr) return;
-
-    bool found = false;
-    uint64_t index = 0;
-
-    for (index = 0; index < peak_alloc_count; ++index) {
-        if (peak_ptr_array[index].ptr == ptr) {
-            found = true;
-            break;
-        }
-    }
-
-    if (found) {
-        for (uint64_t j = index; j < peak_alloc_count - 1; ++j) {
-            peak_ptr_array[j] = peak_ptr_array[j + 1];
-        }
-        peak_alloc_count--;
-    } else {
-        fprintf(stderr, "[WARNING] Attempted to free untracked/double-freed pointer %p at %s:%d %s()\n",
-                ptr, file, line, func);
-    }
-
-    free(ptr);
+	return peak_debug_calloc_domain_impl(count, size, PEAK_MEMORY_NON_DRIVER, file, line, func);
 }
 
 void *
 peak_debug_realloc_impl(void *ptr, size_t size, const char *file, int line, const char *func)
 {
-    if (!ptr) {
-        return peak_debug_malloc_impl(size, file, line, func);
-    }
-    if (size == 0) {
-        peak_debug_free_impl(ptr, file, line, func);
-        return NULL;
-    }
-
-    uintptr_t old_addr = (uintptr_t)ptr;
-    void *new_ptr = realloc(ptr, size);
-    printf("[REALLOC] %p -> %p (%zu bytes) -> %s:%d %s()\n", (void *)old_addr, new_ptr, size, file, line, func);
-
-    if (new_ptr) {
-        bool found = false;
-        for (uint64_t i = 0; i < peak_alloc_count; ++i) {
-            if (peak_ptr_array[i].ptr == (void *)old_addr) {
-                peak_ptr_array[i].ptr = new_ptr;
-                peak_ptr_array[i].size = size;
-                peak_ptr_array[i].file = file;
-                peak_ptr_array[i].line = line;
-                peak_ptr_array[i].func = func;
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
-            if (peak_alloc_count < PEAK_MAX_ALLOCS) {
-                peak_ptr_array[peak_alloc_count++] = (PeakDebugMemoryInfo){
-                    .ptr = new_ptr,
-                    .size = size,
-                    .file = file,
-                    .func = func,
-                    .line = line
-                };
-            }
-        }
-    }
-    return new_ptr;
+	return peak_debug_realloc_domain_impl(ptr, size, PEAK_MEMORY_NON_DRIVER, file, line, func);
 }
 
 void
+peak_debug_free_impl(void *ptr, const char *file, int line, const char *func)
+{
+	peak_debug_free_domain_impl(ptr, PEAK_MEMORY_NON_DRIVER, file, line, func);
+}
+
+PeakMemoryStats
+peak_debug_memory_stats(PeakMemoryDomain domain)
+{
+	/* Invalid accessor arguments must not mutate process statistics. */
+	if (domain < PEAK_MEMORY_NON_DRIVER || domain >= PEAK_MEMORY_DOMAIN_COUNT)
+		return (PeakMemoryStats){0};
+	return peak_memory_counters[domain];
+}
+
+uint64_t
 peak_debug_memory_report(void)
 {
-    printf("\n==================== MEMORY REPORT ====================\n");
-    printf("Remaining unfreed allocations: %lu\n", (unsigned long)peak_alloc_count);
-
-    for (uint64_t i = 0; i < peak_alloc_count; ++i) {
-        PeakDebugMemoryInfo *info = &peak_ptr_array[i];
-        printf("[LEAK] %p (%zu bytes) allocated at %s:%d in %s()\n",
-               info->ptr, info->size, info->file, info->line, info->func);
-    }
-    printf("=======================================================\n");
+	printf("\n==================== MEMORY REPORT ====================\n");
+	printf("Coverage: direct instrumented backing calls; excludes libc/DSO/Vulkan internals\n");
+	printf("Live/release/peak gauges require complete tracking and accounting; incomplete values are not exact\n");
+	for (int d = 0; d < PEAK_MEMORY_DOMAIN_COUNT; ++d) {
+		PeakMemoryStats *s = &peak_memory_counters[d];
+		printf("[%s] successful=%" PRIu64 " failed=%" PRIu64 " realloc=%" PRIu64 " released=%" PRIu64 " live=%" PRIu64 " bytes=%" PRIu64 " peak=%" PRIu64 " domain-errors=%" PRIu64 " unknown=%" PRIu64 " tracking-complete=%d accounting-complete=%d\n",
+		       d == PEAK_MEMORY_DRIVER ? "driver" : "non-driver", s->allocation_requests, s->failed_requests, s->realloc_requests, s->released_blocks, s->live_blocks, s->live_bytes, s->peak_bytes, s->domain_errors, s->unknown_operations, s->tracking_complete, s->accounting_complete);
+		for (size_t i = 0; i < PEAK_MAX_ALLOCS; ++i) {
+			PeakDebugMemoryInfo *info = &peak_ptr_array[d][i];
+			if (info->ptr)
+				printf("[LEAK %s] %p (%zu bytes) allocated at %s:%d in %s()\n", d == PEAK_MEMORY_DRIVER ? "driver" : "non-driver", info->ptr, info->size, info->file, info->line, info->func);
+		}
+	}
+	printf("=======================================================\n");
+	return peak_memory_counters[PEAK_MEMORY_NON_DRIVER].allocation_requests;
 }
-/* END p_log.c */
+
+static size_t
+peak_host_window_size(void)
+{
+#if defined(PEAK_LINUX) && defined(PEAK_VULKAN)
+    size_t n = sizeof(struct peak_linux_win);
+    if (n < sizeof(struct peak_wayland_win))
+        n = sizeof(struct peak_wayland_win);
+    return (n + PEAK_HOST_ALIGN - 1) & ~(size_t)(PEAK_HOST_ALIGN - 1);
+#else
+    return 0;
+#endif
+}
+
+static const PeakParams peak_defaults = {1, PEAK_CLIP_MAX, PEAK_CLIP_MAX};
+
+static size_t
+peak_store_bytes(const PeakParams *params, size_t i)
+{
+    size_t cap = i < PEAK_STORE_PASTE ? params->clipboard_capacity : params->transfer_capacity;
+    if (i == PEAK_STORE_CONVERT) cap *= 2;
+    return (cap + PEAK_HOST_ALIGN) & ~(size_t)(PEAK_HOST_ALIGN - 1);
+}
+
+size_t
+peak_memory(const PeakParams *params)
+{
+    size_t stride = peak_host_window_size(), total, bytes, i;
+    if (!params) params = &peak_defaults;
+    /* X11 byte counts and conversion lengths use signed int. */
+    if (!stride || !params->max_windows || params->max_windows > 8 ||
+        !params->clipboard_capacity || !params->transfer_capacity ||
+        params->clipboard_capacity > INT_MAX || params->transfer_capacity > INT_MAX / 2)
+        return 0;
+    total = (sizeof(PeakCtx) + PEAK_HOST_ALIGN - 1) & ~(size_t)(PEAK_HOST_ALIGN - 1);
+    bytes = params->max_windows * (stride + PEAK_HOST_ALIGN);
+    if (total > SIZE_MAX - bytes) return 0;
+    total += bytes;
+    for (i = 0; i < PEAK_STORE_COUNT; i++) {
+        bytes = peak_store_bytes(params, i);
+        if (total > SIZE_MAX - bytes) return 0;
+        total += bytes;
+    }
+    return total;
+}
+
+PeakCtx *
+peak_place_in_memory_and_init(void *buf, size_t size, const PeakParams *params)
+{
+    PeakParams profile = params ? *params : peak_defaults;
+    size_t need = peak_memory(&profile), i;
+    unsigned char *p;
+    if (!need || !buf || (uintptr_t)buf % PEAK_HOST_ALIGN || size < need || peak_active)
+        return NULL;
+    /* Preserve parameters even when the caller stores them in the backing. */
+    params = &profile;
+    memset(buf, 0, need);
+    peak_active = buf;
+    peak_host.base = buf;
+    peak_host.size = need;
+    peak_host.max_windows = params->max_windows;
+    peak_host.clipboard_capacity = params->clipboard_capacity;
+    peak_host.transfer_capacity = params->transfer_capacity;
+    peak_host.stride = peak_host_window_size() + PEAK_HOST_ALIGN;
+    peak_host.windows = (unsigned char *)buf + ((sizeof(PeakCtx) + PEAK_HOST_ALIGN - 1) & ~(size_t)(PEAK_HOST_ALIGN - 1));
+    p = peak_host.windows + peak_host.stride * params->max_windows;
+    for (i = 0; i < PEAK_STORE_COUNT; i++) {
+        peak_host.store[i] = (char *)p;
+        p += peak_store_bytes(params, i);
+    }
+    assert((size_t)(p - peak_host.base) == need);
+    peak_clip.own[0] = peak_host.store[PEAK_STORE_OWN0];
+    peak_clip.own[1] = peak_host.store[PEAK_STORE_OWN1];
+    peak_clip.paste = peak_host.store[PEAK_STORE_PASTE];
+    peak_xfer.text = peak_host.store[PEAK_STORE_TEXT];
+    peak_xfer.drop = peak_host.store[PEAK_STORE_DROP];
+    return peak_active;
+}
+
+static int
+peak_window_valid(PeakWindow *win)
+{
+    size_t i;
+    if (!win || !peak_active || win->ctx != peak_active || !win->internal.w)
+        return 0;
+    if (!peak_host.base) {
+#if defined(PEAK_LINUX)
+        PeakLegacySlot *slot;
+        for (slot = peak_active->legacy_windows; slot; slot = slot->next)
+            if (win->internal.w == (unsigned char *)slot + PEAK_LEGACY_HEADER)
+                return win->generation && win->generation == slot->generation;
+        return 0;
+#else
+        /* Other hosts retain legacy handle ownership, without copy validation. */
+        return win->generation != 0;
+#endif
+    }
+    for (i = 0; i < peak_host.max_windows; i++) {
+        unsigned char *slot = peak_host.windows + i * peak_host.stride;
+        if (win->internal.w == slot + PEAK_HOST_ALIGN)
+            return win->generation && win->generation == *(uint64_t *)slot;
+    }
+    return 0;
+}
+
+#if defined(PEAK_LINUX)
+static void *
+peak_host_window_alloc(size_t size)
+{
+    size_t i;
+    unsigned char *p;
+    if (!peak_host.base) {
+        PeakLegacySlot *slot;
+        if (size > SIZE_MAX - PEAK_LEGACY_HEADER || !(slot = calloc(1, PEAK_LEGACY_HEADER + size)))
+            return NULL;
+        if (++peak_generation == 0) ++peak_generation;
+        slot->generation = peak_generation;
+        slot->next = peak_active->legacy_windows;
+        peak_active->legacy_windows = slot;
+        return (unsigned char *)slot + PEAK_LEGACY_HEADER;
+    }
+    if (size > peak_host.stride - PEAK_HOST_ALIGN)
+        return NULL;
+    for (i = 0; i < peak_host.max_windows; i++) {
+        p = peak_host.windows + i * peak_host.stride;
+        if (!*(uint64_t *)p) {
+            memset(p, 0, peak_host.stride);
+            if (++peak_generation == 0) ++peak_generation;
+            *(uint64_t *)p = peak_generation;
+            return p + PEAK_HOST_ALIGN;
+        }
+    }
+    return NULL;
+}
+
+static void
+peak_host_window_free(void *p)
+{
+    if (!p)
+        return;
+    if (peak_host.base) {
+        unsigned char *slot = (unsigned char *)p - PEAK_HOST_ALIGN;
+        memset(slot, 0, peak_host.stride);
+    } else {
+        PeakLegacySlot **link = &peak_active->legacy_windows;
+        while (*link) {
+            PeakLegacySlot *slot = *link;
+            if (p == (unsigned char *)slot + PEAK_LEGACY_HEADER) {
+                *link = slot->next;
+                free(slot);
+                return;
+            }
+            link = &slot->next;
+        }
+    }
+}
+
+static void
+peak_host_transfer_free(void *p)
+{
+    if (!p)
+        return;
+    if (peak_host.base) {
+        if (p == peak_host.store[PEAK_STORE_RECV0]) peak_host.recv_busy[0] = 0;
+        if (p == peak_host.store[PEAK_STORE_RECV1]) peak_host.recv_busy[1] = 0;
+    } else {
+        free(p);
+    }
+}
+
+static char *
+peak_host_recv_alloc(void)
+{
+    size_t i;
+    for (i = 0; i < 2; i++) {
+        if (!peak_host.recv_busy[i]) {
+            peak_host.recv_busy[i] = 1;
+            return peak_host.store[PEAK_STORE_RECV0 + i];
+        }
+    }
+    return NULL;
+}
+#endif
 
 static uint32_t *
 peak_window_sync(PeakWindow *win, size_t *width, size_t *height)
@@ -9958,28 +13405,86 @@ peak_window_sync(PeakWindow *win, size_t *width, size_t *height)
     return win->buffer;
 }
 
-int
-peak_init(void)
+PeakCtx *
+peak_init_legacy(void)
 {
-    return peak_platform_init();
+    if (peak_active) return NULL;
+    memset(&peak_legacy, 0, sizeof peak_legacy);
+    peak_active = &peak_legacy;
+    peak_host.clipboard_capacity = peak_host.transfer_capacity = PEAK_CLIP_MAX;
+    return peak_active;
 }
 
 void
-peak_quit(void)
+peak_quit(PeakCtx *ctx)
 {
+    size_t i;
+    int placed;
+    if (!ctx || ctx != peak_active) return;
+    placed = peak_host.base != NULL;
     peak_audio_stop();
-    peak_platform_quit();
+    if (peak_host.base) {
+        for (i = 0; i < peak_host.max_windows; i++) {
+            unsigned char *slot = peak_host.windows + i * peak_host.stride;
+            if (*(uint64_t *)slot) {
+                PeakWindowInternal intern = {slot + PEAK_HOST_ALIGN};
+                peak_platform_window_close(&intern);
+            }
+        }
+    }
+#if defined(PEAK_LINUX)
+    while (peak_active->legacy_windows) {
+        PeakWindowInternal intern = {(unsigned char *)peak_active->legacy_windows + PEAK_LEGACY_HEADER};
+        peak_platform_window_close(&intern);
+    }
+#endif
+    if (peak_initialized) peak_platform_quit();
+#if defined(PEAK_LINUX)
+    if (peak_host.base) {
+        peak_host_transfer_free(peak_clip_incr);
+        peak_clip_incr = NULL;
+        peak_clip_incr_n = 0;
+        peak_clip_incr_on = peak_clip_req_on = peak_clip_req_xa = 0;
+        peak_clip_req_window = None;
+        peak_clip_req_owner = NULL;
+    }
+#endif
+    if (peak_host.base) {
+        memset(&peak_clip, 0, sizeof peak_clip);
+        memset(&peak_xfer, 0, sizeof peak_xfer);
+        memset(&peak_host, 0, sizeof peak_host);
+    }
+    if (!placed) {
+        free(peak_clip.own[0]); free(peak_clip.own[1]); free(peak_clip.paste);
+        free(peak_xfer.text); free(peak_xfer.drop);
+    }
+    peak_initialized = 0;
+    peak_active = NULL;
 }
 
 PeakWindow
-peak_window_open(const char *name, uint32_t width, uint32_t height, uint32_t flags)
+peak_window_open(PeakCtx *ctx, const char *name, uint32_t width, uint32_t height, uint32_t flags)
 {
     PeakWindow win = {0};
+    if (!ctx || ctx != peak_active) return win;
     if (!name || !name[0]) name = "Peak";
     if (!width) width = 800;
     if (!height) height = 600;
+    /* Implicit native initialization must obey the same placement barrier. */
+    if (!peak_initialized && !(peak_initialized = peak_platform_init())) {
+        peak_platform_quit();
+        return win;
+    }
     win.internal = peak_platform_window_open(name, width, height, flags);
-    if (!peak_window_sync(&win, NULL, NULL)) return win;
+    peak_window_sync(&win, NULL, NULL);
+    if (!win.internal.w) return win;
+    win.ctx = ctx;
+    if (peak_host.base) win.generation = *(uint64_t *)((unsigned char *)win.internal.w - PEAK_HOST_ALIGN);
+#if defined(PEAK_LINUX)
+    else win.generation = ((PeakLegacySlot *)((unsigned char *)win.internal.w - PEAK_LEGACY_HEADER))->generation;
+#else
+    else { if (++peak_generation == 0) ++peak_generation; win.generation = peak_generation; }
+#endif
     win.running = 1;
     return win;
 }
@@ -9987,7 +13492,9 @@ peak_window_open(const char *name, uint32_t width, uint32_t height, uint32_t fla
 void
 peak_window_close(PeakWindow *win)
 {
+    if (!peak_window_valid(win)) return;
     win->running = 0;
+    win->generation = 0;
     peak_platform_window_close(&win->internal);
     win->buffer = NULL;
     win->width = 0;
@@ -9998,6 +13505,7 @@ peak_window_close(PeakWindow *win)
 int
 peak_window_epoll(PeakWindow *win, PeakEvent *ev)
 {
+    if (!peak_window_valid(win)) return 0;
     int got = peak_platform_epoll(&win->internal, ev);
     if (got && ev->type == PEAK_EVENT_WINDOW_RESIZE)
         peak_window_sync(win, NULL, NULL);
@@ -10007,6 +13515,7 @@ peak_window_epoll(PeakWindow *win, PeakEvent *ev)
 int
 peak_window_fd(PeakWindow *win)
 {
+    if (!peak_window_valid(win)) return -1;
     if (!win)
         return -1;
     return peak_platform_fd(&win->internal);
@@ -10015,6 +13524,7 @@ peak_window_fd(PeakWindow *win)
 int
 peak_window_pending(PeakWindow *win)
 {
+    if (!peak_window_valid(win)) return 0;
     if (!win)
         return 0;
     return peak_platform_pending(&win->internal);
@@ -10023,12 +13533,14 @@ peak_window_pending(PeakWindow *win)
 uint32_t *
 peak_window_backbuffer(PeakWindow *win, size_t *width, size_t *height)
 {
+    if (!peak_window_valid(win)) return NULL;
     return peak_window_sync(win, width, height);
 }
 
 void
 peak_window_clear(PeakWindow *win, float r, float g, float b, float a)
 {
+    if (!peak_window_valid(win)) return;
     uint32_t c, i;
     if (!win || !win->buffer) return;
 #if defined(PEAK_WEB)
@@ -10050,20 +13562,41 @@ peak_window_clear(PeakWindow *win, float r, float g, float b, float a)
 void
 peak_window_present(PeakWindow *win)
 {
+    if (!peak_window_valid(win)) return;
     if (win) peak_platform_window_present(&win->internal);
 }
 
 void
 peak_window_set_title(PeakWindow *win, const char *name)
 {
+    if (!peak_window_valid(win)) return;
     if (!win || !name)
         return;
     peak_platform_window_set_title(&win->internal, name);
 }
 
 void
+peak_window_set_class(PeakWindow *win, const char *name)
+{
+    if (!peak_window_valid(win)) return;
+    if (!win || !name || !name[0])
+        return;
+    peak_platform_window_set_class(&win->internal, name);
+}
+
+void
+peak_window_set_opacity(PeakWindow *win, uint8_t alpha)
+{
+    if (!peak_window_valid(win)) return;
+    if (!win)
+        return;
+    peak_platform_window_set_opacity(&win->internal, alpha);
+}
+
+void
 peak_window_set_size(PeakWindow *win, uint32_t width, uint32_t height)
 {
+    if (!peak_window_valid(win)) return;
     if (!win || !width || !height)
         return;
     peak_platform_window_set_size(&win->internal, width, height);
@@ -10073,6 +13606,7 @@ peak_window_set_size(PeakWindow *win, uint32_t width, uint32_t height)
 void
 peak_window_fullscreen(PeakWindow *win, int on)
 {
+    if (!peak_window_valid(win)) return;
     if (!win)
         return;
     peak_platform_window_fullscreen(&win->internal, on);
@@ -10081,14 +13615,25 @@ peak_window_fullscreen(PeakWindow *win, int on)
 void
 peak_window_cursor(PeakWindow *win, int on)
 {
+    if (!peak_window_valid(win)) return;
     if (!win)
         return;
     peak_platform_window_cursor(&win->internal, on);
 }
 
 void
+peak_window_cursor_shape(PeakWindow *win, int shape)
+{
+    if (!peak_window_valid(win)) return;
+    if (!win)
+        return;
+    peak_platform_window_cursor_shape(&win->internal, shape);
+}
+
+void
 peak_window_pointer_relative(PeakWindow *win, int on)
 {
+    if (!peak_window_valid(win)) return;
     if (!win)
         return;
     peak_platform_window_pointer_relative(&win->internal, on);
@@ -10097,6 +13642,7 @@ peak_window_pointer_relative(PeakWindow *win, int on)
 float
 peak_window_scale(PeakWindow *win)
 {
+    if (!peak_window_valid(win)) return 1.0f;
     if (!win)
         return 1.f;
     return peak_platform_window_scale(&win->internal);
@@ -10118,6 +13664,7 @@ peak_internal_web_step(void *arg)
 void
 peak_window_run(PeakWindow *win, int (*peak_tick)(PeakWindow *win, void *userdata), void *userdata)
 {
+    if (!peak_window_valid(win)) return;
     assert(win && "peak_window_run needs a window");
     assert(peak_tick && "peak_window_run needs tick callback");
     win->tick = peak_tick;
@@ -10133,7 +13680,7 @@ peak_window_run(PeakWindow *win, int (*peak_tick)(PeakWindow *win, void *userdat
 int
 peak_audio_start(uint32_t channels, uint32_t rate, void (*fill)(int16_t *out, size_t frames, void *userdata), void *userdata)
 {
-    if (!fill || !channels || !rate)
+    if ((peak_active && peak_host.base) || !fill || !channels || !rate)
         return 0;
     peak_audio_stop();
     return peak_platform_audio_start(channels, rate, fill, userdata);
@@ -10212,14 +13759,14 @@ peak_file_write(const char *path, const void *buf, size_t n)
 }
 
 void *
-peak_aligned_alloc(size_t size, size_t alignment)
+peak_aligned_alloc_impl(size_t size, size_t alignment)
 {
     void *p;
 
     if (!size)
         return NULL;
-    if (alignment < sizeof (void *))
-        alignment = sizeof (void *);
+    if (alignment < sizeof(void *))
+        alignment = sizeof(void *);
 #if defined(PEAK_WIN32)
     p = _aligned_malloc(size, alignment);
 #else
@@ -10227,18 +13774,6 @@ peak_aligned_alloc(size_t size, size_t alignment)
         return NULL;
 #endif
     return p;
-}
-
-void
-peak_aligned_free(void *p)
-{
-    if (!p)
-        return;
-#if defined(PEAK_WIN32)
-    _aligned_free(p);
-#else
-    free(p);
-#endif
 }
 
 const char **
@@ -10250,19 +13785,20 @@ peak_vulkan_get_extensions(uint32_t *count)
 int
 peak_vulkan_create_surface(PeakWindow *win, void *instance, const void *allocator, void *out_surface)
 {
-    if (!win || !instance || !out_surface) return 0;
+    if (!peak_window_valid(win) || !instance || !out_surface) return 0;
     return peak_platform_vulkan_create_surface(&win->internal, instance, allocator, out_surface);
 }
 
 int
-peak_clip_set(PeakWindow *win, PeakClip which, const char *utf8, size_t n)
+peak_clip_set(PeakCtx *ctx, PeakWindow *win, PeakClip which, const char *utf8, size_t n)
 {
+    if (!ctx || ctx != peak_active || (win && !peak_window_valid(win))) return 0;
     if (which != PEAK_CLIP_CLIPBOARD && which != PEAK_CLIP_PRIMARY)
         return 0;
     if (n && !utf8)
         return 0;
-    if (n > PEAK_CLIP_MAX)
-        n = PEAK_CLIP_MAX;
+    if (n > PEAK_OWN_CAP)
+        n = PEAK_OWN_CAP;
     if (!peak_clip_own_store(which, utf8, n))
         return 0;
 #if defined(PEAK_WIN32) || defined(PEAK_MACOS) || defined(PEAK_WEB)
@@ -10275,8 +13811,9 @@ peak_clip_set(PeakWindow *win, PeakClip which, const char *utf8, size_t n)
 }
 
 int
-peak_clip_request(PeakWindow *win, PeakClip which)
+peak_clip_request(PeakCtx *ctx, PeakWindow *win, PeakClip which)
 {
+    if (!ctx || ctx != peak_active || (win && !peak_window_valid(win))) return 0;
     const char *p;
     size_t n;
 
@@ -10292,8 +13829,9 @@ peak_clip_request(PeakWindow *win, PeakClip which)
 }
 
 int
-peak_clip_take(PeakWindow *win, char *dst, size_t cap, size_t *n)
+peak_clip_take(PeakCtx *ctx, PeakWindow *win, char *dst, size_t cap, size_t *n)
 {
+    if (!ctx || ctx != peak_active || (win && !peak_window_valid(win))) return 0;
     size_t c;
 
     (void)win;
@@ -10311,8 +13849,9 @@ peak_clip_take(PeakWindow *win, char *dst, size_t cap, size_t *n)
 }
 
 int
-peak_text_take(PeakWindow *win, char *dst, size_t cap, size_t *n)
+peak_text_take(PeakCtx *ctx, PeakWindow *win, char *dst, size_t cap, size_t *n)
 {
+    if (!ctx || ctx != peak_active || (win && !peak_window_valid(win))) return 0;
     size_t c;
 
     (void)win;
@@ -10330,18 +13869,20 @@ peak_text_take(PeakWindow *win, char *dst, size_t cap, size_t *n)
 }
 
 int
-peak_drop_drag(PeakWindow *win, const char *utf8, size_t n)
+peak_drop_drag(PeakCtx *ctx, PeakWindow *win, const char *utf8, size_t n)
 {
+    if (!ctx || ctx != peak_active || (win && !peak_window_valid(win))) return 0;
     if (!win || (n && !utf8))
         return 0;
-    if (n > PEAK_CLIP_MAX)
-        n = PEAK_CLIP_MAX;
+    if (n > PEAK_TRANSFER_CAP)
+        n = PEAK_TRANSFER_CAP;
     return peak_platform_drop_drag(&win->internal, utf8, n);
 }
 
 int
-peak_drop_take(PeakWindow *win, char *dst, size_t cap, size_t *n)
+peak_drop_take(PeakCtx *ctx, PeakWindow *win, char *dst, size_t cap, size_t *n)
 {
+    if (!ctx || ctx != peak_active || (win && !peak_window_valid(win))) return 0;
     size_t c;
 
     (void)win;
