@@ -6,7 +6,8 @@
  */
 
 #include "rend.h"
-#include "peak.c"
+#define PEAK_IMPLEMENTATION
+#include "peak.h"
 #include "rend.c"
 #include "grit.h"
 #include "grit.c"

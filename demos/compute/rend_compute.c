@@ -1,5 +1,6 @@
 #include "rend.h"
-#include "peak.c"
+#define PEAK_IMPLEMENTATION
+#include "peak.h"
 #include "rend.c"
 #include "demos/headless.h"
 #include <stddef.h>

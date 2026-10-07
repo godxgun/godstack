@@ -29,7 +29,8 @@
  * USAGE:
  *     #include "peak.h"
  *     #include "rend.h"
- *     #include "peak.c"
+ *     #define PEAK_IMPLEMENTATION
+ *     #include "peak.h"
  *     #include "rend.c"
  *
  *     RendBindingInfo bind = {0};

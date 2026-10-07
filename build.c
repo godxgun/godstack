@@ -101,7 +101,7 @@ build_peak_demos(int need_web)
     if (!build_peak_native("demos/multiplatform/demo_run.c", "demos/multiplatform/demo_run")) return false;
 
     poof_cmd_append(&cmd, "emcc", "demos/multiplatform/demo_run.c", "-o", "demos/multiplatform/demo.js",
-        "-IPeak", "-std=c99", "-Wall", "-Wno-deprecated-declarations",
+        "-IPeak", "-std=c99", "-D_POSIX_C_SOURCE=200809L", "-Wall", "-Wno-deprecated-declarations",
         "-sALLOW_MEMORY_GROWTH=1", "-sENVIRONMENT=web");
     if (poof_cmd_run(&cmd))
         return true;
@@ -283,6 +283,16 @@ run_one(Poof_Cmd *cmd)
     return ok;
 }
 
+static bool run_peak_header_test(void);
+
+bool
+run_peak_header_test(void)
+{
+    Poof_Cmd cmd = {0};
+    poof_cmd_append(&cmd, "sh", "tests/peak_header/run.sh", "Peak/peak.h");
+    return run_one(&cmd);
+}
+
 static bool
 run_tests(void)
 {
@@ -291,6 +301,7 @@ run_tests(void)
     cmd = (Poof_Cmd){0};
     poof_cmd_append(&cmd, "./tests/peak");
     if (!run_one(&cmd)) return false;
+    if (!run_peak_header_test()) return false;
 
     cmd = (Poof_Cmd){0};
     poof_cmd_append(&cmd, "./Fuse/fuse_test");
@@ -369,6 +380,7 @@ main(int argc, char **argv)
             Poof_Cmd cmd = {0};
             poof_cmd_append(&cmd, "./tests/peak");
             if (!run_one(&cmd)) return 1;
+            if (!run_peak_header_test()) return 1;
         }
         return 0;
     }

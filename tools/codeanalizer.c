@@ -4,7 +4,8 @@
 #include "../Rend/rend.h"
 #include "../Cast/cast.h"
 #include "../Cast/cast.c"
-#include "../Peak/peak.c"
+#define PEAK_IMPLEMENTATION
+#include "../Peak/peak.h"
 #include "../Rend/rend.c"
 
 #include <stdint.h>

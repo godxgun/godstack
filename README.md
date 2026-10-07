@@ -12,7 +12,7 @@ Collection of modular and minimal libraries used by our software.
 | Name   | Version | Description                                |
 | ------ | ------- | ------------------------------------------ |
 | Poof   | 0.2.0   | Build system.                              |
-| Peak   | 0.11.1  | Platform library that automatically links the correct system libraries. |
+| Peak   | 1.0.0   | Single-header platform library.            |
 | Fuse   | 0.8.0   | Immediate-mode UI command buffer.          |
 | Rend   | 1.6.6   | Modern graphics API layer.                 |
 
@@ -33,7 +33,12 @@ Collection of modular and minimal libraries used by our software.
 1. Copy and paste the folder.
 2. -I the directory.
 3. Include foo.h.
-4. Include foo.c and it will pull other .c files as needed.
+4. Include foo.c and it will pull other .c files as needed (except Peak).
+
+Peak needs only `Peak/peak.h`. Define `PEAK_IMPLEMENTATION` before including
+`peak.h` in exactly one translation unit; other translation units include it
+without that define. Platform SDK headers and system link flags are still needed;
+see `build.c` for the native platform link configuration.
 
 ## Build
 
@@ -41,10 +46,11 @@ Collection of modular and minimal libraries used by our software.
 ./build             # demos + tests
 ./build test        # that, then run them headlessly
 ./build peak        # Peak demos + tests/peak
-./build peak test   # that, then run tests/peak
+./build peak test   # that, then run Peak runtime + single-header tests
 ```
 
 Rend demos take `--headless` (`--frames N`, `--ppm path`). Peak window tests need a display (Xvfb on Linux CI).
+The standalone Linux header test needs no display: `sh tests/peak_header/run.sh Peak/peak.h`.
 
 ## Maturity & Versioning
 

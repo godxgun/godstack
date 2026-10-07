@@ -1,7 +1,7 @@
 /* Peak stress test. Headless filesystem/proc first; window if peak_init works. */
 
+#define PEAK_IMPLEMENTATION
 #include "peak.h"
-#include "../Peak/peak.c"
 
 #include <stdio.h>
 #include <string.h>

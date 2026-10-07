@@ -1,7 +1,8 @@
 /* Offscreen Rend CPU raster. No window, no Vulkan. */
 
 #include "rend.h"
-#include "peak.c"
+#define PEAK_IMPLEMENTATION
+#include "peak.h"
 #include "rend.c"
 
 #include <stdio.h>
