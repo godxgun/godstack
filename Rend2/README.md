@@ -24,9 +24,12 @@ The explicitly selected device must provide Vulkan 1.4 and the required descript
 From the godstack directory:
 
 ```sh
-./build rend2 run    # build and run the public-API Rend2 workload
-./build snake run    # compile/validate shaders and check repeated offscreen output
-./build rend abi run # native typed-pointer/layout feasibility workload
+./build demo rend2
+demos/rend2/demo
+./build demo snake
+python3 demos/snake/stress.py # repeated offscreen output and shader reflection
+./build demo rend-abi
+python3 demos/rend_abi.py    # native typed-pointer/layout feasibility workload
 
 demos/snake/snake --headless --frames 2 --ppm /tmp/snake.ppm
 demos/snake/snake --device 0

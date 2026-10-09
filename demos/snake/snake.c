@@ -13,15 +13,16 @@
 #include <string.h>
 
 /* Peak defines the native Vulkan platform macros before Vulkan is included. */
-#include "peak.h"
-#include "rend.h"
-#include "grit.h"
+#include "Peak.h"
+#include "../../Rend2.h"
+#define GRIT_IMPLEMENTATION
+#include "Grit.h"
 #include "snake_render.h"
 
 #define PEAK_IMPLEMENTATION
-#include "peak.h"
-#include "rend.c"
-#include "grit.c"
+#include "Peak.h"
+#define REND2_IMPLEMENTATION
+#include "../../Rend2.h"
 #include "snake_render.c"
 
 #define SNAKE_W 16

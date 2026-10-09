@@ -4,8 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../Rend2/rend.h"
-#include "../../Rend2/rend.c"
+#define REND2_IMPLEMENTATION
+#include "../../Rend2.h"
 
 #define DEMO_CYCLES 8
 #define HEAP_BYTES 4096

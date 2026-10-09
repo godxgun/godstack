@@ -1,5 +1,5 @@
-#include "peak.h"
-#include "peak.h"
+#include "Peak.h"
+#include "Peak.h"
 
 uint64_t declaration_a_time(void);
 

@@ -1,5 +1,5 @@
-#include "peak.h"
+#include "Peak.h"
 
 #define PEAK_IMPLEMENTATION
-#include "peak.h"
-#include "peak.h"
+#include "Peak.h"
+#include "Peak.h"

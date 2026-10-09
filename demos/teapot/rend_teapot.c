@@ -1,10 +1,10 @@
-#include "rend.h"
 #define PEAK_IMPLEMENTATION
-#include "peak.h"
-#include "rend.c"
+#include "Peak.h"
+#define REND_IMPLEMENTATION
+#include "Rend.h"
 #include "teapot.h"
-#include "grit.h"
-#include "grit.c"
+#define GRIT_IMPLEMENTATION
+#include "Grit.h"
 #include "demos/headless.h"
 #include <stddef.h>
 #include <stdlib.h>

@@ -11,8 +11,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "cast.h"
-#include "cast.c"
+#define CAST_IMPLEMENTATION
+#include "Cast.h"
 
 #define COOL_PARAM_MAX 64
 #define COOL_NAME_MAX 64

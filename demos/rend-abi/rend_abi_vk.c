@@ -2,7 +2,7 @@
  * Explicit graphics-compute profile, selected device, fixed demo-owned storage.
  * Run ./build rend abi run from godstack. Vulkan 1.4.357+ headers are required.
  * Native/driver/loader/libc allocations are excluded from host-backing counts.
- * Copyright (c) 2026 Vasco Alves. MIT license, as in Rend/rend.h.
+ * Copyright (c) 2026 Vasco Alves. MIT license, as in Rend.h.
  */
 #define _POSIX_C_SOURCE 200809L
 

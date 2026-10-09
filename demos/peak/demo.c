@@ -13,9 +13,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "peak.h"
+#include "Peak.h"
 #define PEAK_IMPLEMENTATION
-#include "peak.h"
+#include "Peak.h"
 
 #define DEMO_CAPACITY 4096
 #define DEMO_SESSIONS 8

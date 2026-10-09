@@ -1,5 +1,5 @@
-#include "peak.h"
-#include "peak.h"
+#include "Peak.h"
+#include "Peak.h"
 
 int declaration_b_alloc(void);
 

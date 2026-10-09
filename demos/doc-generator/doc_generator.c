@@ -16,14 +16,13 @@
 
 static FILE *cool_out;
 #define COOL_OUTPUT cool_out
-
-#include "cool.h"
-#include "cool.c"
+#define COOL_IMPLEMENTATION
+#include "Cool.h"
 
 #include "view.cool.c"
 
-#include "wire.h"
-#include "wire.c"
+#define WIRE_IMPLEMENTATION
+#include "Wire.h"
 
 #define DOCS_PORT 8080
 #define DOCS_MAX 32
@@ -39,15 +38,16 @@ typedef struct Docs {
 } Docs;
 
 static const char *const docs_default[] = {
-	"Cast/cast.h",
-	"Cool/cool.h",
-	"Fuse/fuse.h",
-	"Grit/grit.h",
-	"Peak/peak.h",
-	"Poof/poof.h",
-	"Rend/rend.h",
-	"Term/term.h",
-	"Wire/wire.h",
+	"Cast.h",
+	"Cool.h",
+	"Fuse.h",
+	"Grit.h",
+	"Peak.h",
+	"Poof.h",
+	"Rend.h",
+	"Rend2.h",
+	"Type.h",
+	"Wire.h",
 };
 
 static int parse_header_line(const char *line, char *func_name, char *func_decl, char **comment_out);

@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-header=${1:-Peak/peak.h}
+header=${1:-Peak.h}
 if [ "$(uname -s)" != Linux ]; then
     echo "skip Peak single-header workload (Linux only)"
     exit 0
@@ -12,7 +12,7 @@ source_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
 tmp_dir=$(mktemp -d "${TMPDIR:-/tmp}/peak-header.XXXXXX")
 trap 'rm -rf "$tmp_dir"' EXIT HUP INT TERM
-cp "$header_path" "$tmp_dir/peak.h"
+cp "$header_path" "$tmp_dir/Peak.h"
 cp "$source_dir"/*.c "$tmp_dir/"
 cp "$source_dir/../demo.c" "$tmp_dir/workload.c"
 cd "$tmp_dir"

@@ -1,10 +1,10 @@
 #define _POSIX_C_SOURCE 200809L
 
-#include "../Peak/peak.h"
-#include "../Cast/cast.h"
-#include "../Cast/cast.c"
+#include "../Peak.h"
+#define CAST_IMPLEMENTATION
+#include "../Cast.h"
 #define PEAK_IMPLEMENTATION
-#include "../Peak/peak.h"
+#include "../Peak.h"
 
 #include <stdint.h>
 #include <stdio.h>

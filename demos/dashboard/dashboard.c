@@ -3,16 +3,16 @@
  * 1:1 with the framebuffer (pixel-snapped, one texel per sample).
  */
 
-#include "rend.h"
 #define PEAK_IMPLEMENTATION
-#include "peak.h"
-#include "rend.c"
-#include "fuse.h"
-#include "fuse.c"
-#include "fuse_rend.h"
-#include "fuse_rend.c"
-#include "Type/type.h"
-#include "Type/type.c"
+#include "Peak.h"
+#define REND_IMPLEMENTATION
+#include "Rend.h"
+#define FUSE_IMPLEMENTATION
+#include "Fuse.h"
+#define FUSE_REND_IMPLEMENTATION
+#include "FuseRend.h"
+#define TYPE_IMPLEMENTATION
+#include "Type.h"
 #include "demos/headless.h"
 
 #include <math.h>

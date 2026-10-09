@@ -6,8 +6,8 @@
 
 #include <vulkan/vulkan.h>
 
-#include "rend.h"
-#include "peak.h"
+#include "../../Rend2.h"
+#include "Peak.h"
 #include "snake_gpu.h"
 
 typedef struct SnakeRender {

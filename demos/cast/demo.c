@@ -4,8 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "cast.h"
-#include "cast.c"
+#define CAST_IMPLEMENTATION
+#include "Cast.h"
 
 #define DEMO_PASSES 256
 #define DEMO_MEMORY (1 << 20)

@@ -1,5 +1,5 @@
 #define PEAK_IMPLEMENTATION
-#include "peak.h"
+#include "Peak.h"
 static PeakCtx *peak_demo_ctx;
 
 #include <stdio.h>

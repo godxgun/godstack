@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "rend.h"
+#include "Rend.h"
 
 static int
 headless_parse(int argc, char **argv, int *frames, const char **ppm)

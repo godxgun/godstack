@@ -8,14 +8,15 @@
 #ifndef PEAK_VULKAN
 #define PEAK_VULKAN
 #endif
-#include "../../Peak/peak.h"
-#include "../../Rend/rend.h"
+#include "Peak.h"
+#include "Rend.h"
 
 static PeakCtx *demo_peak;
 
 #define PEAK_IMPLEMENTATION
-#include "../../Peak/peak.h"
-#include "../../Rend/rend.c"
+#include "Peak.h"
+#define REND_IMPLEMENTATION
+#include "Rend.h"
 
 #define WIDTH 64
 #define HEIGHT 64

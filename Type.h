@@ -1,3 +1,421 @@
+/* ===========================================================================
+ * TYPE - Fast font rendering and utf8 parsing - Copyright (c) 2025-2026 Vasco Alves
+ * See LICENSE file for license info.
+ *
+ * UTF-8 in, glyphs and metrics out. Multiple faces, fallbacks, weight,
+ * style, ligatures, CJK, and emoji are in scope. Port of velocitty src/type.zig.
+ *
+ * FEATURES:
+ * - Take either codepoints or UTF-8 bytes. Layout validates UTF-8, then
+ *   walks codepoints.
+ * - Load sfnt fonts (TrueType glyf, or color CBDT/CBLC) and rasterize into
+ *   an atlas:
+ *      - Coverage bitmaps with box-filter antialiasing.
+ *      - Color emoji into a separate RGBA atlas.
+ *      - Glyph metrics, advance, and bearings.
+ *      - Signed-distance bitmaps are declared and return TYPE_ERR_UNIMPLEMENTED.
+ * - East Asian Width (UAX #11) and emoji (UAX #51) for layout.
+ *      - BMP: property table painted from the UAX ranges.
+ *      - Plane 1: compact page map (emoji / kana).
+ *      - Planes 2+: binary search on the same ranges (CJK unified).
+ *
+ * ANTI-FEATURES:
+ * - Does not allocate. Call the memory function, then place into your buffer.
+ * - Does not read files. Font bytes must outlive every face that points at them.
+ * - Does not grow the face list, the fallback list, or the glyph cache.
+ *   Sizes are fixed when the context is placed.
+ *
+ * PREFIX: TYPE_ (macros)  Type (types)  type_ (functions)
+ *
+ * USAGE:
+ *     #include "Type.h"
+ *
+ *     TypeParams params;
+ *     type_params_default(&params);
+ *     unsigned char *buf = ...; // type_memory(&params) bytes
+ *     TypeCtx *type = type_place(buf, type_memory(&params), &params);
+ *     uint32_t id;
+ *     type_add_font(type, bytes, len, NULL, &id);
+ *     TypeGlyph g;
+ *     type_glyph(type, 'A', 16.0f, &g);
+ *
+ * =========================================================================== */
+
+#ifndef TYPE_H
+#define TYPE_H
+
+#define TYPE_MAJOR 0
+#define TYPE_MINOR 1
+#define TYPE_PATCH 0
+
+/* CHANGE LOG
+ * 0.1.0 - @vasco - public API from velocitty type.zig; caller-provided memory
+ */
+
+#include <stddef.h>
+#include <stdint.h>
+
+#define TYPE_DEFAULT_ATLAS_WIDTH  1024u
+#define TYPE_DEFAULT_ATLAS_HEIGHT 1024u
+#define TYPE_DEFAULT_CACHE        2048u
+#define TYPE_DEFAULT_MAX_FACES    8u
+#define TYPE_DEFAULT_MAX_FALLBACK 8u
+
+#define TYPE_ASCII_LO    32u
+#define TYPE_ASCII_HI    126u
+#define TYPE_ASCII_N     (TYPE_ASCII_HI - TYPE_ASCII_LO + 1u)
+#define TYPE_REPLACEMENT 0xFFFDu
+
+/* GlyphKey.flags. Bold is bit 0, italic is bit 1. */
+#define TYPE_STYLE_BOLD    1u
+#define TYPE_STYLE_ITALIC  2u
+
+typedef struct TypeTTF TypeTTF;     /* Parsed TrueType (glyf) file. t_ttf.c */
+typedef struct TypeOTF TypeOTF;     /* Parsed OpenType / CFF file. t_otf.c */
+typedef struct TypeFont TypeFont;   /* Face view: parsed file + weight + style. Borrows the file. */
+typedef struct TypeAtlas TypeAtlas; /* Shelf-packed coverage atlas. */
+typedef struct TypeAtlasRgba TypeAtlasRgba;
+typedef struct TypeCtx TypeCtx;     /* Faces, fallbacks, atlases, glyph LRU. */
+
+typedef enum {
+	TYPE_OK = 0,
+	TYPE_ERR_INVALID_FONT,
+	TYPE_ERR_UNSUPPORTED_TABLE,
+	TYPE_ERR_GLYPH_NOT_FOUND,
+	TYPE_ERR_ATLAS_FULL,
+	TYPE_ERR_INVALID_UTF8,
+	TYPE_ERR_UNIMPLEMENTED,
+	TYPE_ERR_BUF_TOO_SMALL,
+} TypeError;
+
+typedef enum {
+	TYPE_AA_NONE = 0, /* binary coverage */
+	TYPE_AA_BOX = 1,  /* box-filter antialiasing */
+	TYPE_AA_SDF = 2,  /* signed distance; raster returns TYPE_ERR_UNIMPLEMENTED */
+} TypeAntiAlias;
+
+/* CSS-ish usWeightClass. Any u16 is legal; these are the named stops. */
+typedef enum {
+	TYPE_WEIGHT_THIN        = 100,
+	TYPE_WEIGHT_EXTRA_LIGHT = 200,
+	TYPE_WEIGHT_LIGHT       = 300,
+	TYPE_WEIGHT_REGULAR     = 400,
+	TYPE_WEIGHT_MEDIUM      = 500,
+	TYPE_WEIGHT_SEMI_BOLD   = 600,
+	TYPE_WEIGHT_BOLD        = 700,
+	TYPE_WEIGHT_EXTRA_BOLD  = 800,
+	TYPE_WEIGHT_BLACK       = 900,
+} TypeWeight;
+
+/* UAX #11. Neutral is the default outside the wide and ambiguous ranges. */
+typedef enum {
+	TYPE_WIDTH_NARROW = 0,
+	TYPE_WIDTH_WIDE,
+	TYPE_WIDTH_AMBIGUOUS,
+	TYPE_WIDTH_NEUTRAL,
+} TypeWidth;
+
+typedef struct TypeStyle {
+	uint8_t italic;
+	uint8_t bold;
+} TypeStyle;
+
+/* weight 0 means "unset": bold style selects TYPE_WEIGHT_BOLD, otherwise REGULAR. */
+typedef struct TypeFaceParams {
+	uint16_t weight;
+	TypeStyle style;
+} TypeFaceParams;
+
+/*
+ * atlas_* and cache_capacity must be > 0 (type_params_default fills the
+ * velocitty defaults). max_faces and max_fallbacks bound storage inside the
+ * context buffer. ligatures is stored for shaping; this API does not apply
+ * GSUB yet. color_emoji 0 drops CBDT/CBLC on add. antialias is TypeAntiAlias.
+ */
+typedef struct TypeParams {
+	uint32_t atlas_width;
+	uint32_t atlas_height;
+	uint32_t cache_capacity;
+	uint32_t max_faces;
+	uint32_t max_fallbacks;
+	uint8_t  ligatures;
+	uint8_t  color_emoji;
+	uint8_t  antialias;
+} TypeParams;
+
+typedef struct TypeMetrics {
+	float ascender;
+	float descender;
+	float line_gap;
+	uint16_t units_per_em;
+} TypeMetrics;
+
+/* pixels is coverage (1 byte) or straight RGBA8 (4 bytes) when color != 0.
+ * advance is pixels at the requested size. Bearing is the bitmap origin
+ * relative to the pen, y up. */
+typedef struct TypeBitmap {
+	uint16_t width;
+	uint16_t height;
+	int16_t  bearing_x;
+	int16_t  bearing_y;
+	uint16_t advance;
+	uint8_t *pixels;
+	uint8_t  color;
+} TypeBitmap;
+
+typedef struct TypeGlyph {
+	uint32_t font_id;
+	uint16_t glyph_id;
+	float    advance;
+	float    bearing_x;
+	float    bearing_y;
+	uint16_t width;
+	uint16_t height;
+	uint16_t atlas_x;
+	uint16_t atlas_y;
+	uint8_t  color; /* 0 coverage atlas, 1 color atlas */
+} TypeGlyph;
+
+typedef struct TypeCell {
+	TypeGlyph glyph;
+	float x;
+	float y;
+	uint32_t codepoint;
+} TypeCell;
+
+typedef struct TypeGlyphKey {
+	uint32_t font_id;
+	uint32_t glyph_id;
+	uint16_t size_px;
+	uint16_t flags; /* TYPE_STYLE_BOLD | TYPE_STYLE_ITALIC */
+} TypeGlyphKey;
+
+typedef struct TypeGlyphStats {
+	uint64_t hits;
+	uint64_t misses;
+	uint64_t raster_ns;
+	uint64_t atlas_ns;
+} TypeGlyphStats;
+
+typedef struct TypeRect {
+	uint32_t x, y, w, h;
+} TypeRect;
+
+
+void type_params_default(TypeParams *params);           /* 1024^2 atlas, 2048 cache, 8 faces, ligatures, color emoji, box AA. */
+void type_face_params_default(TypeFaceParams *face);    /* weight unset, roman. */
+
+/* ---------------------------------------------------------------------------
+ * Parsed files. Bytes are borrowed for the life of the placed object.
+ * Type.h implementation
+ * ------------------------------------------------------------------------- */
+
+size_t type_ttf_memory(void);
+size_t type_otf_memory(void);
+
+TypeTTF *type_ttf_place(void *buf, size_t bufsize, const void *bytes, size_t len); /* NULL on short buf or invalid font. */
+TypeOTF *type_otf_place(void *buf, size_t bufsize, const void *bytes, size_t len);
+
+TypeError type_ttf_error(const TypeTTF *font); /* TYPE_OK, or why place failed. place(NULL buf) is not required. */
+TypeError type_otf_error(const TypeOTF *font);
+
+int type_ttf_outline(const TypeTTF *font);     /* 1 when glyf outlines are usable. */
+int type_otf_outline(const TypeOTF *font);
+int type_ttf_color(const TypeTTF *font);       /* 1 when a CBDT/CBLC face was parsed. */
+int type_otf_color(const TypeOTF *font);
+
+/* ---------------------------------------------------------------------------
+ * Face. Borrows the placed file; does not copy glyph bytes.
+ * ------------------------------------------------------------------------- */
+
+size_t type_font_memory(void);
+
+TypeFont *type_font_from_ttf(void *buf, size_t bufsize, const TypeTTF *ttf, const TypeFaceParams *face);
+TypeFont *type_font_from_otf(void *buf, size_t bufsize, const TypeOTF *otf, const TypeFaceParams *face);
+
+uint16_t type_font_weight(const TypeFont *font);
+TypeStyle type_font_style(const TypeFont *font);
+
+TypeError type_font_metrics(const TypeFont *font, float size_px, TypeMetrics *out);
+TypeError type_font_glyph_index(const TypeFont *font, uint32_t codepoint, uint16_t *out_gid); /* TYPE_ERR_GLYPH_NOT_FOUND when unmapped. .notdef is not a hit. */
+TypeError type_font_advance(const TypeFont *font, uint16_t glyph_id, uint16_t *out_fu);       /* font units */
+int type_font_has_drawable(const TypeFont *font, uint16_t glyph_id);                          /* 1 outline or color bitmap */
+
+/* Fill everything except pixels. Use type_bitmap_bytes to size the caller buffer. */
+TypeError type_font_bitmap_info(const TypeFont *font, uint16_t glyph_id, float size_px, TypeBitmap *out);
+size_t type_bitmap_bytes(const TypeBitmap *info); /* width*height, or *4 when color */
+
+/* pixels must hold type_bitmap_bytes of the info at this size. Empty glyphs
+ * (width or height 0) succeed and leave pixels untouched. */
+TypeError type_font_render_bitmap(const TypeFont *font, uint16_t glyph_id, float size_px, TypeAntiAlias aa, void *pixels, size_t len, TypeBitmap *out);
+TypeError type_font_render_sdf(const TypeFont *font, uint16_t glyph_id, float size_px, void *pixels, size_t len, TypeBitmap *out);
+
+/* ---------------------------------------------------------------------------
+ * Shelf atlas. One byte per pixel, or one u32 (straight RGBA8) for color.
+ * Storage is width*height samples inside the same buffer as the header.
+ * ------------------------------------------------------------------------- */
+
+size_t type_atlas_memory(uint32_t width, uint32_t height);
+size_t type_atlas_rgba_memory(uint32_t width, uint32_t height);
+
+TypeAtlas *type_atlas_place(void *buf, size_t bufsize, uint32_t width, uint32_t height);
+TypeAtlasRgba *type_atlas_rgba_place(void *buf, size_t bufsize, uint32_t width, uint32_t height);
+
+const uint8_t *type_atlas_pixels(const TypeAtlas *atlas, uint32_t *width, uint32_t *height);
+const uint32_t *type_atlas_rgba_pixels(const TypeAtlasRgba *atlas, uint32_t *width, uint32_t *height);
+
+int  type_atlas_pack(TypeAtlas *atlas, uint32_t w, uint32_t h, TypeRect *out);           /* 1 placed, 0 does not fit */
+int  type_atlas_rgba_pack(TypeAtlasRgba *atlas, uint32_t w, uint32_t h, TypeRect *out);
+void type_atlas_blit(TypeAtlas *atlas, const TypeRect *rect, const uint8_t *src);       /* src is w*h coverage */
+void type_atlas_rgba_blit(TypeAtlasRgba *atlas, const TypeRect *rect, const uint8_t *src); /* src is w*h*4 */
+void type_atlas_clear(TypeAtlas *atlas);
+void type_atlas_rgba_clear(TypeAtlasRgba *atlas);
+
+/*
+ * Context reserves memory for all our needs,
+ * based on the parameters we pass to it.
+ *
+ * NOTE(vasco): First added face becomes primary. A bold+italic face is remembered
+ * as bold-italic; a bold face as bold; an italic face as italic. Later adds
+ * of the same kind replace that slot. Fallback order is the set_fallbacks list.
+ *
+ * Resolve: color emoji prefers a color fallback, then the style face
+ * (bold-italic, else italic, else bold), then primary, then fallbacks.
+ * A miss draws the primary .notdef (glyph id 0).
+ *
+ * Printable ASCII (32..126) and U+FFFD at the current pixel size bypass the
+ * LRU. Styled lookups always use the LRU. Changing size drops those slots
+ * and warms ASCII again.
+ */
+size_t type_memory(const TypeParams *params); /* 0 when params are unusable. */
+TypeCtx *type_place(void *buf, size_t bufsize, const TypeParams *params);
+
+TypeError type_add_font(TypeCtx *ctx, const void *bytes, size_t len, const TypeFaceParams *face, uint32_t *out_id);
+void type_clear_fonts(TypeCtx *ctx); /* Drops faces. Font bytes may be freed after this returns. */
+void type_select(TypeCtx *ctx, uint32_t font_id);
+TypeError type_set_fallbacks(TypeCtx *ctx, const uint32_t *ids, uint32_t count);
+
+/* Coverage pixel revision; cache hits/packing alone do not change it.
+ * Non-consuming: each GPU consumer keeps its own last uploaded revision. */
+uint64_t type_ctx_atlas_revision(const TypeCtx *ctx);
+const uint8_t *type_ctx_atlas(const TypeCtx *ctx, uint32_t *width, uint32_t *height);
+const uint32_t *type_ctx_color_atlas(const TypeCtx *ctx, uint32_t *width, uint32_t *height);
+
+TypeError type_metrics(const TypeCtx *ctx, float size_px, TypeMetrics *out);
+
+/* Cache probe only. Does not rasterize, does not move the LRU, does not bump stats.
+ * TYPE_ERR_GLYPH_NOT_FOUND when the size does not match the ASCII cache or the key is cold. */
+TypeError type_peek_glyph(const TypeCtx *ctx, uint32_t codepoint, float size_px, TypeGlyph *out);
+TypeError type_peek_glyph_styled(const TypeCtx *ctx, uint32_t codepoint, float size_px, TypeStyle style, TypeGlyph *out);
+TypeError type_glyph(TypeCtx *ctx, uint32_t codepoint, float size_px, TypeGlyph *out);
+TypeError type_glyph_styled(TypeCtx *ctx, uint32_t codepoint, float size_px, TypeStyle style, TypeGlyph *out);
+TypeError type_warm_ascii(TypeCtx *ctx, float size_px);
+
+/* Clear both atlases and the LRU, then warm ASCII at the last size. */
+void type_clear_atlas(TypeCtx *ctx);
+
+/* One line at baseline y = 0. x advances by glyph.advance. No wrap, no bidi.
+ * On TYPE_ERR_BUF_TOO_SMALL, *written is cap and *bytes_used is the next
+ * unconsumed byte. On TYPE_ERR_INVALID_UTF8, *bytes_used is the bad byte and
+ * cells before it are kept. Both out-counts may be NULL. */
+TypeError type_layout_utf8(TypeCtx *ctx, const char *text, size_t len, float size_px, TypeCell *out, uint32_t cap, uint32_t *written, size_t *bytes_used);
+
+void type_stats(const TypeCtx *ctx, TypeGlyphStats *out);
+
+/* ---------------------------------------------------------------------------
+ * UTF-8. type_utf8_next returns the byte length, or 0 when the sequence is
+ * short or illegal (*codepoint is unchanged).
+ * ------------------------------------------------------------------------- */
+
+uint32_t type_utf8_next(const char *s, size_t len, uint32_t *codepoint);
+int      type_utf8_validate(const char *s, size_t len); /* 1 valid, 0 not */
+
+/* ---------------------------------------------------------------------------
+ * East Asian width and emoji class. cell width is 1 or 2.
+ * ------------------------------------------------------------------------- */
+
+TypeWidth type_width(uint32_t codepoint);
+int type_is_cjk(uint32_t codepoint);
+int type_is_emoji(uint32_t codepoint);
+int type_cell_width(uint32_t codepoint);
+int type_is_combining(uint32_t codepoint);
+
+#endif /* TYPE_H */
+
+#if defined(TYPE_IMPLEMENTATION) && !defined(TYPE_IMPLEMENTATION_ONCE)
+#define TYPE_IMPLEMENTATION_ONCE
+/* t_ttf.c - TrueType glyf faces. Copyright (c) 2025-2026 Vasco Alves
+ * Raster is stb_truetype. Shape scratch is a fixed buffer, reset each call.
+ * Font bytes are borrowed for the life of the placed face.
+ */
+
+#include <stddef.h>
+#include <stdint.h>
+#include <string.h>
+
+
+static unsigned char ttf_scratch[1 << 20];
+static size_t ttf_scratch_used;
+
+static void *ttf_scratch_alloc(size_t size, void *user);
+static void ttf_scratch_free(void *p, void *user);
+static void ttf_scratch_reset(void);
+static int16_t ttf_clamp_i16(int v);
+static uint16_t ttf_upem(const struct TypeTTF *font);
+
+static void *
+ttf_scratch_alloc(size_t size, void *user)
+{
+	size_t n;
+	void *p;
+
+	(void)user;
+	n = (size + 15u) & ~(size_t)15u;
+	if (n < size || ttf_scratch_used + n > sizeof ttf_scratch)
+		return NULL;
+	p = ttf_scratch + ttf_scratch_used;
+	ttf_scratch_used += n;
+	return p;
+}
+
+static void
+ttf_scratch_free(void *p, void *user)
+{
+	(void)p;
+	(void)user;
+}
+
+static void
+ttf_scratch_reset(void)
+{
+	ttf_scratch_used = 0;
+}
+
+#ifndef STBTT_malloc
+#define STBTT_malloc(size, user) ttf_scratch_alloc(size, user)
+#define TYPE_DEFINED_STBTT_MALLOC
+#endif
+#ifndef STBTT_free
+#define STBTT_free(p, user) ttf_scratch_free(p, user)
+#define TYPE_DEFINED_STBTT_FREE
+#endif
+#ifndef STBTT_STATIC
+#define STBTT_STATIC
+#define TYPE_DEFINED_STBTT_STATIC
+#endif
+#ifndef STB_TRUETYPE_IMPLEMENTATION
+#define STB_TRUETYPE_IMPLEMENTATION
+#define TYPE_DEFINED_STB_TRUETYPE_IMPLEMENTATION
+#endif
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wall"
+#pragma GCC diagnostic ignored "-Wextra"
+#pragma GCC diagnostic ignored "-Wunused-function"
+#pragma GCC diagnostic ignored "-Wsign-compare"
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#pragma GCC diagnostic ignored "-Wcast-qual"
+#pragma GCC diagnostic ignored "-Wdouble-promotion"
+#pragma GCC diagnostic ignored "-Wimplicit-fallthrough"
 // stb_truetype.h v1.26 public domain. Sean Barrett / RAD Game Tools 2009-2021.
 //
 // =======================================================================
@@ -4531,3 +4949,1350 @@ STBTT_DEF int stbtt_CompareUTF8toUTF16_bigendian(const char *s1, int len1, const
 
 #endif 
 
+
+#pragma GCC diagnostic pop
+
+#ifdef TYPE_DEFINED_STBTT_MALLOC
+#undef STBTT_malloc
+#undef TYPE_DEFINED_STBTT_MALLOC
+#endif
+#ifdef TYPE_DEFINED_STBTT_FREE
+#undef STBTT_free
+#undef TYPE_DEFINED_STBTT_FREE
+#endif
+#ifdef TYPE_DEFINED_STBTT_STATIC
+#undef STBTT_STATIC
+#undef TYPE_DEFINED_STBTT_STATIC
+#endif
+#ifdef TYPE_DEFINED_STB_TRUETYPE_IMPLEMENTATION
+#undef STB_TRUETYPE_IMPLEMENTATION
+#undef TYPE_DEFINED_STB_TRUETYPE_IMPLEMENTATION
+#endif
+
+struct TypeTTF {
+	const uint8_t *bytes;
+	size_t len;
+	TypeError err;
+	int outline;
+	uint16_t units_per_em;
+	int16_t ascent;
+	int16_t descent;
+	int16_t line_gap;
+	int num_glyphs;
+	stbtt_fontinfo info;
+};
+
+struct TypeFont {
+	const struct TypeTTF *ttf;
+	uint16_t weight;
+	TypeStyle style;
+};
+
+static int16_t
+ttf_clamp_i16(int v)
+{
+	if (v > 32767)
+		return 32767;
+	if (v < -32768)
+		return (int16_t)-32768;
+	return (int16_t)v;
+}
+
+static uint16_t
+ttf_upem(const struct TypeTTF *font)
+{
+	const uint8_t *p;
+
+	if (!font || !font->info.data || font->info.head <= 0)
+		return 0;
+	p = font->info.data + font->info.head + 18;
+	return (uint16_t)((p[0] << 8) | p[1]);
+}
+
+size_t
+type_ttf_memory(void)
+{
+	return sizeof (struct TypeTTF);
+}
+
+TypeTTF *
+type_ttf_place(void *buf, size_t bufsize, const void *bytes, size_t len)
+{
+	struct TypeTTF *font;
+	int ascent, descent, gap;
+	int offset;
+
+	if (!buf || bufsize < sizeof (struct TypeTTF) || !bytes || len < 12)
+		return NULL;
+	font = buf;
+	memset(font, 0, sizeof *font);
+	font->bytes = bytes;
+	font->len = len;
+	font->err = TYPE_ERR_INVALID_FONT;
+	offset = stbtt_GetFontOffsetForIndex(bytes, 0);
+	if (offset < 0)
+		return NULL;
+	ttf_scratch_reset();
+	if (!stbtt_InitFont(&font->info, (const unsigned char *)bytes, offset))
+		return NULL;
+	if (!font->info.glyf)
+		return NULL;
+	font->units_per_em = ttf_upem(font);
+	if (font->units_per_em == 0)
+		return NULL;
+	stbtt_GetFontVMetrics(&font->info, &ascent, &descent, &gap);
+	font->ascent = ttf_clamp_i16(ascent);
+	font->descent = ttf_clamp_i16(descent);
+	font->line_gap = ttf_clamp_i16(gap);
+	font->num_glyphs = font->info.numGlyphs;
+	font->outline = 1;
+	font->err = TYPE_OK;
+	return font;
+}
+
+TypeError
+type_ttf_error(const TypeTTF *font)
+{
+	if (!font)
+		return TYPE_ERR_INVALID_FONT;
+	return font->err;
+}
+
+int
+type_ttf_outline(const TypeTTF *font)
+{
+	return font && font->outline;
+}
+
+int
+type_ttf_color(const TypeTTF *font)
+{
+	(void)font;
+	return 0;
+}
+
+size_t
+type_font_memory(void)
+{
+	return sizeof (struct TypeFont);
+}
+
+TypeFont *
+type_font_from_ttf(void *buf, size_t bufsize, const TypeTTF *ttf, const TypeFaceParams *face)
+{
+	struct TypeFont *font;
+	TypeFaceParams def;
+
+	if (!buf || bufsize < sizeof (struct TypeFont) || !ttf || ttf->err != TYPE_OK)
+		return NULL;
+	if (!face) {
+		type_face_params_default(&def);
+		face = &def;
+	}
+	font = buf;
+	memset(font, 0, sizeof *font);
+	font->ttf = ttf;
+	font->style = face->style;
+	if (face->weight)
+		font->weight = face->weight;
+	else if (face->style.bold)
+		font->weight = TYPE_WEIGHT_BOLD;
+	else
+		font->weight = TYPE_WEIGHT_REGULAR;
+	return font;
+}
+
+uint16_t
+type_font_weight(const TypeFont *font)
+{
+	if (!font)
+		return 0;
+	return font->weight;
+}
+
+TypeStyle
+type_font_style(const TypeFont *font)
+{
+	TypeStyle style;
+
+	memset(&style, 0, sizeof style);
+	if (!font)
+		return style;
+	return font->style;
+}
+
+TypeError
+type_font_metrics(const TypeFont *font, float size_px, TypeMetrics *out)
+{
+	float scale;
+
+	if (!font || !font->ttf || !out || !(size_px > 0.0f))
+		return TYPE_ERR_INVALID_FONT;
+	scale = size_px / (float)font->ttf->units_per_em;
+	out->ascender = (float)font->ttf->ascent * scale;
+	out->descender = (float)font->ttf->descent * scale;
+	out->line_gap = (float)font->ttf->line_gap * scale;
+	out->units_per_em = font->ttf->units_per_em;
+	return TYPE_OK;
+}
+
+TypeError
+type_font_glyph_index(const TypeFont *font, uint32_t codepoint, uint16_t *out_gid)
+{
+	int g;
+
+	if (!font || !font->ttf || !out_gid)
+		return TYPE_ERR_INVALID_FONT;
+	if (codepoint > 0x10FFFFu)
+		return TYPE_ERR_GLYPH_NOT_FOUND;
+	g = stbtt_FindGlyphIndex(&font->ttf->info, (int)codepoint);
+	if (g <= 0)
+		return TYPE_ERR_GLYPH_NOT_FOUND;
+	*out_gid = (uint16_t)g;
+	return TYPE_OK;
+}
+
+TypeError
+type_font_advance(const TypeFont *font, uint16_t glyph_id, uint16_t *out_fu)
+{
+	int adv, lsb;
+
+	if (!font || !font->ttf || !out_fu)
+		return TYPE_ERR_INVALID_FONT;
+	if (glyph_id >= font->ttf->num_glyphs)
+		return TYPE_ERR_GLYPH_NOT_FOUND;
+	stbtt_GetGlyphHMetrics(&font->ttf->info, glyph_id, &adv, &lsb);
+	if (adv < 0)
+		adv = 0;
+	if (adv > 65535)
+		adv = 65535;
+	*out_fu = (uint16_t)adv;
+	(void)lsb;
+	return TYPE_OK;
+}
+
+int
+type_font_has_drawable(const TypeFont *font, uint16_t glyph_id)
+{
+	int x0, y0, x1, y1;
+
+	if (!font || !font->ttf || glyph_id >= font->ttf->num_glyphs)
+		return 0;
+	if (!stbtt_GetGlyphBox(&font->ttf->info, glyph_id, &x0, &y0, &x1, &y1))
+		return 0;
+	return x0 < x1 && y0 < y1;
+}
+
+TypeError
+type_font_bitmap_info(const TypeFont *font, uint16_t glyph_id, float size_px, TypeBitmap *out)
+{
+	float scale;
+	int x0, y0, x1, y1;
+	int adv, lsb;
+	int w, h;
+	uint16_t fu;
+
+	if (!font || !font->ttf || !out || !(size_px > 0.0f))
+		return TYPE_ERR_INVALID_FONT;
+	if (glyph_id >= font->ttf->num_glyphs)
+		return TYPE_ERR_GLYPH_NOT_FOUND;
+	memset(out, 0, sizeof *out);
+	scale = stbtt_ScaleForMappingEmToPixels(&font->ttf->info, size_px);
+	stbtt_GetGlyphHMetrics(&font->ttf->info, glyph_id, &adv, &lsb);
+	if (adv < 0)
+		adv = 0;
+	fu = (uint16_t)(adv > 65535 ? 65535 : adv);
+	out->advance = (uint16_t)(fu * scale + 0.5f);
+	stbtt_GetGlyphBitmapBox(&font->ttf->info, glyph_id, scale, scale, &x0, &y0, &x1, &y1);
+	w = x1 - x0;
+	h = y1 - y0;
+	if (w <= 0 || h <= 0)
+		return TYPE_OK;
+	if (w > 65535 || h > 65535)
+		return TYPE_ERR_INVALID_FONT;
+	out->width = (uint16_t)w;
+	out->height = (uint16_t)h;
+	out->bearing_x = ttf_clamp_i16(x0);
+	out->bearing_y = ttf_clamp_i16(-y0);
+	return TYPE_OK;
+}
+
+size_t
+type_bitmap_bytes(const TypeBitmap *info)
+{
+	size_t n;
+
+	if (!info)
+		return 0;
+	n = (size_t)info->width * (size_t)info->height;
+	if (info->color)
+		n *= 4;
+	return n;
+}
+
+TypeError
+type_font_render_bitmap(const TypeFont *font, uint16_t glyph_id, float size_px, TypeAntiAlias aa, void *pixels, size_t len, TypeBitmap *out)
+{
+	TypeBitmap info;
+	TypeError err;
+	float scale;
+	size_t need;
+	size_t i;
+	uint8_t *dst;
+
+	if (aa == TYPE_AA_SDF)
+		return TYPE_ERR_UNIMPLEMENTED;
+	err = type_font_bitmap_info(font, glyph_id, size_px, &info);
+	if (err != TYPE_OK)
+		return err;
+	need = type_bitmap_bytes(&info);
+	if (need == 0) {
+		if (out)
+			*out = info;
+		return TYPE_OK;
+	}
+	if (!pixels || len < need)
+		return TYPE_ERR_BUF_TOO_SMALL;
+	scale = stbtt_ScaleForMappingEmToPixels(&font->ttf->info, size_px);
+	ttf_scratch_reset();
+	dst = pixels;
+	stbtt_MakeGlyphBitmap(&font->ttf->info, dst, info.width, info.height, info.width, scale, scale, glyph_id);
+	if (aa == TYPE_AA_NONE) {
+		for (i = 0; i < need; i++)
+			dst[i] = dst[i] > 127 ? 255 : 0;
+	}
+	info.pixels = dst;
+	if (out)
+		*out = info;
+	return TYPE_OK;
+}
+
+TypeError
+type_font_render_sdf(const TypeFont *font, uint16_t glyph_id, float size_px, void *pixels, size_t len, TypeBitmap *out)
+{
+	(void)font;
+	(void)glyph_id;
+	(void)size_px;
+	(void)pixels;
+	(void)len;
+	(void)out;
+	return TYPE_ERR_UNIMPLEMENTED;
+}
+
+/* t_otf.c - OpenType / CFF faces. Copyright (c) 2025-2026 Vasco Alves
+ * CFF outlines are not implemented yet.
+ */
+
+
+size_t
+type_otf_memory(void)
+{
+	return 0;
+}
+
+TypeOTF *
+type_otf_place(void *buf, size_t bufsize, const void *bytes, size_t len)
+{
+	(void)buf;
+	(void)bufsize;
+	(void)bytes;
+	(void)len;
+	return NULL;
+}
+
+TypeError
+type_otf_error(const TypeOTF *font)
+{
+	(void)font;
+	return TYPE_ERR_UNIMPLEMENTED;
+}
+
+int
+type_otf_outline(const TypeOTF *font)
+{
+	(void)font;
+	return 0;
+}
+
+int
+type_otf_color(const TypeOTF *font)
+{
+	(void)font;
+	return 0;
+}
+
+TypeFont *
+type_font_from_otf(void *buf, size_t bufsize, const TypeOTF *otf, const TypeFaceParams *face)
+{
+	(void)buf;
+	(void)bufsize;
+	(void)otf;
+	(void)face;
+	return NULL;
+}
+
+/* type.c - Faces, atlas, and UTF-8 layout. Copyright (c) 2025-2026 Vasco Alves
+ * Caller provides the buffer from type_memory. Font bytes are borrowed.
+ */
+
+#include <stddef.h>
+#include <stdint.h>
+#include <string.h>
+#include <time.h>
+
+
+
+#define TYPE_NONE 0xFFFFFFFFu
+
+typedef struct CacheSlot {
+	TypeGlyphKey key;
+	TypeGlyph glyph;
+	uint32_t stamp;
+	uint8_t used;
+} CacheSlot;
+
+typedef struct FaceRec {
+	TypeTTF *ttf;
+	TypeFont *font;
+	uint32_t id;
+} FaceRec;
+
+struct TypeCtx {
+	TypeParams params;
+	uint32_t nfaces;
+	uint32_t primary;
+	uint32_t bold;
+	uint32_t italic;
+	uint32_t bold_italic;
+	uint32_t fallbacks[TYPE_DEFAULT_MAX_FALLBACK];
+	uint32_t nfallbacks;
+	uint16_t ascii_size;
+	uint8_t warming;
+	uint8_t ascii_ok[TYPE_ASCII_N];
+	uint8_t replacement_ok;
+	TypeGlyph ascii[TYPE_ASCII_N];
+	TypeGlyph replacement;
+	TypeGlyphStats stats;
+	uint64_t atlas_revision;
+	uint32_t aw, ah;
+	uint32_t shelf_x, shelf_y, shelf_h;
+	uint8_t *cov;
+	uint32_t *rgba;
+	uint32_t cache_n;
+	uint32_t stamp;
+	CacheSlot *cache;
+	uint8_t *scratch;
+	size_t scratch_n;
+	FaceRec *faces;
+	unsigned char *bytes;
+	size_t face_stride;
+};
+
+typedef struct TypeLayout {
+	size_t total;
+	size_t faces;
+	size_t cov;
+	size_t rgba;
+	size_t cache;
+	size_t scratch;
+	size_t scratch_n;
+	size_t face_stride;
+	size_t face_bytes;
+} TypeLayout;
+
+static size_t type_align(size_t v, size_t a);
+static int type_layout(const TypeParams *params, TypeLayout *lay);
+static uint16_t type_size_px(float size_px);
+static void type_atlas_reset(struct TypeCtx *ctx);
+static int type_pack(struct TypeCtx *ctx, uint32_t w, uint32_t h, TypeRect *out);
+static FaceRec *type_face(const struct TypeCtx *ctx, uint32_t id);
+static TypeError type_raster(struct TypeCtx *ctx, FaceRec *face, uint16_t gid, uint16_t size_u, TypeGlyph *out);
+static TypeError type_resolve(struct TypeCtx *ctx, uint32_t codepoint, TypeStyle style, FaceRec **face, uint16_t *gid);
+static uint64_t type_now_ns(void);
+static int type_cache_find(struct TypeCtx *ctx, const TypeGlyphKey *key, TypeGlyph *out, int touch);
+static void type_cache_put(struct TypeCtx *ctx, const TypeGlyphKey *key, const TypeGlyph *glyph);
+static void type_ascii_stash(struct TypeCtx *ctx);
+
+static size_t
+type_align(size_t v, size_t a)
+{
+	return (v + a - 1u) & ~(a - 1u);
+}
+
+static int
+type_layout(const TypeParams *params, TypeLayout *lay)
+{
+	size_t o;
+	if (!params || !lay)
+		return 0;
+	if (params->atlas_width == 0 || params->atlas_height == 0 || params->cache_capacity == 0)
+		return 0;
+	if (params->max_faces == 0)
+		return 0;
+	memset(lay, 0, sizeof *lay);
+	lay->face_stride = type_align(type_ttf_memory(), 16) + type_align(type_font_memory(), 16);
+	o = type_align(sizeof (struct TypeCtx), 16);
+	lay->faces = o;
+	o = type_align(o + (size_t)params->max_faces * sizeof (FaceRec), 16);
+	lay->face_bytes = o;
+	o = type_align(o + (size_t)params->max_faces * lay->face_stride, 16);
+	lay->cov = o;
+	o = type_align(o + (size_t)params->atlas_width * (size_t)params->atlas_height, 16);
+	lay->rgba = o;
+	o = type_align(o + (size_t)params->atlas_width * (size_t)params->atlas_height * 4u, 16);
+	lay->cache = o;
+	o = type_align(o + (size_t)params->cache_capacity * sizeof (CacheSlot), 16);
+	lay->scratch = o;
+	lay->scratch_n = 256u * 256u;
+	o += lay->scratch_n;
+	lay->total = o;
+	return 1;
+}
+
+void
+type_params_default(TypeParams *params)
+{
+	if (!params)
+		return;
+	memset(params, 0, sizeof *params);
+	params->atlas_width = TYPE_DEFAULT_ATLAS_WIDTH;
+	params->atlas_height = TYPE_DEFAULT_ATLAS_HEIGHT;
+	params->cache_capacity = TYPE_DEFAULT_CACHE;
+	params->max_faces = TYPE_DEFAULT_MAX_FACES;
+	params->max_fallbacks = TYPE_DEFAULT_MAX_FALLBACK;
+	params->ligatures = 1;
+	params->color_emoji = 1;
+	params->antialias = TYPE_AA_BOX;
+}
+
+void
+type_face_params_default(TypeFaceParams *face)
+{
+	if (!face)
+		return;
+	memset(face, 0, sizeof *face);
+}
+
+size_t
+type_memory(const TypeParams *params)
+{
+	TypeLayout lay;
+
+	if (!type_layout(params, &lay))
+		return 0;
+	return lay.total;
+}
+
+TypeCtx *
+type_place(void *buf, size_t bufsize, const TypeParams *params)
+{
+	struct TypeCtx *ctx;
+	TypeLayout lay;
+	unsigned char *base;
+
+	if (!buf || !type_layout(params, &lay) || bufsize < lay.total)
+		return NULL;
+	memset(buf, 0, lay.total);
+	base = buf;
+	ctx = buf;
+	ctx->params = *params;
+	if (ctx->params.max_fallbacks > TYPE_DEFAULT_MAX_FALLBACK)
+		ctx->params.max_fallbacks = TYPE_DEFAULT_MAX_FALLBACK;
+	ctx->primary = TYPE_NONE;
+	ctx->bold = TYPE_NONE;
+	ctx->italic = TYPE_NONE;
+	ctx->bold_italic = TYPE_NONE;
+	ctx->atlas_revision = 1;
+	ctx->aw = params->atlas_width;
+	ctx->ah = params->atlas_height;
+	ctx->bytes = base;
+	ctx->face_stride = lay.face_stride;
+	ctx->faces = (FaceRec *)(base + lay.faces);
+	ctx->cov = base + lay.cov;
+	ctx->rgba = (uint32_t *)(base + lay.rgba);
+	ctx->cache = (CacheSlot *)(base + lay.cache);
+	ctx->cache_n = params->cache_capacity;
+	ctx->scratch = base + lay.scratch;
+	ctx->scratch_n = lay.scratch_n;
+	return ctx;
+}
+
+static uint16_t
+type_size_px(float size_px)
+{
+	uint32_t s;
+
+	if (!(size_px > 0.0f))
+		return 0;
+	s = (uint32_t)(size_px + 0.5f);
+	if (s < 1)
+		s = 1;
+	if (s > 65535)
+		s = 65535;
+	return (uint16_t)s;
+}
+
+static void
+type_atlas_reset(struct TypeCtx *ctx)
+{
+	ctx->atlas_revision++;
+	memset(ctx->cov, 0, (size_t)ctx->aw * (size_t)ctx->ah);
+	memset(ctx->rgba, 0, (size_t)ctx->aw * (size_t)ctx->ah * 4u);
+	memset(ctx->cache, 0, (size_t)ctx->cache_n * sizeof (CacheSlot));
+	memset(ctx->ascii_ok, 0, sizeof ctx->ascii_ok);
+	ctx->replacement_ok = 0;
+	ctx->shelf_x = 0;
+	ctx->shelf_y = 0;
+	ctx->shelf_h = 0;
+	ctx->stamp = 1;
+}
+
+static int
+type_pack(struct TypeCtx *ctx, uint32_t w, uint32_t h, TypeRect *out)
+{
+	uint32_t pw, ph;
+
+	pw = w + 1;
+	ph = h + 1;
+	if (pw > ctx->aw || ph > ctx->ah)
+		return 0;
+	if (ctx->shelf_x + pw > ctx->aw) {
+		ctx->shelf_y += ctx->shelf_h;
+		ctx->shelf_x = 0;
+		ctx->shelf_h = 0;
+	}
+	if (ctx->shelf_y + ph > ctx->ah)
+		return 0;
+	out->x = ctx->shelf_x;
+	out->y = ctx->shelf_y;
+	out->w = w;
+	out->h = h;
+	ctx->shelf_x += pw;
+	if (ph > ctx->shelf_h)
+		ctx->shelf_h = ph;
+	return 1;
+}
+
+static FaceRec *
+type_face(const struct TypeCtx *ctx, uint32_t id)
+{
+	uint32_t i;
+
+	if (!ctx || id == TYPE_NONE)
+		return NULL;
+	for (i = 0; i < ctx->nfaces; i++) {
+		if (ctx->faces[i].id == id)
+			return &ctx->faces[i];
+	}
+	return NULL;
+}
+
+static uint64_t
+type_now_ns(void)
+{
+	struct timespec ts;
+
+	if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
+		return 0;
+	return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
+}
+
+static void
+type_ascii_stash(struct TypeCtx *ctx)
+{
+	TypeGlyphKey key;
+	uint32_t i;
+
+	if (!ctx || ctx->ascii_size == 0)
+		return;
+	memset(&key, 0, sizeof key);
+	key.size_px = ctx->ascii_size;
+	for (i = 0; i < TYPE_ASCII_N; i++) {
+		if (!ctx->ascii_ok[i])
+			continue;
+		key.font_id = ctx->ascii[i].font_id;
+		key.glyph_id = ctx->ascii[i].glyph_id;
+		if (type_cache_find(ctx, &key, NULL, 0))
+			continue;
+		type_cache_put(ctx, &key, &ctx->ascii[i]);
+	}
+	if (!ctx->replacement_ok)
+		return;
+	key.font_id = ctx->replacement.font_id;
+	key.glyph_id = ctx->replacement.glyph_id;
+	if (!type_cache_find(ctx, &key, NULL, 0))
+		type_cache_put(ctx, &key, &ctx->replacement);
+}
+
+static TypeError
+type_raster(struct TypeCtx *ctx, FaceRec *face, uint16_t gid, uint16_t size_u, TypeGlyph *out)
+{
+	TypeBitmap info;
+	TypeError err;
+	TypeRect rect;
+	uint16_t adv;
+	float scale;
+	size_t need;
+	uint32_t row;
+	uint64_t t0, t1;
+	TypeAntiAlias aa;
+
+	memset(out, 0, sizeof *out);
+	out->font_id = face->id;
+	out->glyph_id = gid;
+	err = type_font_advance(face->font, gid, &adv);
+	if (err != TYPE_OK)
+		return err;
+	scale = (float)size_u / (float)face->ttf->units_per_em;
+	out->advance = (float)adv * scale;
+	aa = (TypeAntiAlias)ctx->params.antialias;
+	err = type_font_bitmap_info(face->font, gid, (float)size_u, &info);
+	if (err != TYPE_OK)
+		return err;
+	out->bearing_x = (float)info.bearing_x;
+	out->bearing_y = (float)info.bearing_y;
+	if (info.width == 0 || info.height == 0)
+		return TYPE_OK;
+	need = type_bitmap_bytes(&info);
+	if (need > ctx->scratch_n)
+		return TYPE_ERR_BUF_TOO_SMALL;
+	t0 = type_now_ns();
+	err = type_font_render_bitmap(face->font, gid, (float)size_u, aa, ctx->scratch, ctx->scratch_n, &info);
+	t1 = type_now_ns();
+	if (t1 > t0)
+		ctx->stats.raster_ns += t1 - t0;
+	if (err != TYPE_OK)
+		return err;
+	if (!type_pack(ctx, info.width, info.height, &rect))
+		return TYPE_ERR_ATLAS_FULL;
+	t0 = type_now_ns();
+	for (row = 0; row < info.height; row++) {
+		memcpy(ctx->cov + ((size_t)(rect.y + row) * ctx->aw + rect.x),
+		       ctx->scratch + (size_t)row * info.width,
+		       info.width);
+	}
+	t1 = type_now_ns();
+	if (t1 > t0)
+		ctx->stats.atlas_ns += t1 - t0;
+	ctx->atlas_revision++;
+	out->width = info.width;
+	out->height = info.height;
+	out->atlas_x = (uint16_t)rect.x;
+	out->atlas_y = (uint16_t)rect.y;
+	out->bearing_x = (float)info.bearing_x;
+	out->bearing_y = (float)info.bearing_y;
+	ctx->stats.misses++;
+	return TYPE_OK;
+}
+
+static int
+type_cache_find(struct TypeCtx *ctx, const TypeGlyphKey *key, TypeGlyph *out, int touch)
+{
+	uint32_t i;
+
+	for (i = 0; i < ctx->cache_n; i++) {
+		CacheSlot *s;
+
+		s = &ctx->cache[i];
+		if (!s->used)
+			continue;
+		if (s->key.font_id != key->font_id || s->key.glyph_id != key->glyph_id)
+			continue;
+		if (s->key.size_px != key->size_px || s->key.flags != key->flags)
+			continue;
+		if (touch) {
+			ctx->stamp++;
+			s->stamp = ctx->stamp;
+		}
+		if (out)
+			*out = s->glyph;
+		return 1;
+	}
+	return 0;
+}
+
+static void
+type_cache_put(struct TypeCtx *ctx, const TypeGlyphKey *key, const TypeGlyph *glyph)
+{
+	uint32_t i;
+	uint32_t victim;
+	uint32_t best;
+
+	for (i = 0; i < ctx->cache_n; i++) {
+		if (!ctx->cache[i].used) {
+			ctx->stamp++;
+			ctx->cache[i].used = 1;
+			ctx->cache[i].key = *key;
+			ctx->cache[i].glyph = *glyph;
+			ctx->cache[i].stamp = ctx->stamp;
+			return;
+		}
+	}
+	victim = 0;
+	best = ctx->cache[0].stamp;
+	for (i = 1; i < ctx->cache_n; i++) {
+		if (ctx->cache[i].stamp < best) {
+			best = ctx->cache[i].stamp;
+			victim = i;
+		}
+	}
+	ctx->stamp++;
+	ctx->cache[victim].used = 1;
+	ctx->cache[victim].key = *key;
+	ctx->cache[victim].glyph = *glyph;
+	ctx->cache[victim].stamp = ctx->stamp;
+}
+
+static TypeError
+type_resolve(struct TypeCtx *ctx, uint32_t codepoint, TypeStyle style, FaceRec **face, uint16_t *gid)
+{
+	uint32_t order[8];
+	uint32_t n, i;
+	FaceRec *primary;
+
+	n = 0;
+	if (style.bold && style.italic && ctx->bold_italic != TYPE_NONE)
+		order[n++] = ctx->bold_italic;
+	else if (style.italic && ctx->italic != TYPE_NONE)
+		order[n++] = ctx->italic;
+	else if (style.bold && ctx->bold != TYPE_NONE)
+		order[n++] = ctx->bold;
+	if (ctx->primary != TYPE_NONE)
+		order[n++] = ctx->primary;
+	for (i = 0; i < ctx->nfallbacks && n < 8; i++)
+		order[n++] = ctx->fallbacks[i];
+	for (i = 0; i < n; i++) {
+		FaceRec *f;
+		uint16_t g;
+
+		f = type_face(ctx, order[i]);
+		if (!f)
+			continue;
+		if (type_font_glyph_index(f->font, codepoint, &g) == TYPE_OK) {
+			*face = f;
+			*gid = g;
+			return TYPE_OK;
+		}
+	}
+	primary = type_face(ctx, ctx->primary);
+	if (!primary)
+		return TYPE_ERR_INVALID_FONT;
+	*face = primary;
+	*gid = 0;
+	return TYPE_OK;
+}
+
+TypeError
+type_add_font(TypeCtx *ctx, const void *bytes, size_t len, const TypeFaceParams *face, uint32_t *out_id)
+{
+	TypeFaceParams def;
+	FaceRec *rec;
+	unsigned char *slot;
+	TypeTTF *ttf;
+	TypeFont *font;
+	uint32_t id;
+
+	if (!ctx || !bytes)
+		return TYPE_ERR_INVALID_FONT;
+	if (!face) {
+		type_face_params_default(&def);
+		face = &def;
+	}
+	if (ctx->nfaces >= ctx->params.max_faces)
+		return TYPE_ERR_BUF_TOO_SMALL;
+	id = ctx->nfaces;
+	{
+		TypeLayout lay;
+
+		if (!type_layout(&ctx->params, &lay))
+			return TYPE_ERR_INVALID_FONT;
+		slot = ctx->bytes + lay.face_bytes + (size_t)id * lay.face_stride;
+		ttf = type_ttf_place(slot, type_ttf_memory(), bytes, len);
+		if (!ttf || !type_ttf_outline(ttf))
+			return TYPE_ERR_INVALID_FONT;
+		font = type_font_from_ttf(slot + type_align(type_ttf_memory(), 16), type_font_memory(), ttf, face);
+		if (!font)
+			return TYPE_ERR_INVALID_FONT;
+	}
+	rec = &ctx->faces[id];
+	rec->ttf = ttf;
+	rec->font = font;
+	rec->id = id;
+	ctx->nfaces++;
+	if (ctx->primary == TYPE_NONE)
+		ctx->primary = id;
+	if (face->style.bold && face->style.italic)
+		ctx->bold_italic = id;
+	else if (face->style.bold)
+		ctx->bold = id;
+	else if (face->style.italic)
+		ctx->italic = id;
+	if (out_id)
+		*out_id = id;
+	return TYPE_OK;
+}
+
+void
+type_clear_fonts(TypeCtx *ctx)
+{
+	if (!ctx)
+		return;
+	ctx->nfaces = 0;
+	ctx->primary = TYPE_NONE;
+	ctx->bold = TYPE_NONE;
+	ctx->italic = TYPE_NONE;
+	ctx->bold_italic = TYPE_NONE;
+	ctx->nfallbacks = 0;
+	ctx->ascii_size = 0;
+	type_atlas_reset(ctx);
+}
+
+void
+type_select(TypeCtx *ctx, uint32_t font_id)
+{
+	if (!ctx || !type_face(ctx, font_id))
+		return;
+	type_ascii_stash(ctx);
+	ctx->primary = font_id;
+	ctx->ascii_size = 0;
+	memset(ctx->ascii_ok, 0, sizeof ctx->ascii_ok);
+	ctx->replacement_ok = 0;
+}
+
+TypeError
+type_set_fallbacks(TypeCtx *ctx, const uint32_t *ids, uint32_t count)
+{
+	uint32_t i;
+
+	if (!ctx)
+		return TYPE_ERR_INVALID_FONT;
+	if (count > ctx->params.max_fallbacks)
+		return TYPE_ERR_BUF_TOO_SMALL;
+	for (i = 0; i < count; i++) {
+		if (!type_face(ctx, ids[i]))
+			return TYPE_ERR_INVALID_FONT;
+	}
+	ctx->nfallbacks = count;
+	for (i = 0; i < count; i++)
+		ctx->fallbacks[i] = ids[i];
+	return TYPE_OK;
+}
+
+uint64_t
+type_ctx_atlas_revision(const TypeCtx *ctx)
+{
+	return ctx ? ctx->atlas_revision : 0;
+}
+
+const uint8_t *
+type_ctx_atlas(const TypeCtx *ctx, uint32_t *width, uint32_t *height)
+{
+	if (!ctx)
+		return NULL;
+	if (width)
+		*width = ctx->aw;
+	if (height)
+		*height = ctx->ah;
+	return ctx->cov;
+}
+
+const uint32_t *
+type_ctx_color_atlas(const TypeCtx *ctx, uint32_t *width, uint32_t *height)
+{
+	if (!ctx)
+		return NULL;
+	if (width)
+		*width = ctx->aw;
+	if (height)
+		*height = ctx->ah;
+	return ctx->rgba;
+}
+
+TypeError
+type_metrics(const TypeCtx *ctx, float size_px, TypeMetrics *out)
+{
+	FaceRec *face;
+
+	if (!ctx || !out)
+		return TYPE_ERR_INVALID_FONT;
+	face = type_face(ctx, ctx->primary);
+	if (!face)
+		return TYPE_ERR_INVALID_FONT;
+	return type_font_metrics(face->font, size_px, out);
+}
+
+static TypeError
+type_glyph_styled_inner(struct TypeCtx *ctx, uint32_t codepoint, float size_px, TypeStyle style, TypeGlyph *out)
+{
+	uint16_t size_u;
+	uint16_t gid;
+	FaceRec *face;
+	TypeError err;
+	TypeGlyphKey key;
+	int styled;
+	uint32_t slot;
+
+	if (!ctx || !out || !(size_px > 0.0f))
+		return TYPE_ERR_INVALID_FONT;
+	size_u = type_size_px(size_px);
+	styled = style.bold || style.italic;
+	if (!ctx->warming && size_u != ctx->ascii_size) {
+		ctx->warming = 1;
+		err = type_warm_ascii(ctx, (float)size_u);
+		ctx->warming = 0;
+		if (err != TYPE_OK)
+			return err;
+	}
+	if (!styled && codepoint >= TYPE_ASCII_LO && codepoint <= TYPE_ASCII_HI && size_u == ctx->ascii_size) {
+		slot = codepoint - TYPE_ASCII_LO;
+		if (ctx->ascii_ok[slot]) {
+			ctx->stats.hits++;
+			*out = ctx->ascii[slot];
+			return TYPE_OK;
+		}
+	}
+	if (!styled && codepoint == TYPE_REPLACEMENT && ctx->replacement_ok && size_u == ctx->ascii_size) {
+		ctx->stats.hits++;
+		*out = ctx->replacement;
+		return TYPE_OK;
+	}
+	err = type_resolve(ctx, codepoint, style, &face, &gid);
+	if (err != TYPE_OK)
+		return err;
+	key.font_id = face->id;
+	key.glyph_id = gid;
+	key.size_px = size_u;
+	key.flags = 0;
+	if (style.bold)
+		key.flags |= TYPE_STYLE_BOLD;
+	if (style.italic)
+		key.flags |= TYPE_STYLE_ITALIC;
+	if (type_cache_find(ctx, &key, out, 1)) {
+		ctx->stats.hits++;
+		if (!styled && codepoint >= TYPE_ASCII_LO && codepoint <= TYPE_ASCII_HI && size_u == ctx->ascii_size) {
+			slot = codepoint - TYPE_ASCII_LO;
+			ctx->ascii[slot] = *out;
+			ctx->ascii_ok[slot] = 1;
+		} else if (!styled && codepoint == TYPE_REPLACEMENT && size_u == ctx->ascii_size) {
+			ctx->replacement = *out;
+			ctx->replacement_ok = 1;
+		}
+		return TYPE_OK;
+	}
+	err = type_raster(ctx, face, gid, size_u, out);
+	if (err != TYPE_OK)
+		return err;
+	if (!styled && codepoint >= TYPE_ASCII_LO && codepoint <= TYPE_ASCII_HI) {
+		slot = codepoint - TYPE_ASCII_LO;
+		ctx->ascii[slot] = *out;
+		ctx->ascii_ok[slot] = 1;
+	} else if (!styled && codepoint == TYPE_REPLACEMENT) {
+		ctx->replacement = *out;
+		ctx->replacement_ok = 1;
+	} else {
+		type_cache_put(ctx, &key, out);
+	}
+	return TYPE_OK;
+}
+
+TypeError
+type_glyph(TypeCtx *ctx, uint32_t codepoint, float size_px, TypeGlyph *out)
+{
+	TypeStyle style;
+
+	memset(&style, 0, sizeof style);
+	return type_glyph_styled_inner(ctx, codepoint, size_px, style, out);
+}
+
+TypeError
+type_glyph_styled(TypeCtx *ctx, uint32_t codepoint, float size_px, TypeStyle style, TypeGlyph *out)
+{
+	return type_glyph_styled_inner(ctx, codepoint, size_px, style, out);
+}
+
+TypeError
+type_warm_ascii(TypeCtx *ctx, float size_px)
+{
+	uint16_t size_u;
+	uint32_t cp;
+	TypeGlyph g;
+	TypeError err;
+	int save;
+
+	if (!ctx)
+		return TYPE_ERR_INVALID_FONT;
+	size_u = type_size_px(size_px);
+	if (size_u == 0)
+		return TYPE_ERR_INVALID_FONT;
+	if (size_u != ctx->ascii_size) {
+		type_ascii_stash(ctx);
+		ctx->ascii_size = size_u;
+		memset(ctx->ascii_ok, 0, sizeof ctx->ascii_ok);
+		ctx->replacement_ok = 0;
+	}
+	save = ctx->warming;
+	ctx->warming = 1;
+	for (cp = TYPE_ASCII_LO; cp <= TYPE_ASCII_HI; cp++) {
+		if (ctx->ascii_ok[cp - TYPE_ASCII_LO])
+			continue;
+		err = type_glyph(ctx, cp, (float)size_u, &g);
+		if (err != TYPE_OK) {
+			ctx->warming = save;
+			return err;
+		}
+	}
+	ctx->warming = save;
+	return TYPE_OK;
+}
+
+TypeError
+type_peek_glyph_styled(const TypeCtx *ctx, uint32_t codepoint, float size_px, TypeStyle style, TypeGlyph *out)
+{
+	uint16_t size_u;
+	int styled;
+
+	if (!ctx || !out)
+		return TYPE_ERR_GLYPH_NOT_FOUND;
+	size_u = type_size_px(size_px);
+	if (size_u == 0 || size_u != ctx->ascii_size)
+		return TYPE_ERR_GLYPH_NOT_FOUND;
+	styled = style.bold || style.italic;
+	if (!styled && codepoint >= TYPE_ASCII_LO && codepoint <= TYPE_ASCII_HI) {
+		uint32_t slot;
+
+		slot = codepoint - TYPE_ASCII_LO;
+		if (!ctx->ascii_ok[slot])
+			return TYPE_ERR_GLYPH_NOT_FOUND;
+		*out = ctx->ascii[slot];
+		return TYPE_OK;
+	}
+	if (!styled && codepoint == TYPE_REPLACEMENT && ctx->replacement_ok) {
+		*out = ctx->replacement;
+		return TYPE_OK;
+	}
+	{
+		struct TypeCtx *mut;
+		FaceRec *face;
+		uint16_t gid;
+		TypeGlyphKey key;
+
+		mut = (struct TypeCtx *)ctx;
+		if (type_resolve(mut, codepoint, style, &face, &gid) != TYPE_OK)
+			return TYPE_ERR_GLYPH_NOT_FOUND;
+		memset(&key, 0, sizeof key);
+		key.font_id = face->id;
+		key.glyph_id = gid;
+		key.size_px = size_u;
+		if (style.bold)
+			key.flags |= TYPE_STYLE_BOLD;
+		if (style.italic)
+			key.flags |= TYPE_STYLE_ITALIC;
+		if (!type_cache_find(mut, &key, out, 0))
+			return TYPE_ERR_GLYPH_NOT_FOUND;
+		return TYPE_OK;
+	}
+}
+
+TypeError
+type_peek_glyph(const TypeCtx *ctx, uint32_t codepoint, float size_px, TypeGlyph *out)
+{
+	TypeStyle style;
+
+	memset(&style, 0, sizeof style);
+	return type_peek_glyph_styled(ctx, codepoint, size_px, style, out);
+}
+
+void
+type_clear_atlas(TypeCtx *ctx)
+{
+	float size;
+
+	if (!ctx)
+		return;
+	size = (float)ctx->ascii_size;
+	type_atlas_reset(ctx);
+	if (ctx->ascii_size == 0 && size == 0.0f)
+		return;
+	ctx->ascii_size = 0;
+	if (size > 0.0f)
+		type_warm_ascii(ctx, size);
+}
+
+void
+type_stats(const TypeCtx *ctx, TypeGlyphStats *out)
+{
+	if (!out)
+		return;
+	if (!ctx) {
+		memset(out, 0, sizeof *out);
+		return;
+	}
+	*out = ctx->stats;
+}
+
+uint32_t
+type_utf8_next(const char *s, size_t len, uint32_t *codepoint)
+{
+	const uint8_t *p;
+	uint32_t cp;
+	uint32_t need;
+	uint32_t i;
+
+	if (!s || !codepoint || len == 0)
+		return 0;
+	p = (const uint8_t *)s;
+	if (p[0] < 0x80) {
+		*codepoint = p[0];
+		return 1;
+	}
+	if ((p[0] & 0xE0) == 0xC0) {
+		need = 2;
+		cp = p[0] & 0x1F;
+	} else if ((p[0] & 0xF0) == 0xE0) {
+		need = 3;
+		cp = p[0] & 0x0F;
+	} else if ((p[0] & 0xF8) == 0xF0) {
+		need = 4;
+		cp = p[0] & 0x07;
+	} else {
+		return 0;
+	}
+	if (len < need)
+		return 0;
+	for (i = 1; i < need; i++) {
+		if ((p[i] & 0xC0) != 0x80)
+			return 0;
+		cp = (cp << 6) | (p[i] & 0x3F);
+	}
+	if (need == 2 && cp < 0x80)
+		return 0;
+	if (need == 3 && cp < 0x800)
+		return 0;
+	if (need == 4 && cp < 0x10000)
+		return 0;
+	if (cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF))
+		return 0;
+	*codepoint = cp;
+	return need;
+}
+
+int
+type_utf8_validate(const char *s, size_t len)
+{
+	size_t i;
+
+	if (!s && len)
+		return 0;
+	i = 0;
+	while (i < len) {
+		uint32_t cp;
+		uint32_t n;
+
+		cp = 0;
+		n = type_utf8_next(s + i, len - i, &cp);
+		if (n == 0)
+			return 0;
+		i += n;
+	}
+	return 1;
+}
+
+TypeError
+type_layout_utf8(TypeCtx *ctx, const char *text, size_t len, float size_px, TypeCell *out, uint32_t cap, uint32_t *written, size_t *bytes_used)
+{
+	size_t i;
+	uint32_t n;
+	float x;
+
+	if (written)
+		*written = 0;
+	if (bytes_used)
+		*bytes_used = 0;
+	if (!ctx || (!text && len) || !(size_px > 0.0f))
+		return TYPE_ERR_INVALID_FONT;
+	if (cap && !out)
+		return TYPE_ERR_BUF_TOO_SMALL;
+	i = 0;
+	n = 0;
+	x = 0.0f;
+	while (i < len) {
+		uint32_t cp;
+		uint32_t adv;
+		TypeGlyph g;
+		TypeError err;
+
+		cp = 0;
+		adv = type_utf8_next(text + i, len - i, &cp);
+		if (adv == 0) {
+			if (written)
+				*written = n;
+			if (bytes_used)
+				*bytes_used = i;
+			return TYPE_ERR_INVALID_UTF8;
+		}
+		if (n >= cap) {
+			if (written)
+				*written = n;
+			if (bytes_used)
+				*bytes_used = i;
+			return TYPE_ERR_BUF_TOO_SMALL;
+		}
+		err = type_glyph(ctx, cp, size_px, &g);
+		if (err != TYPE_OK) {
+			if (written)
+				*written = n;
+			if (bytes_used)
+				*bytes_used = i;
+			return err;
+		}
+		out[n].glyph = g;
+		out[n].x = x;
+		out[n].y = 0.0f;
+		out[n].codepoint = cp;
+		x += g.advance;
+		n++;
+		i += adv;
+	}
+	if (written)
+		*written = n;
+	if (bytes_used)
+		*bytes_used = i;
+	return TYPE_OK;
+}
+
+TypeWidth
+type_width(uint32_t codepoint)
+{
+	(void)codepoint;
+	return TYPE_WIDTH_NEUTRAL;
+}
+
+int
+type_is_cjk(uint32_t codepoint)
+{
+	(void)codepoint;
+	return 0;
+}
+
+int
+type_is_emoji(uint32_t codepoint)
+{
+	(void)codepoint;
+	return 0;
+}
+
+int
+type_cell_width(uint32_t codepoint)
+{
+	(void)codepoint;
+	return 1;
+}
+
+int
+type_is_combining(uint32_t codepoint)
+{
+	(void)codepoint;
+	return 0;
+}
+
+#endif /* TYPE_IMPLEMENTATION && !TYPE_IMPLEMENTATION_ONCE */

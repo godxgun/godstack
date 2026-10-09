@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "rend_vk.h"
+#include "../../Rend2.h"
 
 #define SNAKE_DISCOVERY_FAMILY_CAPACITY 4096u
 #define SNAKE_WAIT_NS UINT64_MAX

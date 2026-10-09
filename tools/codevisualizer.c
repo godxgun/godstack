@@ -1,11 +1,11 @@
 #define PEAK_IMPLEMENTATION
-#include "../Peak/peak.h"
+#include "../Peak.h"
 
-#include "../Cast/cast.h"
-#include "../Cast/cast.c"
+#define CAST_IMPLEMENTATION
+#include "../Cast.h"
 
-#include "../Rend/rend.h"
-#include "../Rend/rend.c"
+#define REND_IMPLEMENTATION
+#include "../Rend.h"
 
 int main() {
     return 0;

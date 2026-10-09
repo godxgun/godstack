@@ -1,7 +1,7 @@
-#include "rend.h"
 #define PEAK_IMPLEMENTATION
-#include "peak.h"
-#include "rend.c"
+#include "Peak.h"
+#define REND_IMPLEMENTATION
+#include "Rend.h"
 #include "demos/headless.h"
 #include <stddef.h>
 #include <string.h>

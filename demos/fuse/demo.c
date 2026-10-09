@@ -5,10 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "fuse.h"
-#include "fuse_dock.h"
-#include "fuse.c"
-#include "fuse_dock.c"
+#define FUSE_IMPLEMENTATION
+#include "Fuse.h"
 
 #define DEMO_FRAMES 600
 #define DEMO_PANELS 4

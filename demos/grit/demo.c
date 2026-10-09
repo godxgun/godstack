@@ -6,8 +6,8 @@
 #include <string.h>
 
 #define GRIT_DEBUG
-#include "grit.h"
-#include "grit.c"
+#define GRIT_IMPLEMENTATION
+#include "Grit.h"
 
 #define DEMO_WIDTH 64
 #define DEMO_HEIGHT 24
