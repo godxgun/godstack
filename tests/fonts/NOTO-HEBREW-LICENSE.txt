@@ -1,0 +1,7 @@
+Noto Sans Hebrew Regular and Bold — Noto Project Authors
+Copyright 2024 Noto Project Authors (https://github.com/notofonts/hebrew)
+SIL Open Font License 1.1 (embedded font name table); full text in NOTO-FONTS-LICENSE.txt.
+
+Unmodified font SHA-256:
+NotoSansHebrew-Regular.ttf cdefaf8efd47045f6820928eba84db5bed7557539328952b5f828315485e02ee
+NotoSansHebrew-Bold.ttf da9226e886c245a7e11673c24dec82bded64d8574c1e1f03983bf89297d2aaa8

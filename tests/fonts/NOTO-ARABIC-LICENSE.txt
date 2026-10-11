@@ -1,0 +1,7 @@
+Noto Sans Arabic Regular and Bold — Noto Project Authors
+Copyright 2022 Noto Project Authors (https://github.com/notofonts/arabic)
+SIL Open Font License 1.1 (embedded font name table); full text in NOTO-FONTS-LICENSE.txt.
+
+Unmodified font SHA-256:
+NotoSansArabic-Regular.ttf bdff3e5659d67e67def05b33f749683b9376ae819d65d3dd62ac4640b3aaef48
+NotoSansArabic-Bold.ttf 4e5462d2e8be880317b9f49b5b2da109ddb6a3563d91cc604b67f3535832a555
