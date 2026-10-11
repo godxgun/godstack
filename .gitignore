@@ -11,8 +11,17 @@ bin/
 *.so.*
 *.dll
 *.dylib
+__pycache__/
+*.py[cod]
 
-# Generated demo and tool executables (legacy output names retained for stale binaries).
+# Hugo generated output and caches
+/site/public/
+/site/resources/
+/site/.hugo_build.lock
+/site/.hugo_cache/
+
+# Generated demo and tool executables 
+# (legacy output names retained for stale binaries).
 /Cast/cast_test
 /Fuse/fuse_test
 /tests/peak

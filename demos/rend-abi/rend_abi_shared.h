@@ -6,7 +6,7 @@
 #define REND_ABI_SHARED_H
 
 #ifdef __SLANG__
-#define ABI_POINTER(type) type*
+#define ABI_POINTER(type) type *
 #define ABI_FLOAT2 float2
 #define ABI_FLOAT3 float3
 #define ABI_MATRIX float3x2
@@ -16,9 +16,15 @@
 #define ABI_FLOAT2 AbiFloat2
 #define ABI_FLOAT3 AbiFloat3
 #define ABI_MATRIX AbiMatrix
-typedef struct AbiFloat2 { float x, y; } AbiFloat2;
-typedef struct AbiFloat3 { float x, y, z; } AbiFloat3;
-typedef struct AbiMatrix { float rows[3][2]; } AbiMatrix;
+typedef struct AbiFloat2 {
+	float x, y;
+} AbiFloat2;
+typedef struct AbiFloat3 {
+	float x, y, z;
+} AbiFloat3;
+typedef struct AbiMatrix {
+	float rows[3][2];
+} AbiMatrix;
 #endif
 
 #define ABI_WIDTH 16

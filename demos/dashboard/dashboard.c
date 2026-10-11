@@ -23,21 +23,21 @@
 #include <string.h>
 #include <zlib.h>
 
-#define COL_BG       0xFF0E1116u
-#define COL_SIDE     0xFF161B22u
-#define COL_TOP      0xFF1C2330u
-#define COL_CARD     0xFF212833u
-#define COL_BTN      0xFF2D3644u
-#define COL_BTN_H    0xFF3D4A5Cu
-#define COL_ACCENT   0xFF3B82F6u
+#define COL_BG 0xFF0E1116u
+#define COL_SIDE 0xFF161B22u
+#define COL_TOP 0xFF1C2330u
+#define COL_CARD 0xFF212833u
+#define COL_BTN 0xFF2D3644u
+#define COL_BTN_H 0xFF3D4A5Cu
+#define COL_ACCENT 0xFF3B82F6u
 #define COL_ACCENT_H 0xFF60A5FAu
-#define COL_OK       0xFF22C55Eu
-#define COL_WARN     0xFFF59E0Bu
-#define COL_BAD      0xFFEF4444u
-#define COL_TRACK    0xFF111827u
-#define COL_NOB      0xFFF8FAFCu
-#define COL_TEXT     0xFFE6EDF3u
-#define COL_MUTED    0xFF93A1B5u
+#define COL_OK 0xFF22C55Eu
+#define COL_WARN 0xFFF59E0Bu
+#define COL_BAD 0xFFEF4444u
+#define COL_TRACK 0xFF111827u
+#define COL_NOB 0xFFF8FAFCu
+#define COL_TEXT 0xFFE6EDF3u
+#define COL_MUTED 0xFF93A1B5u
 
 #define MAX_UI 256
 #define MAX_VERTS 65536
@@ -46,13 +46,7 @@
 #define TEXT_SMALL 15.0f
 #define MAX_KEEP 8
 
-enum {
-	PAGE_SPECIMEN = 0,
-	PAGE_STYLES,
-	PAGE_SCRIPTS,
-	PAGE_CACHE,
-	PAGE_COUNT
-};
+enum { PAGE_SPECIMEN = 0, PAGE_STYLES, PAGE_SCRIPTS, PAGE_CACHE, PAGE_COUNT };
 
 typedef struct DashVert {
 	float x, y, u, v;
@@ -91,33 +85,38 @@ static PeakCtx *peak_demo_ctx;
 
 static uint8_t *zip_ttf(const uint8_t *zip, size_t n, size_t *out_len);
 static uint8_t *dash_file(const char *a, const char *b, size_t *out_n);
-static int dash_text_init(DashText *dt, DashVert *verts, size_t cap, RendRenderer renderer, uint8_t *vert_spv, size_t vert_n, uint8_t *frag_spv, size_t frag_n);
+static int dash_text_init(DashText *dt, DashVert *verts, size_t cap, RendRenderer renderer,
+                          uint8_t *vert_spv, size_t vert_n, uint8_t *frag_spv, size_t frag_n);
 static void dash_text_begin(DashText *dt, float atlas_w, float atlas_h);
 static void dash_text_flush(DashText *dt, RendRenderer renderer, float screen_w, float screen_h);
-static void dash_emit(DashText *dt, float x, float y, float w, float h, float u0, float v0, float u1, float v1, uint32_t color);
+static void dash_emit(DashText *dt, float x, float y, float w, float h, float u0, float v0,
+                      float u1, float v1, uint32_t color);
 static void dash_glyph(DashText *dt, float x, float y, const TypeGlyph *g, uint32_t color);
-static float dash_styled(DashText *dt, TypeCtx *type, float x, float y, float size, const char *s, TypeStyle style, uint32_t color);
-static float dash_string(DashText *dt, TypeCtx *type, float x, float y, float size, const char *s, uint32_t color);
-static void dash_string_box(DashText *dt, TypeCtx *type, float x, float y, float w, float h, float size, const char *s, uint32_t color, int center);
-static int dash_add_face(TypeCtx *type, uint8_t **keep, int *nkeep, const char *path, int bold, int italic, uint32_t *id);
+static float dash_styled(DashText *dt, TypeCtx *type, float x, float y, float size, const char *s,
+                         TypeStyle style, uint32_t color);
+static float dash_string(DashText *dt, TypeCtx *type, float x, float y, float size, const char *s,
+                         uint32_t color);
+static void dash_string_box(DashText *dt, TypeCtx *type, float x, float y, float w, float h,
+                            float size, const char *s, uint32_t color, int center);
+static int dash_add_face(TypeCtx *type, uint8_t **keep, int *nkeep, const char *path, int bold,
+                         int italic, uint32_t *id);
 static void dash_load_faces(TypeCtx *type, uint8_t **keep, int *nkeep, DashFonts *fonts);
 static void dash_use(TypeCtx *type, DashFonts *fonts, int blue);
 static void dash_probe(TypeCtx *type, DashFonts *fonts);
 static void dash_churn(TypeCtx *type, int count, float size, int *resets);
-static void dash_pages(DashText *dt, TypeCtx *type, DashFonts *fonts, int page, float W, float H, float churn, int *resets);
+static void dash_pages(DashText *dt, TypeCtx *type, DashFonts *fonts, int page, float W, float H,
+                       float churn, int *resets);
 static const char *dash_err(TypeError e);
 
 static int atlas_resets;
 static uint32_t churn_cp = 0x00A1u;
 
-static uint32_t
-zip_u32(const uint8_t *p)
+static uint32_t zip_u32(const uint8_t *p)
 {
 	return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
 }
 
-static uint8_t *
-zip_ttf(const uint8_t *zip, size_t n, size_t *out_len)
+static uint8_t *zip_ttf(const uint8_t *zip, size_t n, size_t *out_len)
 {
 	const uint8_t *p;
 	const uint8_t *end;
@@ -182,8 +181,7 @@ zip_ttf(const uint8_t *zip, size_t n, size_t *out_len)
 	return NULL;
 }
 
-static uint8_t *
-dash_file(const char *a, const char *b, size_t *out_n)
+static uint8_t *dash_file(const char *a, const char *b, size_t *out_n)
 {
 	unsigned long n;
 	uint8_t *p;
@@ -197,24 +195,31 @@ dash_file(const char *a, const char *b, size_t *out_n)
 	return p;
 }
 
-static const char *
-dash_err(TypeError e)
+static const char *dash_err(TypeError e)
 {
 	switch (e) {
-	case TYPE_OK: return "ok";
-	case TYPE_ERR_INVALID_FONT: return "invalid font";
-	case TYPE_ERR_UNSUPPORTED_TABLE: return "unsupported table";
-	case TYPE_ERR_GLYPH_NOT_FOUND: return "missing glyph";
-	case TYPE_ERR_ATLAS_FULL: return "atlas full";
-	case TYPE_ERR_INVALID_UTF8: return "bad utf8";
-	case TYPE_ERR_UNIMPLEMENTED: return "unimplemented";
-	case TYPE_ERR_BUF_TOO_SMALL: return "buf too small";
-	default: return "error";
+	case TYPE_OK:
+		return "ok";
+	case TYPE_ERR_INVALID_FONT:
+		return "invalid font";
+	case TYPE_ERR_UNSUPPORTED_TABLE:
+		return "unsupported table";
+	case TYPE_ERR_GLYPH_NOT_FOUND:
+		return "missing glyph";
+	case TYPE_ERR_ATLAS_FULL:
+		return "atlas full";
+	case TYPE_ERR_INVALID_UTF8:
+		return "bad utf8";
+	case TYPE_ERR_UNIMPLEMENTED:
+		return "unimplemented";
+	case TYPE_ERR_BUF_TOO_SMALL:
+		return "buf too small";
+	default:
+		return "error";
 	}
 }
 
-static void
-dash_color(uint32_t c, float *r, float *g, float *b, float *a)
+static void dash_color(uint32_t c, float *r, float *g, float *b, float *a)
 {
 	*a = ((c >> 24) & 0xFFu) / 255.0f;
 	*r = ((c >> 16) & 0xFFu) / 255.0f;
@@ -222,9 +227,8 @@ dash_color(uint32_t c, float *r, float *g, float *b, float *a)
 	*b = (c & 0xFFu) / 255.0f;
 }
 
-static int
-dash_text_init(DashText *dt, DashVert *verts, size_t cap, RendRenderer renderer,
-               uint8_t *vert_spv, size_t vert_n, uint8_t *frag_spv, size_t frag_n)
+static int dash_text_init(DashText *dt, DashVert *verts, size_t cap, RendRenderer renderer,
+                          uint8_t *vert_spv, size_t vert_n, uint8_t *frag_spv, size_t frag_n)
 {
 	RendVertexBinding bind;
 	RendVertexAttributes attrs[3];
@@ -236,7 +240,7 @@ dash_text_init(DashText *dt, DashVert *verts, size_t cap, RendRenderer renderer,
 	dt->verts = verts;
 	dt->cap = cap;
 	bind.binding = 0;
-	bind.stride = sizeof (DashVert);
+	bind.stride = sizeof(DashVert);
 	bind.input_rate = REND_INPUT_RATE_VERTEX;
 	attrs[0].location = 0;
 	attrs[0].binding = 0;
@@ -251,36 +255,27 @@ dash_text_init(DashText *dt, DashVert *verts, size_t cap, RendRenderer renderer,
 	attrs[2].offset = offsetof(DashVert, r);
 	attrs[2].format = REND_FORMAT_4_SFLOAT32;
 	pc.offset = 0;
-	pc.size = sizeof (DashPC);
+	pc.size = sizeof(DashPC);
 	dt->pipeline = rend_pipeline_create_graphics_spirv(
-		renderer,
-		vert_spv, vert_n,
-		frag_spv, frag_n,
-		&bind, 1,
-		attrs, 3,
-		&pc, 1,
-		REND_POLYGON_MODE_FILL,
-		REND_CULL_MODE_NONE,
-		REND_TOPOLOGY_TRIANGLE_LIST,
-		REND_FORMAT_UNDEFINED,
-		false);
+	    renderer, vert_spv, vert_n, frag_spv, frag_n, &bind, 1, attrs, 3, &pc, 1,
+	    REND_POLYGON_MODE_FILL, REND_CULL_MODE_NONE, REND_TOPOLOGY_TRIANGLE_LIST,
+	    REND_FORMAT_UNDEFINED, false);
 	if (!dt->pipeline)
 		return 0;
 	rend_pipeline_set_blend(dt->pipeline, true);
-	dt->vbo = rend_buffer_create(renderer, cap * sizeof (DashVert), REND_BUFFER_VERTEX, false);
+	dt->vbo = rend_buffer_create(renderer, cap * sizeof(DashVert), REND_BUFFER_VERTEX, false);
 	return 1;
 }
 
-static void
-dash_text_begin(DashText *dt, float atlas_w, float atlas_h)
+static void dash_text_begin(DashText *dt, float atlas_w, float atlas_h)
 {
 	dt->count = 0;
 	dt->atlas_w = atlas_w;
 	dt->atlas_h = atlas_h;
 }
 
-static void
-dash_emit(DashText *dt, float x, float y, float w, float h, float u0, float v0, float u1, float v1, uint32_t color)
+static void dash_emit(DashText *dt, float x, float y, float w, float h, float u0, float v0,
+                      float u1, float v1, uint32_t color)
 {
 	DashVert *v;
 	float r, g, b, a;
@@ -290,12 +285,30 @@ dash_emit(DashText *dt, float x, float y, float w, float h, float u0, float v0, 
 		return;
 	dash_color(color, &r, &g, &b, &a);
 	v = dt->verts + dt->count;
-	v[0].x = x;     v[0].y = y;     v[0].u = u0; v[0].v = v0;
-	v[1].x = x + w; v[1].y = y;     v[1].u = u1; v[1].v = v0;
-	v[2].x = x;     v[2].y = y + h; v[2].u = u0; v[2].v = v1;
-	v[3].x = x;     v[3].y = y + h; v[3].u = u0; v[3].v = v1;
-	v[4].x = x + w; v[4].y = y;     v[4].u = u1; v[4].v = v0;
-	v[5].x = x + w; v[5].y = y + h; v[5].u = u1; v[5].v = v1;
+	v[0].x = x;
+	v[0].y = y;
+	v[0].u = u0;
+	v[0].v = v0;
+	v[1].x = x + w;
+	v[1].y = y;
+	v[1].u = u1;
+	v[1].v = v0;
+	v[2].x = x;
+	v[2].y = y + h;
+	v[2].u = u0;
+	v[2].v = v1;
+	v[3].x = x;
+	v[3].y = y + h;
+	v[3].u = u0;
+	v[3].v = v1;
+	v[4].x = x + w;
+	v[4].y = y;
+	v[4].u = u1;
+	v[4].v = v0;
+	v[5].x = x + w;
+	v[5].y = y + h;
+	v[5].u = u1;
+	v[5].v = v1;
 	for (i = 0; i < 6; i++) {
 		v[i].r = r;
 		v[i].g = g;
@@ -305,8 +318,7 @@ dash_emit(DashText *dt, float x, float y, float w, float h, float u0, float v0, 
 	dt->count += 6;
 }
 
-static void
-dash_glyph(DashText *dt, float x, float y, const TypeGlyph *g, uint32_t color)
+static void dash_glyph(DashText *dt, float x, float y, const TypeGlyph *g, uint32_t color)
 {
 	float gx, gy, u0, v0, u1, v1;
 
@@ -321,8 +333,8 @@ dash_glyph(DashText *dt, float x, float y, const TypeGlyph *g, uint32_t color)
 	dash_emit(dt, gx, gy, (float)g->width, (float)g->height, u0, v0, u1, v1, color);
 }
 
-static float
-dash_styled(DashText *dt, TypeCtx *type, float x, float y, float size, const char *s, TypeStyle style, uint32_t color)
+static float dash_styled(DashText *dt, TypeCtx *type, float x, float y, float size, const char *s,
+                         TypeStyle style, uint32_t color)
 {
 	const char *p;
 	float pen;
@@ -360,8 +372,8 @@ dash_styled(DashText *dt, TypeCtx *type, float x, float y, float size, const cha
 	return pen - x;
 }
 
-static float
-dash_string(DashText *dt, TypeCtx *type, float x, float y, float size, const char *s, uint32_t color)
+static float dash_string(DashText *dt, TypeCtx *type, float x, float y, float size, const char *s,
+                         uint32_t color)
 {
 	TypeStyle style;
 
@@ -369,8 +381,7 @@ dash_string(DashText *dt, TypeCtx *type, float x, float y, float size, const cha
 	return dash_styled(dt, type, x, y, size, s, style, color);
 }
 
-static float
-dash_measure(TypeCtx *type, float size, const char *s)
+static float dash_measure(TypeCtx *type, float size, const char *s)
 {
 	TypeCell cells[96];
 	uint32_t n;
@@ -380,8 +391,8 @@ dash_measure(TypeCtx *type, float size, const char *s)
 	return cells[n - 1].x + cells[n - 1].glyph.advance;
 }
 
-static void
-dash_string_box(DashText *dt, TypeCtx *type, float x, float y, float w, float h, float size, const char *s, uint32_t color, int center)
+static void dash_string_box(DashText *dt, TypeCtx *type, float x, float y, float w, float h,
+                            float size, const char *s, uint32_t color, int center)
 {
 	TypeMetrics metrics;
 	float tw, pen, baseline;
@@ -399,8 +410,7 @@ dash_string_box(DashText *dt, TypeCtx *type, float x, float y, float w, float h,
 	dash_string(dt, type, pen, baseline, size, s, color);
 }
 
-static void
-dash_text_flush(DashText *dt, RendRenderer renderer, float screen_w, float screen_h)
+static void dash_text_flush(DashText *dt, RendRenderer renderer, float screen_w, float screen_h)
 {
 	DashPC pc;
 
@@ -410,15 +420,15 @@ dash_text_flush(DashText *dt, RendRenderer renderer, float screen_w, float scree
 	pc.screen_h = screen_h;
 	pc.atlas_w = dt->atlas_w;
 	pc.atlas_h = dt->atlas_h;
-	rend_buffer_write(renderer, &dt->vbo, dt->verts, dt->count * sizeof (DashVert), 0);
+	rend_buffer_write(renderer, &dt->vbo, dt->verts, dt->count * sizeof(DashVert), 0);
 	rend_cmd_bind_pipeline(dt->pipeline);
 	rend_cmd_push_constants(dt->pipeline, &pc, sizeof pc);
 	rend_cmd_bind_vertex_buffer(dt->pipeline, 0, dt->vbo, 0);
 	rend_cmd_draw(dt->pipeline, dt->count, 1);
 }
 
-static int
-dash_add_face(TypeCtx *type, uint8_t **keep, int *nkeep, const char *path, int bold, int italic, uint32_t *id)
+static int dash_add_face(TypeCtx *type, uint8_t **keep, int *nkeep, const char *path, int bold,
+                         int italic, uint32_t *id)
 {
 	unsigned long n;
 	uint8_t *bytes;
@@ -447,8 +457,8 @@ dash_add_face(TypeCtx *type, uint8_t **keep, int *nkeep, const char *path, int b
 	return 1;
 }
 
-static int
-dash_add_first(TypeCtx *type, uint8_t **keep, int *nkeep, const char **paths, int npaths, int bold, int italic, uint32_t *id)
+static int dash_add_first(TypeCtx *type, uint8_t **keep, int *nkeep, const char **paths, int npaths,
+                          int bold, int italic, uint32_t *id)
 {
 	int i;
 
@@ -459,30 +469,21 @@ dash_add_first(TypeCtx *type, uint8_t **keep, int *nkeep, const char **paths, in
 	return 0;
 }
 
-static void
-dash_load_faces(TypeCtx *type, uint8_t **keep, int *nkeep, DashFonts *fonts)
+static void dash_load_faces(TypeCtx *type, uint8_t **keep, int *nkeep, DashFonts *fonts)
 {
-	static const char *regular[] = {
-		"/usr/share/fonts/noto/NotoSans-Regular.ttf",
-		"/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
-		"/usr/share/fonts/TTF/DejaVuSans.ttf",
-		"/usr/share/fonts/Adwaita/AdwaitaSans-Regular.ttf"
-	};
-	static const char *bold[] = {
-		"/usr/share/fonts/noto/NotoSans-Bold.ttf",
-		"/usr/share/fonts/liberation/LiberationSans-Bold.ttf",
-		"/usr/share/fonts/TTF/DejaVuSans-Bold.ttf"
-	};
-	static const char *italic[] = {
-		"/usr/share/fonts/noto/NotoSans-Italic.ttf",
-		"/usr/share/fonts/liberation/LiberationSans-Italic.ttf",
-		"/usr/share/fonts/TTF/DejaVuSans-Oblique.ttf"
-	};
-	static const char *bi[] = {
-		"/usr/share/fonts/noto/NotoSans-BoldItalic.ttf",
-		"/usr/share/fonts/liberation/LiberationSans-BoldItalic.ttf",
-		"/usr/share/fonts/TTF/DejaVuSans-BoldOblique.ttf"
-	};
+	static const char *regular[] = {"/usr/share/fonts/noto/NotoSans-Regular.ttf",
+	                                "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
+	                                "/usr/share/fonts/TTF/DejaVuSans.ttf",
+	                                "/usr/share/fonts/Adwaita/AdwaitaSans-Regular.ttf"};
+	static const char *bold[] = {"/usr/share/fonts/noto/NotoSans-Bold.ttf",
+	                             "/usr/share/fonts/liberation/LiberationSans-Bold.ttf",
+	                             "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf"};
+	static const char *italic[] = {"/usr/share/fonts/noto/NotoSans-Italic.ttf",
+	                               "/usr/share/fonts/liberation/LiberationSans-Italic.ttf",
+	                               "/usr/share/fonts/TTF/DejaVuSans-Oblique.ttf"};
+	static const char *bi[] = {"/usr/share/fonts/noto/NotoSans-BoldItalic.ttf",
+	                           "/usr/share/fonts/liberation/LiberationSans-BoldItalic.ttf",
+	                           "/usr/share/fonts/TTF/DejaVuSans-BoldOblique.ttf"};
 	uint32_t id;
 	uint32_t fb[4];
 	uint32_t nfb;
@@ -499,7 +500,8 @@ dash_load_faces(TypeCtx *type, uint8_t **keep, int *nkeep, DashFonts *fonts)
 	fonts->have_italic = dash_add_first(type, keep, nkeep, italic, 3, 0, 1, &id);
 	fonts->have_bi = dash_add_first(type, keep, nkeep, bi, 3, 1, 1, &id);
 
-	bytes = dash_file("Blue Screen Personal Use.ttf", "demos/dashboard/Blue Screen Personal Use.ttf", &n);
+	bytes = dash_file("Blue Screen Personal Use.ttf",
+	                  "demos/dashboard/Blue Screen Personal Use.ttf", &n);
 	if (!bytes) {
 		uint8_t *zip;
 		unsigned long zn;
@@ -524,7 +526,8 @@ dash_load_faces(TypeCtx *type, uint8_t **keep, int *nkeep, DashFonts *fonts)
 	}
 
 	err = TYPE_ERR_INVALID_FONT;
-	if (dash_add_face(type, keep, nkeep, "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc", 0, 0, &fonts->cjk)) {
+	if (dash_add_face(type, keep, nkeep, "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc", 0, 0,
+	                  &fonts->cjk)) {
 		fonts->have_cjk = 1;
 		err = TYPE_OK;
 	}
@@ -535,15 +538,15 @@ dash_load_faces(TypeCtx *type, uint8_t **keep, int *nkeep, DashFonts *fonts)
 		fb[nfb++] = fonts->cjk;
 	if (nfb)
 		type_set_fallbacks(type, fb, nfb);
-	fonts->nfaces = (int)(fonts->have_regular + fonts->have_bold + fonts->have_italic + fonts->have_bi + fonts->have_blue + fonts->have_cjk);
+	fonts->nfaces = (int)(fonts->have_regular + fonts->have_bold + fonts->have_italic +
+	                      fonts->have_bi + fonts->have_blue + fonts->have_cjk);
 	snprintf(fonts->note, sizeof fonts->note,
-		"faces %d  bold %d  italic %d  bi %d  blue %d  cjk %s",
-		fonts->nfaces, fonts->have_bold, fonts->have_italic, fonts->have_bi, fonts->have_blue,
-		fonts->have_cjk ? "yes" : dash_err(err));
+	         "faces %d  bold %d  italic %d  bi %d  blue %d  cjk %s", fonts->nfaces,
+	         fonts->have_bold, fonts->have_italic, fonts->have_bi, fonts->have_blue,
+	         fonts->have_cjk ? "yes" : dash_err(err));
 }
 
-static void
-dash_use(TypeCtx *type, DashFonts *fonts, int blue)
+static void dash_use(TypeCtx *type, DashFonts *fonts, int blue)
 {
 	if (blue && fonts->have_blue)
 		type_select(type, fonts->blue);
@@ -551,8 +554,7 @@ dash_use(TypeCtx *type, DashFonts *fonts, int blue)
 		type_select(type, fonts->regular);
 }
 
-static void
-dash_probe(TypeCtx *type, DashFonts *fonts)
+static void dash_probe(TypeCtx *type, DashFonts *fonts)
 {
 	TypeCell cells[8];
 	TypeGlyph g;
@@ -582,15 +584,13 @@ dash_probe(TypeCtx *type, DashFonts *fonts)
 		}
 	}
 	snprintf(fonts->probe, sizeof fonts->probe,
-		"utf8 %s at %u  peek CJK %s  width %d cjk %d emoji %d  A gray %u/%u  huge %s",
-		dash_err(e), (unsigned)used,
-		peek_cold ? "hit" : "cold",
-		type_width(0x4E00), type_is_cjk(0x4E00), type_is_emoji(0x1F600),
-		(unsigned)gray, (unsigned)cover, dash_err(huge));
+	         "utf8 %s at %u  peek CJK %s  width %d cjk %d emoji %d  A gray %u/%u  huge %s",
+	         dash_err(e), (unsigned)used, peek_cold ? "hit" : "cold", type_width(0x4E00),
+	         type_is_cjk(0x4E00), type_is_emoji(0x1F600), (unsigned)gray, (unsigned)cover,
+	         dash_err(huge));
 }
 
-static void
-dash_churn(TypeCtx *type, int count, float size, int *resets)
+static void dash_churn(TypeCtx *type, int count, float size, int *resets)
 {
 	int i;
 
@@ -612,8 +612,8 @@ dash_churn(TypeCtx *type, int count, float size, int *resets)
 	}
 }
 
-static float
-dash_line(DashText *dt, TypeCtx *type, float x, float y, float size, const char *s, uint32_t color)
+static float dash_line(DashText *dt, TypeCtx *type, float x, float y, float size, const char *s,
+                       uint32_t color)
 {
 	TypeMetrics m;
 
@@ -623,8 +623,7 @@ dash_line(DashText *dt, TypeCtx *type, float x, float y, float size, const char 
 	return y + m.ascender - m.descender + m.line_gap + 6.0f;
 }
 
-static void
-dash_stats_line(DashText *dt, TypeCtx *type, float x, float y, float W)
+static void dash_stats_line(DashText *dt, TypeCtx *type, float x, float y, float W)
 {
 	TypeGlyphStats st;
 	char buf[160];
@@ -641,29 +640,27 @@ dash_stats_line(DashText *dt, TypeCtx *type, float x, float y, float W)
 			if (px[i])
 				fill++;
 	}
-	snprintf(buf, sizeof buf, "hits %llu  misses %llu  raster %.2f ms  atlas %.2f ms  fill %u  resets %d",
-		(unsigned long long)st.hits, (unsigned long long)st.misses,
-		(double)st.raster_ns / 1.0e6, (double)st.atlas_ns / 1.0e6,
-		fill, atlas_resets);
+	snprintf(buf, sizeof buf,
+	         "hits %llu  misses %llu  raster %.2f ms  atlas %.2f ms  fill %u  resets %d",
+	         (unsigned long long)st.hits, (unsigned long long)st.misses,
+	         (double)st.raster_ns / 1.0e6, (double)st.atlas_ns / 1.0e6, fill, atlas_resets);
 	(void)W;
 	dash_string(dt, type, x, y, TEXT_SMALL, buf, COL_MUTED);
 }
 
-static void
-dash_pages(DashText *dt, TypeCtx *type, DashFonts *fonts, int page, float W, float H, float churn, int *resets)
+static void dash_pages(DashText *dt, TypeCtx *type, DashFonts *fonts, int page, float W, float H,
+                       float churn, int *resets)
 {
-	static const char *nav_name[] = { "Specimen", "Styles", "Scripts", "Cache" };
-	static const float sizes[] = { 14.0f, 22.0f, 32.0f, 48.0f, 72.0f };
-	static const char *scripts[] = {
-		"Latin  na\xc3\xafve caf\xc3\xa9",
-		"Cyrillic  \xd0\x9f\xd1\x80\xd0\xb8\xd0\xb2\xd0\xb5\xd1\x82",
-		"Greek  \xce\xb3\xce\xb5\xce\xb9\xce\xac",
-		"CJK  \xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e",
-		"Hangul  \xed\x95\x9c\xea\xb8\x80",
-		"Hiragana  \xe3\x81\x82\xe3\x81\x84\xe3\x81\x86",
-		"Symbols  \xe2\x86\x90 \xe2\x98\x85 \xe2\x99\xaa",
-		"Replacement  \xef\xbf\xbd"
-	};
+	static const char *nav_name[] = {"Specimen", "Styles", "Scripts", "Cache"};
+	static const float sizes[] = {14.0f, 22.0f, 32.0f, 48.0f, 72.0f};
+	static const char *scripts[] = {"Latin  na\xc3\xafve caf\xc3\xa9",
+	                                "Cyrillic  \xd0\x9f\xd1\x80\xd0\xb8\xd0\xb2\xd0\xb5\xd1\x82",
+	                                "Greek  \xce\xb3\xce\xb5\xce\xb9\xce\xac",
+	                                "CJK  \xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e",
+	                                "Hangul  \xed\x95\x9c\xea\xb8\x80",
+	                                "Hiragana  \xe3\x81\x82\xe3\x81\x84\xe3\x81\x86",
+	                                "Symbols  \xe2\x86\x90 \xe2\x98\x85 \xe2\x99\xaa",
+	                                "Replacement  \xef\xbf\xbd"};
 	char buf[128];
 	float x, y, line;
 	int i;
@@ -672,8 +669,8 @@ dash_pages(DashText *dt, TypeCtx *type, DashFonts *fonts, int page, float W, flo
 	x = 216.0f;
 	dash_use(type, fonts, 0);
 	for (i = 0; i < PAGE_COUNT; i++) {
-		dash_string_box(dt, type, 12, 64.0f + (float)i * 44.0f, 176, 36, TEXT_UI,
-			nav_name[i], page == i ? 0xFFFFFFFFu : COL_TEXT, 1);
+		dash_string_box(dt, type, 12, 64.0f + (float)i * 44.0f, 176, 36, TEXT_UI, nav_name[i],
+		                page == i ? 0xFFFFFFFFu : COL_TEXT, 1);
 	}
 	dash_string(dt, type, 16, 28, TEXT_UI, "Type", COL_TEXT);
 	dash_string(dt, type, 220, 28, TEXT_UI, nav_name[page], COL_TEXT);
@@ -701,7 +698,8 @@ dash_pages(DashText *dt, TypeCtx *type, DashFonts *fonts, int page, float W, flo
 			if (fonts->have_blue && line + sz < H - 4.0f) {
 				dash_use(type, fonts, 1);
 				if (type_metrics(type, sz, &m) == TYPE_OK) {
-					dash_string(dt, type, x + 48.0f, line + m.ascender, sz, "Blue Screen", COL_ACCENT_H);
+					dash_string(dt, type, x + 48.0f, line + m.ascender, sz, "Blue Screen",
+					            COL_ACCENT_H);
 					line = line + m.ascender - m.descender + 8.0f;
 				}
 			} else {
@@ -732,7 +730,8 @@ dash_pages(DashText *dt, TypeCtx *type, DashFonts *fonts, int page, float W, flo
 		dash_styled(dt, type, x + 180.0f, y + 22.0f, 28.0f, "28 px", style, COL_TEXT);
 		dash_styled(dt, type, x + 280.0f, y + 28.0f, 42.0f, "42 px", style, COL_TEXT);
 		if (!fonts->have_bold)
-			dash_string(dt, type, x, y + 70.0f, TEXT_SMALL, "no bold face loaded; style bit still caches a key", COL_WARN);
+			dash_string(dt, type, x, y + 70.0f, TEXT_SMALL,
+			            "no bold face loaded; style bit still caches a key", COL_WARN);
 	}
 
 	if (page == PAGE_SCRIPTS) {
@@ -745,8 +744,8 @@ dash_pages(DashText *dt, TypeCtx *type, DashFonts *fonts, int page, float W, flo
 		dash_string(dt, type, x, y, TEXT_SMALL, fonts->probe, COL_MUTED);
 		y += 24.0f;
 		snprintf(buf, sizeof buf, "cell %d  combining %d  validate %d  layout cap",
-			type_cell_width(0x4E00), type_is_combining(0x0301),
-			type_utf8_validate("\xE6\x97\xA5", 3));
+		         type_cell_width(0x4E00), type_is_combining(0x0301),
+		         type_utf8_validate("\xE6\x97\xA5", 3));
 		dash_string(dt, type, x, y, TEXT_SMALL, buf, COL_MUTED);
 	}
 
@@ -765,18 +764,19 @@ dash_pages(DashText *dt, TypeCtx *type, DashFonts *fonts, int page, float W, flo
 		y += vh + 16.0f;
 		hot = type_peek_glyph(type, 'A', TEXT_UI, &peek) == TYPE_OK;
 		snprintf(buf, sizeof buf, "peek ASCII A %s  churn %g  codepoint U+%04X",
-			hot ? "hot" : "cold", churn, churn_cp);
+		         hot ? "hot" : "cold", churn, churn_cp);
 		dash_string(dt, type, x, y, TEXT_SMALL, buf, COL_MUTED);
 		y += 28.0f;
-		dash_string(dt, type, x, y, 20.0f, "Atlas is shelf-packed. LRU eviction does not free texels.", COL_TEXT);
+		dash_string(dt, type, x, y, 20.0f,
+		            "Atlas is shelf-packed. LRU eviction does not free texels.", COL_TEXT);
 		y += 32.0f;
-		dash_string(dt, type, x, y, 20.0f, "Clear resets both atlases and rewarms ASCII.", COL_TEXT);
+		dash_string(dt, type, x, y, 20.0f, "Clear resets both atlases and rewarms ASCII.",
+		            COL_TEXT);
 		dash_churn(type, (int)(churn * 48.0f), 18.0f, resets);
 	}
 }
 
-static uint8_t *
-load_spv(const char *a, const char *b, unsigned long *size)
+static uint8_t *load_spv(const char *a, const char *b, unsigned long *size)
 {
 	uint8_t *p;
 
@@ -786,17 +786,16 @@ load_spv(const char *a, const char *b, unsigned long *size)
 	return peak_file_alloc(b, size);
 }
 
-int
-main(int argc, char **argv)
-{
+typedef struct Dashboard {
+
 	PeakWindow win;
 	RendBindingInfo bind_info;
 	RendRenderer renderer;
 	FuseRend fr;
 	FuseCanvas canvas;
-	static unsigned char ui_buf[1 << 18];
-	static unsigned char vert_buf[MAX_VERTS * sizeof (FuseRendVertex)];
-	static DashVert text_verts[DASH_TEXT_VERTS];
+	unsigned char ui_buf[1 << 18];
+	unsigned char vert_buf[MAX_VERTS * sizeof(FuseRendVertex)];
+	DashVert text_verts[DASH_TEXT_VERTS];
 	unsigned long vert_spv_n, frag_spv_n, tvert_n, tfrag_n;
 	uint8_t *vert_spv, *frag_spv, *tvert, *tfrag;
 	uint8_t *keep[MAX_KEEP];
@@ -825,267 +824,308 @@ main(int argc, char **argv)
 	uint32_t height;
 	int i;
 
-	width = 1280;
-	height = 720;
-	memset(&win, 0, sizeof win);
-	headless = headless_parse(argc, argv, &frames, &ppm);
-	nkeep = 0;
-	memset(keep, 0, sizeof keep);
-	probed = 0;
-	churn = 0.35f;
-	page = PAGE_SPECIMEN;
+} Dashboard;
 
-	if (!headless) {
+static int dash_open(Dashboard *d, int argc, char **argv)
+{
+
+	d->width = 1280;
+	d->height = 720;
+	memset(&d->win, 0, sizeof d->win);
+	d->headless = headless_parse(argc, argv, &d->frames, &d->ppm);
+	d->nkeep = 0;
+	memset(d->keep, 0, sizeof d->keep);
+	d->probed = 0;
+	d->churn = 0.35f;
+	d->page = PAGE_SPECIMEN;
+
+	if (!d->headless) {
 		if (!(peak_demo_ctx = peak_init_legacy())) {
 			PFATAL("Failed to init Peak!");
-			return 1;
+			return 0;
 		}
-		win = peak_window_open(peak_demo_ctx, "Type Dashboard", width, height, 0);
-		if (!win.running) {
+		d->win = peak_window_open(peak_demo_ctx, "Type Dashboard", d->width, d->height, 0);
+		if (!d->win.running) {
 			PFATAL("Failed to open a window!");
-			return 1;
+			return 0;
 		}
-		width = win.width;
-		height = win.height;
+		d->width = d->win.width;
+		d->height = d->win.height;
 	}
 
-	memset(&bind_info, 0, sizeof bind_info);
-	bind_info.texture_bindings[0] = 0;
-	bind_info.texture_array_sizes[0] = 1;
-	bind_info.texture_binding_count = 1;
-	if (headless)
-		renderer = rend_renderer_create_offscreen(width, height, REND_FORMAT_R8G8B8A8_UNORM, REND_BACKEND_AUTO, &bind_info);
+	memset(&d->bind_info, 0, sizeof d->bind_info);
+	d->bind_info.texture_bindings[0] = 0;
+	d->bind_info.texture_array_sizes[0] = 1;
+	d->bind_info.texture_binding_count = 1;
+	if (d->headless)
+		d->renderer = rend_renderer_create_offscreen(
+		    d->width, d->height, REND_FORMAT_R8G8B8A8_UNORM, REND_BACKEND_AUTO, &d->bind_info);
 	else
-		renderer = rend_renderer_create(&win, REND_BACKEND_AUTO, NULL, true, &bind_info);
-	if (!renderer) {
+		d->renderer = rend_renderer_create(&d->win, REND_BACKEND_AUTO, NULL, true, &d->bind_info);
+	if (!d->renderer) {
 		PFATAL("Failed to create renderer!");
-		if (!headless) {
-			peak_window_close(&win);
-			peak_quit(peak_demo_ctx);
-		}
-		return 1;
+
+		return 0;
 	}
 
-	vert_spv = load_spv("fuse_ui.vert.spv", "demos/dashboard/fuse_ui.vert.spv", &vert_spv_n);
-	frag_spv = load_spv("fuse_ui.frag.spv", "demos/dashboard/fuse_ui.frag.spv", &frag_spv_n);
-	tvert = load_spv("fuse_text.vert.spv", "demos/dashboard/fuse_text.vert.spv", &tvert_n);
-	tfrag = load_spv("fuse_text.frag.spv", "demos/dashboard/fuse_text.frag.spv", &tfrag_n);
-	if (!vert_spv || !frag_spv || !tvert || !tfrag) {
+	return 1;
+}
+
+static int dash_graphics_init(Dashboard *d)
+{
+	d->vert_spv = load_spv("fuse_ui.vert.spv", "demos/dashboard/fuse_ui.vert.spv", &d->vert_spv_n);
+	d->frag_spv = load_spv("fuse_ui.frag.spv", "demos/dashboard/fuse_ui.frag.spv", &d->frag_spv_n);
+	d->tvert = load_spv("fuse_text.vert.spv", "demos/dashboard/fuse_text.vert.spv", &d->tvert_n);
+	d->tfrag = load_spv("fuse_text.frag.spv", "demos/dashboard/fuse_text.frag.spv", &d->tfrag_n);
+	if (!d->vert_spv || !d->frag_spv || !d->tvert || !d->tfrag) {
 		PFATAL("Failed to load dashboard shaders!");
-		free(vert_spv);
-		free(frag_spv);
-		free(tvert);
-		free(tfrag);
-		return 1;
+		return 0;
 	}
-	if (!fuse_rend_init(&fr, vert_buf, sizeof vert_buf, renderer, vert_spv, vert_spv_n, frag_spv, frag_spv_n)) {
+	if (!fuse_rend_init(&d->fr, d->vert_buf, sizeof d->vert_buf, d->renderer, d->vert_spv,
+	                    d->vert_spv_n, d->frag_spv, d->frag_spv_n)) {
 		PFATAL("Failed to init Fuse Rend backend!");
-		return 1;
+		return 0;
 	}
-	free(vert_spv);
-	free(frag_spv);
-	if (!dash_text_init(&text, text_verts, DASH_TEXT_VERTS, renderer, tvert, tvert_n, tfrag, tfrag_n)) {
+	if (!dash_text_init(&d->text, d->text_verts, DASH_TEXT_VERTS, d->renderer, d->tvert, d->tvert_n,
+	                    d->tfrag, d->tfrag_n)) {
 		PFATAL("Failed to init text pipeline!");
-		free(tvert);
-		free(tfrag);
-		return 1;
+		return 0;
 	}
-	free(tvert);
-	free(tfrag);
 
-	if (fuse_canvas_memory(MAX_UI) > sizeof ui_buf) {
+	if (fuse_canvas_memory(MAX_UI) > sizeof d->ui_buf) {
 		PFATAL("UI buffer too small!");
-		return 1;
+		return 0;
 	}
-	canvas = fuse_canvas_create(ui_buf, sizeof ui_buf);
-	if (!canvas) {
+	d->canvas = fuse_canvas_create(d->ui_buf, sizeof d->ui_buf);
+	if (!d->canvas) {
 		PFATAL("Failed to create Fuse canvas!");
-		return 1;
+		return 0;
 	}
 
-	pointer_state = FUSE_POINTER_RELEASED;
-	mx = 0.0f;
-	my = 0.0f;
-	running = 1;
-	frame_i = 0;
-	type_buf = NULL;
-	memset(&atlas_tex, 0, sizeof atlas_tex);
-	memset(&fonts, 0, sizeof fonts);
+	return 1;
+}
 
-	type_params_default(&type_params);
-	type_params.atlas_width = 2048;
-	type_params.atlas_height = 2048;
-	type_params.cache_capacity = 1024;
-	type_params.max_faces = 8;
-	type_params.max_fallbacks = 4;
-	type_params.color_emoji = 1;
-	type_params.ligatures = 1;
-	type_params.antialias = TYPE_AA_BOX;
-	type_n = type_memory(&type_params);
-	type_buf = malloc(type_n);
-	type = type_place(type_buf, type_n, &type_params);
-	if (!type) {
+static int dash_type_init(Dashboard *d)
+{
+	d->pointer_state = FUSE_POINTER_RELEASED;
+	d->mx = 0.0f;
+	d->my = 0.0f;
+	d->running = 1;
+	d->frame_i = 0;
+	d->type_buf = NULL;
+	memset(&d->atlas_tex, 0, sizeof d->atlas_tex);
+	memset(&d->fonts, 0, sizeof d->fonts);
+
+	type_params_default(&d->type_params);
+	d->type_params.atlas_width = 2048;
+	d->type_params.atlas_height = 2048;
+	d->type_params.cache_capacity = 1024;
+	d->type_params.max_faces = 8;
+	d->type_params.max_fallbacks = 4;
+	d->type_params.color_emoji = 1;
+	d->type_params.ligatures = 1;
+	d->type_params.antialias = TYPE_AA_BOX;
+	d->type_n = type_memory(&d->type_params);
+	d->type_buf = malloc(d->type_n);
+	d->type = type_place(d->type_buf, d->type_n, &d->type_params);
+	if (!d->type) {
 		PFATAL("Failed to place Type!");
-		return 1;
+		return 0;
 	}
-	dash_load_faces(type, keep, &nkeep, &fonts);
-	if (!fonts.nfaces) {
+	dash_load_faces(d->type, d->keep, &d->nkeep, &d->fonts);
+	if (!d->fonts.nfaces) {
 		PFATAL("Failed to load a font for Type!");
-		free(type_buf);
-		return 1;
+		return 0;
 	}
-	if (type_warm_ascii(type, TEXT_UI) != TYPE_OK) {
+	if (type_warm_ascii(d->type, TEXT_UI) != TYPE_OK) {
 		PFATAL("Failed to rasterize ASCII!");
-		free(type_buf);
-		return 1;
+		return 0;
 	}
-	atlas_px = type_ctx_atlas(type, &atlas_w, &atlas_h);
-	atlas_tex = rend_texture_create(renderer, atlas_w, atlas_h, 1, 0, 1, REND_FORMAT_R8_UNORM);
-	rend_pipeline_bind_texture(text.pipeline, &atlas_tex, 0, 0);
+	d->atlas_px = type_ctx_atlas(d->type, &d->atlas_w, &d->atlas_h);
+	d->atlas_tex =
+	    rend_texture_create(d->renderer, d->atlas_w, d->atlas_h, 1, 0, 1, REND_FORMAT_R8_UNORM);
+	rend_pipeline_bind_texture(d->text.pipeline, &d->atlas_tex, 0, 0);
 
-	while (running) {
-		PeakEvent ev;
-		float W, H;
-		size_t ncmds;
-		FuseCmd *cmds;
-		static FuseClass sidebar;
-		static FuseClass nav;
+	return 1;
+}
 
-		if (headless && frame_i >= frames)
-			break;
-
-		while (!headless && peak_window_epoll(&win, &ev)) {
-			if (ev.type == PEAK_EVENT_WINDOW_CLOSE)
-				running = 0;
-			if (ev.type == PEAK_EVENT_KEY_DOWN && ev.key.key == PEAK_KEY_ESCAPE)
-				running = 0;
-			if (ev.type == PEAK_EVENT_WINDOW_RESIZE) {
-				width = ev.resize.width;
-				height = ev.resize.height;
-				win.width = width;
-				win.height = height;
+static void dash_events(Dashboard *d)
+{
+	PeakEvent ev;
+	while (peak_window_epoll(&d->win, &ev)) {
+		if (ev.type == PEAK_EVENT_WINDOW_CLOSE)
+			d->running = 0;
+		if (ev.type == PEAK_EVENT_KEY_DOWN && ev.key.key == PEAK_KEY_ESCAPE)
+			d->running = 0;
+		if (ev.type == PEAK_EVENT_WINDOW_RESIZE) {
+			d->width = ev.resize.width;
+			d->height = ev.resize.height;
+			d->win.width = d->width;
+			d->win.height = d->height;
+		}
+		if (ev.type == PEAK_EVENT_POINTER) {
+			d->mx = ev.pointer.x;
+			d->my = ev.pointer.y;
+			if (ev.pointer.type == PEAK_POINTER_LEFT) {
+				if (ev.pointer.state == PEAK_POINTER_PRESSED)
+					d->pointer_state = FUSE_POINTER_PRESSED;
+				else if (ev.pointer.state == PEAK_POINTER_RELEASED)
+					d->pointer_state = FUSE_POINTER_RELEASED;
 			}
-			if (ev.type == PEAK_EVENT_POINTER) {
-				mx = ev.pointer.x;
-				my = ev.pointer.y;
-				if (ev.pointer.type == PEAK_POINTER_LEFT) {
-					if (ev.pointer.state == PEAK_POINTER_PRESSED)
-						pointer_state = FUSE_POINTER_PRESSED;
-					else if (ev.pointer.state == PEAK_POINTER_RELEASED)
-						pointer_state = FUSE_POINTER_RELEASED;
+		}
+		if (ev.type == PEAK_EVENT_KEY_DOWN) {
+			if (ev.key.key == PEAK_KEY_1)
+				d->page = PAGE_SPECIMEN;
+			if (ev.key.key == PEAK_KEY_2)
+				d->page = PAGE_STYLES;
+			if (ev.key.key == PEAK_KEY_3)
+				d->page = PAGE_SCRIPTS;
+			if (ev.key.key == PEAK_KEY_4)
+				d->page = PAGE_CACHE;
+		}
+	}
+}
+
+static void dash_frame(Dashboard *d)
+{
+	float W, H;
+	size_t ncmds;
+	FuseCmd *cmds;
+	static FuseClass sidebar, nav;
+
+	W = (float)d->width;
+	H = (float)d->height;
+	if (W < 640.0f)
+		W = 640.0f;
+	if (H < 400.0f)
+		H = 400.0f;
+
+	memset(&sidebar, 0, sizeof sidebar);
+	sidebar.color = COL_SIDE;
+	memset(&nav, 0, sizeof nav);
+	nav.direction = FUSE_DIRECTION_COLUMN;
+	nav.gap = 8.0f;
+	nav.pad_l = 12.0f;
+	nav.pad_r = 12.0f;
+	nav.pad_t = 64.0f;
+	nav.pad_b = 12.0f;
+	nav.width_sizing = FUSE_SIZING_FIT;
+	nav.height_sizing = FUSE_SIZING_FIT;
+
+	fuse_canvas_resize(d->canvas, W, H);
+	fuse_canvas_pointer(d->canvas, d->pointer_state, d->mx, d->my);
+	fuse_canvas_clear(d->canvas);
+
+	fuse_div_begin(d->canvas, 0, 0, W, H, NULL);
+	{
+		fuse_div_begin(d->canvas, 0, 0, 200, H, &sidebar);
+		{
+			fuse_div_begin(d->canvas, 0, 0, 200, H, &nav);
+			{
+				for (d->i = 0; d->i < PAGE_COUNT; d->i++) {
+					uint32_t idle, hover;
+					idle = (d->page == d->i) ? COL_ACCENT : COL_BTN;
+					hover = (d->page == d->i) ? COL_ACCENT_H : COL_BTN_H;
+					fuse_idi(d->canvas, "nav", d->i);
+					if (fuse_button(d->canvas, 12, 0, 176, 36, idle, hover))
+						d->page = d->i;
 				}
 			}
-			if (ev.type == PEAK_EVENT_KEY_DOWN) {
-				if (ev.key.key == PEAK_KEY_1) page = PAGE_SPECIMEN;
-				if (ev.key.key == PEAK_KEY_2) page = PAGE_STYLES;
-				if (ev.key.key == PEAK_KEY_3) page = PAGE_SCRIPTS;
-				if (ev.key.key == PEAK_KEY_4) page = PAGE_CACHE;
-			}
+			fuse_div_end(d->canvas);
 		}
+		fuse_div_end(d->canvas);
 
-		W = (float)width;
-		H = (float)height;
-		if (W < 640.0f)
-			W = 640.0f;
-		if (H < 400.0f)
-			H = 400.0f;
-
-		memset(&sidebar, 0, sizeof sidebar);
-		sidebar.color = COL_SIDE;
-		memset(&nav, 0, sizeof nav);
-		nav.direction = FUSE_DIRECTION_COLUMN;
-		nav.gap = 8.0f;
-		nav.pad_l = 12.0f;
-		nav.pad_r = 12.0f;
-		nav.pad_t = 64.0f;
-		nav.pad_b = 12.0f;
-		nav.width_sizing = FUSE_SIZING_FIT;
-		nav.height_sizing = FUSE_SIZING_FIT;
-
-		fuse_canvas_resize(canvas, W, H);
-		fuse_canvas_pointer(canvas, pointer_state, mx, my);
-		fuse_canvas_clear(canvas);
-
-		fuse_div_begin(canvas, 0, 0, W, H, NULL); {
-			fuse_div_begin(canvas, 0, 0, 200, H, &sidebar); {
-				fuse_div_begin(canvas, 0, 0, 200, H, &nav); {
-					for (i = 0; i < PAGE_COUNT; i++) {
-						uint32_t idle, hover;
-						idle = (page == i) ? COL_ACCENT : COL_BTN;
-						hover = (page == i) ? COL_ACCENT_H : COL_BTN_H;
-						fuse_idi(canvas, "nav", i);
-						if (fuse_button(canvas, 12, 0, 176, 36, idle, hover))
-							page = i;
-					}
-				} fuse_div_end(canvas);
-			} fuse_div_end(canvas);
-
-			fuse_div_begin(canvas, 200, 0, W - 200, H, NULL); {
-				if (page == PAGE_CACHE) {
-					fuse_id(canvas, "churn");
-					fuse_slider(canvas, 16, H - 248, W - 232, 18, COL_TRACK, COL_ACCENT, &churn);
-					fuse_id(canvas, "clear");
-					if (fuse_button(canvas, 16, H - 210, 160, 36, COL_BAD, COL_BTN_H)) {
-						type_clear_atlas(type);
-						atlas_resets++;
-					}
+		fuse_div_begin(d->canvas, 200, 0, W - 200, H, NULL);
+		{
+			if (d->page == PAGE_CACHE) {
+				fuse_id(d->canvas, "churn");
+				fuse_slider(d->canvas, 16, H - 248, W - 232, 18, COL_TRACK, COL_ACCENT, &d->churn);
+				fuse_id(d->canvas, "clear");
+				if (fuse_button(d->canvas, 16, H - 210, 160, 36, COL_BAD, COL_BTN_H)) {
+					type_clear_atlas(d->type);
+					atlas_resets++;
 				}
-			} fuse_div_end(canvas);
-		} fuse_div_end(canvas);
-
-		cmds = fuse_canvas_draw(canvas, &ncmds);
-		if (!probed) {
-			dash_probe(type, &fonts);
-			probed = 1;
-		}
-		resets = 0;
-		if (headless)
-			dash_churn(type, 64, 16.0f, &resets);
-
-		dash_text_begin(&text, (float)atlas_w, (float)atlas_h);
-		dash_pages(&text, type, &fonts, page, W, H, churn, &resets);
-		atlas_px = type_ctx_atlas(type, &atlas_w, &atlas_h);
-		rend_texture_copy_data(renderer, &atlas_tex, atlas_px, (size_t)atlas_w * (size_t)atlas_h);
-
-		if (rend_renderer_frame_begin(renderer)) {
-			rend_cmd_render_begin(renderer, 0.055f, 0.067f, 0.086f, 1.0f);
-			fuse_rend_begin(&fr, W, H);
-			if (cmds)
-				fuse_rend_cmds(&fr, cmds, ncmds);
-			fuse_rend_quad(&fr, 200, 0, W - 200, 52, COL_TOP);
-			if (page == PAGE_CACHE) {
-				fuse_rend_quad(&fr, 216, 112, 360, 180, COL_CARD);
-				fuse_rend_quad(&fr, 216, H - 210, 160, 36, COL_BAD);
 			}
-			fuse_rend_flush(&fr, renderer);
-			dash_text_flush(&text, renderer, W, H);
-			rend_cmd_render_end(renderer);
-			rend_renderer_frame_end(renderer, NULL);
 		}
-		frame_i++;
+		fuse_div_end(d->canvas);
 	}
+	fuse_div_end(d->canvas);
 
-	if (headless && !headless_finish(renderer, width, height, REND_FORMAT_R8G8B8A8_UNORM, ppm)) {
-		for (i = 0; i < nkeep; i++)
-			free(keep[i]);
-		free(type_buf);
-		fuse_rend_shutdown(&fr);
-		rend_renderer_destroy(renderer);
-		rend_quit();
-		return 1;
+	cmds = fuse_canvas_draw(d->canvas, &ncmds);
+	if (!d->probed) {
+		dash_probe(d->type, &d->fonts);
+		d->probed = 1;
 	}
+	d->resets = 0;
+	if (d->headless)
+		dash_churn(d->type, 64, 16.0f, &d->resets);
 
-	for (i = 0; i < nkeep; i++)
-		free(keep[i]);
-	free(type_buf);
-	fuse_rend_shutdown(&fr);
-	rend_buffer_destroy(&text.vbo);
-	rend_texture_destroy(renderer, &atlas_tex);
-	rend_renderer_destroy(renderer);
-	if (!headless) {
-		peak_window_close(&win);
+	dash_text_begin(&d->text, (float)d->atlas_w, (float)d->atlas_h);
+	dash_pages(&d->text, d->type, &d->fonts, d->page, W, H, d->churn, &d->resets);
+	d->atlas_px = type_ctx_atlas(d->type, &d->atlas_w, &d->atlas_h);
+	rend_texture_copy_data(d->renderer, &d->atlas_tex, d->atlas_px,
+	                       (size_t)d->atlas_w * (size_t)d->atlas_h);
+
+	if (rend_renderer_frame_begin(d->renderer)) {
+		rend_cmd_render_begin(d->renderer, 0.055f, 0.067f, 0.086f, 1.0f);
+		fuse_rend_begin(&d->fr, W, H);
+		if (cmds)
+			fuse_rend_cmds(&d->fr, cmds, ncmds);
+		fuse_rend_quad(&d->fr, 200, 0, W - 200, 52, COL_TOP);
+		if (d->page == PAGE_CACHE) {
+			fuse_rend_quad(&d->fr, 216, 112, 360, 180, COL_CARD);
+			fuse_rend_quad(&d->fr, 216, H - 210, 160, 36, COL_BAD);
+		}
+		fuse_rend_flush(&d->fr, d->renderer);
+		dash_text_flush(&d->text, d->renderer, W, H);
+		rend_cmd_render_end(d->renderer);
+		rend_renderer_frame_end(d->renderer, NULL);
+	}
+	d->frame_i++;
+}
+
+static void dash_shutdown(Dashboard *d)
+{
+	int i;
+	free(d->vert_spv);
+	free(d->frag_spv);
+	free(d->tvert);
+	free(d->tfrag);
+	for (i = 0; i < d->nkeep; i++)
+		free(d->keep[i]);
+	free(d->type_buf);
+	if (d->renderer) {
+		fuse_rend_shutdown(&d->fr);
+		rend_buffer_destroy(&d->text.vbo);
+		rend_texture_destroy(d->renderer, &d->atlas_tex);
+		rend_renderer_destroy(d->renderer);
+	}
+	if (d->win.running)
+		peak_window_close(&d->win);
+	if (peak_demo_ctx)
 		peak_quit(peak_demo_ctx);
-	}
 	rend_quit();
-	return 0;
+}
+
+int main(int argc, char **argv)
+{
+	static Dashboard dashboard;
+	Dashboard *d = &dashboard;
+	int ok = 0;
+	if (!dash_open(d, argc, argv) || !dash_graphics_init(d) || !dash_type_init(d))
+		goto done;
+	while (d->running) {
+		if (d->headless && d->frame_i >= d->frames)
+			break;
+		if (!d->headless)
+			dash_events(d);
+		if (!d->running)
+			break;
+		dash_frame(d);
+	}
+	ok = !d->headless ||
+	     headless_finish(d->renderer, d->width, d->height, REND_FORMAT_R8G8B8A8_UNORM, d->ppm);
+done:
+	dash_shutdown(d);
+	return ok ? 0 : 1;
 }

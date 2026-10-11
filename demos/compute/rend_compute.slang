@@ -11,7 +11,7 @@ struct PushConstants {
     uint width;
     uint height;
     float deltaTime;
-    uint renderMode; // 0 = particles, 1 = sand 
+    uint renderMode; // 0 = particles, 1 = sand
 };
 
 struct VSOutput {
@@ -71,7 +71,7 @@ void sandMain(uint3 threadId : SV_DispatchThreadID) {
             pc.dstGrid[getIndex(x + dir1, y + 1)] = 1;
             pc.dstGrid[currentIdx] = 0;
             return;
-        } 
+        }
         else if (y + 1 < pc.height && isEmpty(x + dir2, y + 1)) {
             pc.dstGrid[getIndex(x + dir2, y + 1)] = 1;
             pc.dstGrid[currentIdx] = 0;
@@ -113,7 +113,7 @@ VSOutput vertMain(uint vertexID : SV_VertexID) {
             float3(1.0, 1.0, 1.0),
             float3(0.0, 0.33, 0.67)
         );
-    } 
+    }
 
     else {
         uint x = elementIdx % pc.width;

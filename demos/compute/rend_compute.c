@@ -6,260 +6,284 @@
 #include <stddef.h>
 #include <string.h>
 
-#define malloc(size)  peak_debug_malloc_impl((size), __FILE__, __LINE__, __func__)
+#define malloc(size) peak_debug_malloc_impl((size), __FILE__, __LINE__, __func__)
 #define realloc(ptr, size) peak_debug_realloc_impl((ptr), (size), __FILE__, __LINE__, __func__)
-#define free(ptr)     peak_debug_free_impl((ptr), __FILE__, __LINE__, __func__)
+#define free(ptr) peak_debug_free_impl((ptr), __FILE__, __LINE__, __func__)
 
-float delta = 0;
-PeakWindow win;
-PeakEvent ev;
+static PeakWindow win;
 
-bool vsync = true;
+static bool vsync = true;
 
 #define PARTICLE_COUNT 1024 * 10
-#define GRID_WIDTH  512
+#define GRID_WIDTH 512
 #define GRID_HEIGHT 512
 
 typedef struct {
-    uint64_t particles;
-    uint64_t src_grid;
-    uint64_t dst_grid;
-    uint32_t particle_count;
-    uint32_t width;
-    uint32_t height;
-    float delta_time;
-    uint32_t render_mode;
+	uint64_t particles;
+	uint64_t src_grid;
+	uint64_t dst_grid;
+	uint32_t particle_count;
+	uint32_t width;
+	uint32_t height;
+	float delta_time;
+	uint32_t render_mode;
 } PushConstants;
 
 typedef struct Particle {
-    float pos[2];
-    float vel[2];
+	float pos[2];
+	float vel[2];
 } Particle;
 
-uint32_t pcg_hash(uint32_t seed) {
-    uint32_t state = seed * 747796405u + 2891336453u;
-    uint32_t word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
-    return (word >> 22u) ^ word;
+static uint32_t pcg_hash(uint32_t seed)
+{
+	uint32_t state = seed * 747796405u + 2891336453u;
+	uint32_t word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+	return (word >> 22u) ^ word;
 }
 
-float cool_beans(uint32_t *seed) {
-    *seed = pcg_hash(*seed);
-    return (float) *seed / 4294967295.0;
+static float particle_random(uint32_t *seed)
+{
+	*seed = pcg_hash(*seed);
+	return (float)*seed / 4294967295.0;
 }
 
 static PeakCtx *peak_demo_ctx;
 
-static uint8_t *
-load_spv(const char *a, const char *b, unsigned long *size)
+static uint8_t *load_spv(const char *a, const char *b, unsigned long *size)
 {
-    uint8_t *p = peak_file_alloc(a, size);
-    if (p) return p;
-    return peak_file_alloc(b, size);
+	uint8_t *p = peak_file_alloc(a, size);
+	if (p)
+		return p;
+	return peak_file_alloc(b, size);
 }
 
-int main(int argc, char **argv) {
-    int headless;
-    int frames;
-    int frame_i;
-    const char *ppm;
-    uint32_t width = 800;
-    uint32_t height = 600;
-    RendBindingInfo bind_info = {0};
-    RendRenderer renderer;
+static void initialize_particles(Particle *initial_particles, uint32_t *seed)
+{
+	for (int i = 0; i < PARTICLE_COUNT; i++) {
+		initial_particles[i].pos[0] = particle_random(seed) * 2.0f - 1.0f;
+		initial_particles[i].pos[1] = particle_random(seed) * 2.0f - 1.0f;
+		initial_particles[i].vel[0] = particle_random(seed) * 0.4f - 0.2f;
+		initial_particles[i].vel[1] = particle_random(seed) * 0.4f - 0.2f;
+	}
+}
 
-    headless = headless_parse(argc, argv, &frames, &ppm);
-    memset(&win, 0, sizeof win);
+static void initialize_grid(uint32_t *initial_grid)
+{
+	for (int y = 0; y < 100; y++) {
+		for (int x = 150; x < 362; x++) {
+			initial_grid[y * GRID_WIDTH + x] = 1; // 1 = sand
+		}
+	}
+}
 
-    if (!headless) {
-        if (!(peak_demo_ctx = peak_init_legacy())) {
-            PFATAL("Failed to init Peak!");
-            return 1;
-        }
+static void compute_shutdown(RendRenderer renderer)
+{
+	rend_renderer_destroy(renderer);
+	if (win.running)
+		peak_window_close(&win);
+	if (peak_demo_ctx)
+		peak_quit(peak_demo_ctx);
+	rend_quit();
+}
 
-        win = peak_window_open(peak_demo_ctx, "demo", width, height, 0);
-        if (!win.running) {
-            PFATAL("Failed to open a window!");
-            return 1;
-        }
-    }
+int main(int argc, char **argv)
+{
+	int headless;
+	int frames;
+	int frame_i;
+	const char *ppm;
+	uint32_t width = 800;
+	uint32_t height = 600;
+	RendBindingInfo bind_info = {0};
+	RendRenderer renderer;
 
-    if (headless)
-        renderer = rend_renderer_create_offscreen(width, height, REND_FORMAT_R8G8B8A8_UNORM, REND_BACKEND_AUTO, &bind_info);
-    else
-        renderer = rend_renderer_create(&win, REND_BACKEND_AUTO, NULL, vsync, &bind_info);
-    if (!renderer) {
-        PFATAL("Failed to create renderer!");
-        if (!headless) {
-            peak_window_close(&win);
-            peak_quit(peak_demo_ctx);
-        }
-        return 1;
-    }
+	headless = headless_parse(argc, argv, &frames, &ppm);
+	memset(&win, 0, sizeof win);
 
-    unsigned long particles_bytes = 0;
-    uint8_t *particles_shader = load_spv("particle.spv", "demos/compute/particle.spv", &particles_bytes);
+	renderer = demo_renderer_open(&win, &peak_demo_ctx, headless, width, height,
+	                              "Compute: sand and particles", vsync, &bind_info);
+	if (!renderer) {
+		PFATAL("Failed to create window/renderer!");
+		return 1;
+	}
 
-    unsigned long sand_bytes = 0;
-    uint8_t *sand_shader = load_spv("sand.spv", "demos/compute/sand.spv", &sand_bytes);
+	unsigned long particles_bytes = 0;
+	uint8_t *particles_shader =
+	    load_spv("particle.spv", "demos/compute/particle.spv", &particles_bytes);
 
-    unsigned long vert_size = 0;
-    uint8_t *vert = load_spv("vert.spv", "demos/compute/vert.spv", &vert_size);
+	unsigned long sand_bytes = 0;
+	uint8_t *sand_shader = load_spv("sand.spv", "demos/compute/sand.spv", &sand_bytes);
 
-    unsigned long frag_size = 0;
-    uint8_t *frag = load_spv("frag.spv", "demos/compute/frag.spv", &frag_size);
+	unsigned long vert_size = 0;
+	uint8_t *vert = load_spv("vert.spv", "demos/compute/vert.spv", &vert_size);
 
-    uint32_t seed = 0xC0FFEE;
+	unsigned long frag_size = 0;
+	uint8_t *frag = load_spv("frag.spv", "demos/compute/frag.spv", &frag_size);
 
-    Particle *initial_particles = malloc(PARTICLE_COUNT * sizeof *initial_particles);
-    for (int i = 0; i < PARTICLE_COUNT; i++) {
-        initial_particles[i].pos[0] = cool_beans(&seed) * 2.0f - 1.0f;
-        initial_particles[i].pos[1] = cool_beans(&seed) * 2.0f - 1.0f;
-        initial_particles[i].vel[0] = cool_beans(&seed) * 0.4f - 0.2f;
-        initial_particles[i].vel[1] = cool_beans(&seed) * 0.4f - 0.2f;
-    }
+	uint32_t seed = 0xC0FFEE;
 
-    size_t buffer_size = PARTICLE_COUNT * sizeof(Particle);
-    RendBuffer particle_buf = rend_buffer_create(renderer, buffer_size, REND_BUFFER_STORAGE, true);
-    rend_buffer_write(renderer, &particle_buf, initial_particles, buffer_size, 0);
+	Particle *initial_particles = malloc(PARTICLE_COUNT * sizeof *initial_particles);
+	if (!initial_particles) {
+		free(particles_shader);
+		free(sand_shader);
+		free(vert);
+		free(frag);
+		compute_shutdown(renderer);
+		return 1;
+	}
+	initialize_particles(initial_particles, &seed);
 
-    size_t grid_buffer_size = GRID_WIDTH * GRID_HEIGHT * sizeof(uint32_t);
-    uint32_t *initial_grid = calloc(GRID_WIDTH * GRID_HEIGHT, sizeof(uint32_t));
+	size_t buffer_size = PARTICLE_COUNT * sizeof(Particle);
+	RendBuffer particle_buf = rend_buffer_create(renderer, buffer_size, REND_BUFFER_STORAGE, true);
+	rend_buffer_write(renderer, &particle_buf, initial_particles, buffer_size, 0);
 
-    for (int y = 0; y < 100; y++) {
-        for (int x = 150; x < 362; x++) {
-            initial_grid[y * GRID_WIDTH + x] = 1; // 1 = sand
-        }
-    }
+	size_t grid_buffer_size = GRID_WIDTH * GRID_HEIGHT * sizeof(uint32_t);
+	uint32_t *initial_grid = calloc(GRID_WIDTH * GRID_HEIGHT, sizeof(uint32_t));
 
-    RendBuffer src_buf = rend_buffer_create(renderer, GRID_WIDTH * GRID_HEIGHT * sizeof(uint32_t), REND_BUFFER_STORAGE, false);
-    RendBuffer dst_buf = rend_buffer_create(renderer, GRID_WIDTH * GRID_HEIGHT * sizeof(uint32_t), REND_BUFFER_STORAGE, false);
-    rend_buffer_write(renderer, &src_buf, initial_grid, grid_buffer_size, 0);
-    rend_buffer_write(renderer, &dst_buf, initial_grid, grid_buffer_size, 0);
+	if (!initial_grid) {
+		free(initial_particles);
+		free(particles_shader);
+		free(sand_shader);
+		free(vert);
+		free(frag);
+		rend_buffer_destroy(&particle_buf);
+		compute_shutdown(renderer);
+		return 1;
+	}
+	initialize_grid(initial_grid);
 
-    uint64_t particles_address = rend_buffer_address(&particle_buf);
+	RendBuffer src_buf = rend_buffer_create(renderer, GRID_WIDTH * GRID_HEIGHT * sizeof(uint32_t),
+	                                        REND_BUFFER_STORAGE, false);
+	RendBuffer dst_buf = rend_buffer_create(renderer, GRID_WIDTH * GRID_HEIGHT * sizeof(uint32_t),
+	                                        REND_BUFFER_STORAGE, false);
+	rend_buffer_write(renderer, &src_buf, initial_grid, grid_buffer_size, 0);
+	rend_buffer_write(renderer, &dst_buf, initial_grid, grid_buffer_size, 0);
 
-    RendBuffer *src_grid = &src_buf;
-    RendBuffer *dst_grid = &dst_buf;
+	uint64_t particles_address = rend_buffer_address(&particle_buf);
 
-    RendPushConstantInfo pc = { .offset = 0, .size = sizeof(PushConstants) };
-    RendPipeline particle_compute = rend_pipeline_create_compute_spirv(renderer, particles_shader, particles_bytes, &pc, 1);
-    RendPipeline sand_compute = rend_pipeline_create_compute_spirv(renderer, sand_shader, sand_bytes, &pc, 1);
-    free(particles_shader);
-    free(sand_shader); 
-                        
-    RendPipeline graphics_pipeline = rend_pipeline_create_graphics_bindless_spirv(renderer, vert, vert_size, frag, frag_size, &pc, 1, REND_POLYGON_MODE_FILL, REND_CULL_MODE_NONE, REND_TOPOLOGY_TRIANGLE_LIST, 0, true);
+	RendBuffer *src_grid = &src_buf;
+	RendBuffer *dst_grid = &dst_buf;
 
-    free(vert);
-    free(frag);
+	RendPushConstantInfo pc = {.offset = 0, .size = sizeof(PushConstants)};
+	RendPipeline particle_compute =
+	    rend_pipeline_create_compute_spirv(renderer, particles_shader, particles_bytes, &pc, 1);
+	RendPipeline sand_compute =
+	    rend_pipeline_create_compute_spirv(renderer, sand_shader, sand_bytes, &pc, 1);
+	free(particles_shader);
+	free(sand_shader);
 
-    float dt = 1.0f / 60.0f; 
-    uint64_t dt_ns = (uint64_t) (dt * NANOS_PER_SEC);
+	RendPipeline graphics_pipeline = rend_pipeline_create_graphics_bindless_spirv(
+	    renderer, vert, vert_size, frag, frag_size, &pc, 1, REND_POLYGON_MODE_FILL,
+	    REND_CULL_MODE_NONE, REND_TOPOLOGY_TRIANGLE_LIST, 0, true);
 
-    uint32_t mode = 2;
-    frame_i = 0;
-    while (mode > 0) {
-        uint64_t start;
-        PeakEvent ev;
+	free(vert);
+	free(frag);
 
-        if (headless && frame_i >= frames)
-            break;
+	float dt = 1.0f / 60.0f;
+	uint64_t dt_ns = (uint64_t)(dt * NANOS_PER_SEC);
 
-        start = peak_get_time();
+	uint32_t mode = 2;
+	frame_i = 0;
+	while (mode > 0) {
+		uint64_t start;
+		PeakEvent ev;
 
-        while (!headless && peak_window_epoll(&win, &ev)) {
-            if (ev.type == PEAK_EVENT_WINDOW_CLOSE) {
-                mode -= 1;
-                break;
-            }
-        }
+		if (headless && frame_i >= frames)
+			break;
 
-        if (rend_renderer_frame_begin(renderer)) {
+		start = peak_get_time();
 
-            PushConstants pc = {0};
+		while (!headless && peak_window_epoll(&win, &ev)) {
+			if (ev.type == PEAK_EVENT_WINDOW_CLOSE) {
+				mode -= 1;
+				break;
+			}
+		}
 
-            if (mode == 2) {
-                /*
-                 * Sand Simulation 
-                 */
-                pc.delta_time   = dt;
-                pc.width        = GRID_WIDTH;
-                pc.height       = GRID_HEIGHT;
-                pc.render_mode  = 1;
-                pc.src_grid     = src_grid->gpu_address;
-                pc.dst_grid     = dst_grid->gpu_address;
+		if (rend_renderer_frame_begin(renderer)) {
 
-                rend_pipeline_bind(sand_compute);
-                rend_pipeline_push_constants(sand_compute, &pc, sizeof(pc));
-                
-                uint32_t x = (GRID_WIDTH  + 15) / 16;
-                uint32_t y = (GRID_HEIGHT + 15) / 16;
-                rend_pipeline_dispatch(sand_compute, x, y, 1);
+			PushConstants pc = {0};
 
-                RendBuffer *temp = src_grid;
-                src_grid = dst_grid;
-                dst_grid = temp;
+			if (mode == 2) {
+				/*
+				 * Sand Simulation
+				 */
+				pc.delta_time = dt;
+				pc.width = GRID_WIDTH;
+				pc.height = GRID_HEIGHT;
+				pc.render_mode = 1;
+				pc.src_grid = src_grid->gpu_address;
+				pc.dst_grid = dst_grid->gpu_address;
 
-                memset(rend_buffer_mapped(src_grid), 0, grid_buffer_size);
+				rend_pipeline_bind(sand_compute);
+				rend_pipeline_push_constants(sand_compute, &pc, sizeof(pc));
 
-            } else {
-                /*
-                 * Particles Simulation 
-                 */
-                pc.particles      = particles_address;
-                pc.delta_time     = dt;
-                pc.particle_count = PARTICLE_COUNT;
-                pc.render_mode    = 0;
+				uint32_t x = (GRID_WIDTH + 15) / 16;
+				uint32_t y = (GRID_HEIGHT + 15) / 16;
+				rend_pipeline_dispatch(sand_compute, x, y, 1);
 
-                rend_pipeline_bind(particle_compute);
-                rend_pipeline_push_constants(particle_compute, &pc, sizeof(pc));
-                rend_pipeline_dispatch(particle_compute, (PARTICLE_COUNT + 255) / 256, 1, 1);
-            }
+				RendBuffer *temp = src_grid;
+				src_grid = dst_grid;
+				dst_grid = temp;
 
-            rend_renderer_render_pass_begin(renderer, 0.5f, 0.5f, 0.5f, 0.0f); {
-                rend_pipeline_bind(graphics_pipeline);
-                rend_pipeline_push_constants(graphics_pipeline, &pc, sizeof(pc));
+				memset(rend_buffer_mapped(src_grid), 0, grid_buffer_size);
 
-                uint32_t vertex_count = (mode == 2) ? (6 * GRID_WIDTH * GRID_HEIGHT) : (6 * PARTICLE_COUNT);
-                rend_pipeline_draw(graphics_pipeline, vertex_count, 1);
+			} else {
+				/*
+				 * Particles Simulation
+				 */
+				pc.particles = particles_address;
+				pc.delta_time = dt;
+				pc.particle_count = PARTICLE_COUNT;
+				pc.render_mode = 0;
 
-            } rend_renderer_render_pass_end(renderer);
+				rend_pipeline_bind(particle_compute);
+				rend_pipeline_push_constants(particle_compute, &pc, sizeof(pc));
+				rend_pipeline_dispatch(particle_compute, (PARTICLE_COUNT + 255) / 256, 1, 1);
+			}
 
-            rend_renderer_frame_end(renderer, NULL);
-        }
+			rend_renderer_render_pass_begin(renderer, 0.5f, 0.5f, 0.5f, 0.0f);
+			{
+				rend_pipeline_bind(graphics_pipeline);
+				rend_pipeline_push_constants(graphics_pipeline, &pc, sizeof(pc));
 
-        if (!headless) {
-            uint64_t delta_ns = peak_get_time() - start;
-            if (delta_ns < dt_ns)
-                peak_sleep_ns(dt_ns - delta_ns);
-        }
-        frame_i++;
-    }
+				uint32_t vertex_count =
+				    (mode == 2) ? (6 * GRID_WIDTH * GRID_HEIGHT) : (6 * PARTICLE_COUNT);
+				rend_pipeline_draw(graphics_pipeline, vertex_count, 1);
+			}
+			rend_renderer_render_pass_end(renderer);
 
-    if (headless && !headless_finish(renderer, width, height, REND_FORMAT_R8G8B8A8_UNORM, ppm)) {
-        free(initial_particles);
-        free(initial_grid);
-        rend_buffer_destroy(&particle_buf);
-        rend_buffer_destroy(&src_buf);
-        rend_buffer_destroy(&dst_buf);
-        rend_renderer_destroy(renderer);
-        peak_debug_memory_report();
-        return 1;
-    }
+			rend_renderer_frame_end(renderer, NULL);
+		}
 
-    free(initial_particles);
-    free(initial_grid);
+		if (!headless) {
+			uint64_t delta_ns = peak_get_time() - start;
+			if (delta_ns < dt_ns)
+				peak_sleep_ns(dt_ns - delta_ns);
+		}
+		frame_i++;
+	}
 
-    rend_buffer_destroy(&particle_buf);
-    rend_buffer_destroy(&src_buf);
-    rend_buffer_destroy(&dst_buf);
+	if (headless && !headless_finish(renderer, width, height, REND_FORMAT_R8G8B8A8_UNORM, ppm)) {
+		free(initial_particles);
+		free(initial_grid);
+		rend_buffer_destroy(&particle_buf);
+		rend_buffer_destroy(&src_buf);
+		rend_buffer_destroy(&dst_buf);
+		compute_shutdown(renderer);
+		peak_debug_memory_report();
+		return 1;
+	}
 
-    rend_renderer_destroy(renderer);
+	free(initial_particles);
+	free(initial_grid);
 
-    if (!headless) {
-        peak_window_close(&win);
-        peak_quit(peak_demo_ctx);
-    }
+	rend_buffer_destroy(&particle_buf);
+	rend_buffer_destroy(&src_buf);
+	rend_buffer_destroy(&dst_buf);
 
-    peak_debug_memory_report();
-    return 0;
+	compute_shutdown(renderer);
+
+	peak_debug_memory_report();
+	return 0;
 }

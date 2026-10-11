@@ -10,8 +10,7 @@
 #define DEMO_CYCLES 8
 #define HEAP_BYTES 4096
 
-static void *
-caller_storage(size_t size, size_t alignment, void **allocation)
+static void *caller_storage(size_t size, size_t alignment, void **allocation)
 {
 	uintptr_t address;
 	if (!alignment || (alignment & (alignment - 1)) || size > SIZE_MAX - alignment)
@@ -24,63 +23,70 @@ caller_storage(size_t size, size_t alignment, void **allocation)
 	return (void *)address;
 }
 
-static int
-report_failure(const char *operation)
+static int report_failure(const char *operation)
 {
 	RendDiagnostic diagnostic = {0};
 	if (rend_last_diagnostic(&diagnostic))
-		fprintf(stderr, "rend2 demo: %s: diagnostic %d/native %d: %s\n", operation,
-			diagnostic.code, diagnostic.native_code, diagnostic.message);
+		fprintf(stderr, "rend2 demo: %s: diagnostic %d/native %d: %s\n", operation, diagnostic.code,
+		        diagnostic.native_code, diagnostic.message);
 	else
 		fprintf(stderr, "rend2 demo: %s failed without a diagnostic\n", operation);
 	return 0;
 }
 
-int
-main(void)
-{
+typedef struct RendDemo {
+
 	RendMemoryRequirements discovery_requirements, backend_requirements;
 	RendQueueFamilyInfo families[4096];
-	RendDiscovery *discovery = NULL;
-	RendBackend backend = NULL;
-	RendQueue queue = NULL;
-	RendCommandPool pool = NULL;
-	RendCommandList commands = NULL;
-	RendTimeline timeline = NULL;
-	RendHeap heap = NULL;
-	RendParams params = {0};
-	RendQueueParams queue_params = {0};
-	RendCommandPoolParams pool_params = {0};
+	RendDiscovery *discovery;
+	RendBackend backend;
+	RendQueue queue;
+	RendCommandPool pool;
+	RendCommandList commands;
+	RendTimeline timeline;
+	RendHeap heap;
+	RendParams params;
+	RendQueueParams queue_params;
+	RendCommandPoolParams pool_params;
 	RendHeapClassInfo classes[64];
-	RendHeapDesc heap_desc = {0};
+	RendHeapDesc heap_desc;
 	RendHeapInfo heap_info;
 	RendHeapRange range;
-	RendSubmitDesc submit = {0};
-	void *discovery_allocation = NULL, *backend_allocation = NULL;
-	void *discovery_storage = NULL, *backend_storage = NULL;
+	RendSubmitDesc submit;
+	void *discovery_allocation, *backend_allocation;
+	void *discovery_storage, *backend_storage;
 	unsigned char expected[HEAP_BYTES];
-	uint32_t class_count = 0, device_index, family = UINT32_MAX, i;
-	int success = 0;
+	uint32_t class_count, device_index, family, i;
+	int success;
 
-	if (!rend_discovery_memory_requirements(&discovery_requirements))
+} RendDemo;
+
+static int demo_discover(RendDemo *d)
+{
+
+	if (!rend_discovery_memory_requirements(&d->discovery_requirements))
 		return report_failure("discovery sizing");
-	discovery_storage = caller_storage(discovery_requirements.size, discovery_requirements.alignment, &discovery_allocation);
-	if (!discovery_storage) {
+	d->discovery_storage =
+	    caller_storage(d->discovery_requirements.size, d->discovery_requirements.alignment,
+	                   &d->discovery_allocation);
+	if (!d->discovery_storage) {
 		fprintf(stderr, "rend2 demo: caller discovery storage allocation failed\n");
-		goto done;
+		return 0;
 	}
-	if (!rend_discovery_create(discovery_storage, discovery_requirements.size, families,
-			(uint32_t)(sizeof(families) / sizeof(families[0])), &discovery)) {
+	if (!rend_discovery_create(d->discovery_storage, d->discovery_requirements.size, d->families,
+	                           (uint32_t)(sizeof(d->families) / sizeof(d->families[0])),
+	                           &d->discovery)) {
 		report_failure("Vulkan device discovery");
-		goto done;
+		return 0;
 	}
-	if (!rend_discovery_device_count(discovery)) {
+	if (!rend_discovery_device_count(d->discovery)) {
 		fprintf(stderr, "rend2 demo: unsupported: Vulkan discovery found no physical devices\n");
-		goto done;
+		return 0;
 	}
 
-	for (device_index = 0; device_index < rend_discovery_device_count(discovery); device_index++) {
-		const RendDeviceInfo *candidate = rend_discovery_device(discovery, device_index);
+	for (d->device_index = 0; d->device_index < rend_discovery_device_count(d->discovery);
+	     d->device_index++) {
+		const RendDeviceInfo *candidate = rend_discovery_device(d->discovery, d->device_index);
 		const RendQueueFamilyInfo *candidate_families;
 		uint32_t count = 0, j;
 		if (!candidate || !rend_device_supports_profile(candidate, REND_PROFILE_GRAPHICS_COMPUTE))
@@ -89,160 +95,199 @@ main(void)
 		for (j = 0; j < count; j++) {
 			if ((candidate_families[j].capabilities & (REND_QUEUE_GRAPHICS | REND_QUEUE_COMPUTE)) ==
 			    (REND_QUEUE_GRAPHICS | REND_QUEUE_COMPUTE)) {
-				family = candidate_families[j].family_index;
+				d->family = candidate_families[j].family_index;
 				break;
 			}
 		}
-		if (family != UINT32_MAX) {
-			params.device = candidate;
-			printf("rend2 demo: selected explicit Vulkan device %u: %s\n", device_index, rend_device_name(candidate));
+		if (d->family != UINT32_MAX) {
+			d->params.device = candidate;
+			printf("rend2 demo: selected explicit Vulkan device %u: %s\n", d->device_index,
+			       rend_device_name(candidate));
 			break;
 		}
 	}
-	if (family == UINT32_MAX) {
-		fprintf(stderr, "rend2 demo: unsupported: no discovered device offers graphics-compute profile and queue family\n");
-		goto done;
+	if (d->family == UINT32_MAX) {
+		fprintf(stderr, "rend2 demo: unsupported: no discovered device offers graphics-compute "
+		                "profile and queue family\n");
+		return 0;
 	}
 
-	params.profile = REND_PROFILE_GRAPHICS_COMPUTE;
-	params.queues = &queue_params;
-	params.queue_count = 1;
-	params.command_pools = &pool_params;
-	params.command_pool_count = 1;
-	params.heap_count = 1;
-	params.timeline_count = 1;
-	queue_params.family_index = family;
-	queue_params.submission_count = 1;
-	queue_params.max_submit_command_lists = 1;
-	queue_params.max_submit_waits = 1;
-	pool_params.family_index = family;
-	pool_params.command_list_count = 1;
-	pool_params.scratch_bytes = 64 * 1024;
-	pool_params.metadata_bytes = 16 * 1024;
-	if (!rend_memory_requirements(&params, &backend_requirements)) {
+	return 1;
+}
+
+static int demo_backend(RendDemo *d)
+{
+	d->params.profile = REND_PROFILE_GRAPHICS_COMPUTE;
+	d->params.queues = &d->queue_params;
+	d->params.queue_count = 1;
+	d->params.command_pools = &d->pool_params;
+	d->params.command_pool_count = 1;
+	d->params.heap_count = 1;
+	d->params.timeline_count = 1;
+	d->queue_params.family_index = d->family;
+	d->queue_params.submission_count = 1;
+	d->queue_params.max_submit_command_lists = 1;
+	d->queue_params.max_submit_waits = 1;
+	d->pool_params.family_index = d->family;
+	d->pool_params.command_list_count = 1;
+	d->pool_params.scratch_bytes = 64 * 1024;
+	d->pool_params.metadata_bytes = 16 * 1024;
+	if (!rend_memory_requirements(&d->params, &d->backend_requirements)) {
 		report_failure("explicit backend sizing");
-		goto done;
+		return 0;
 	}
-	backend_storage = caller_storage(backend_requirements.size, backend_requirements.alignment, &backend_allocation);
-	if (!backend_storage) {
+	d->backend_storage = caller_storage(d->backend_requirements.size,
+	                                    d->backend_requirements.alignment, &d->backend_allocation);
+	if (!d->backend_storage) {
 		fprintf(stderr, "rend2 demo: caller backend storage allocation failed\n");
-		goto done;
+		return 0;
 	}
-	if (!rend_place_in_memory(backend_storage, backend_requirements.size, &params, &backend)) {
+	if (!rend_place_in_memory(d->backend_storage, d->backend_requirements.size, &d->params,
+	                          &d->backend)) {
 		report_failure("explicit backend placement");
-		goto done;
+		return 0;
 	}
-	if (!rend_queue_get(backend, 0, &queue) || !rend_command_pool_get(backend, 0, &pool)) {
+	if (!rend_queue_get(d->backend, 0, &d->queue) ||
+	    !rend_command_pool_get(d->backend, 0, &d->pool)) {
 		report_failure("queue/command-pool retrieval");
-		goto done;
+		return 0;
 	}
-	if (!rend_timeline_create(queue, 0, &timeline)) {
+	if (!rend_timeline_create(d->queue, 0, &d->timeline)) {
 		report_failure("timeline creation");
-		goto done;
+		return 0;
 	}
 
-	if (!rend_heap_classes(backend, REND_HEAP_DATA, classes, 64, &class_count) || !class_count) {
+	return 1;
+}
+
+static int demo_heap(RendDemo *d)
+{
+	if (!rend_heap_classes(d->backend, REND_HEAP_DATA, d->classes, 64, &d->class_count) ||
+	    !d->class_count) {
 		report_failure("data heap memory classes");
-		goto done;
+		return 0;
 	}
-	heap_desc.kind = REND_HEAP_DATA;
-	heap_desc.size = HEAP_BYTES;
-	for (i = 0; i < class_count; i++) {
-		if (classes[i].memory_properties & REND_MEMORY_HOST_VISIBLE) {
-			heap_desc.memory_class = classes[i].id;
+	d->heap_desc.kind = REND_HEAP_DATA;
+	d->heap_desc.size = HEAP_BYTES;
+	for (d->i = 0; d->i < d->class_count; d->i++) {
+		if (d->classes[d->i].memory_properties & REND_MEMORY_HOST_VISIBLE) {
+			d->heap_desc.memory_class = d->classes[d->i].id;
 			break;
 		}
 	}
-	if (i == class_count) {
+	if (d->i == d->class_count) {
 		fprintf(stderr, "rend2 demo: unsupported: no host-visible data heap memory class\n");
-		goto done;
+		return 0;
 	}
-	if (!rend_heap_create(backend, &heap_desc, &heap) || !rend_heap_get_info(backend, heap, &heap_info)) {
+	if (!rend_heap_create(d->backend, &d->heap_desc, &d->heap) ||
+	    !rend_heap_get_info(d->backend, d->heap, &d->heap_info)) {
 		report_failure("host-visible data heap creation/info");
-		goto done;
+		return 0;
 	}
-	if (!heap_info.cpu_base) {
+	if (!d->heap_info.cpu_base) {
 		fprintf(stderr, "rend2 demo: unsupported: selected host-visible heap has no CPU mapping\n");
-		goto done;
+		return 0;
 	}
 
-	for (i = 0; i < HEAP_BYTES; i++)
-		expected[i] = (unsigned char)((i * 37u + 11u) & 255u);
-	memcpy(heap_info.cpu_base, expected, sizeof(expected));
-	range.heap = heap;
-	range.offset = 0;
-	range.size = sizeof(expected);
-	if (!rend_heap_flush(backend, range)) {
+	return 1;
+}
+
+static int demo_submit(RendDemo *d)
+{
+	for (d->i = 0; d->i < HEAP_BYTES; d->i++)
+		d->expected[d->i] = (unsigned char)((d->i * 37u + 11u) & 255u);
+	memcpy(d->heap_info.cpu_base, d->expected, sizeof(d->expected));
+	d->range.heap = d->heap;
+	d->range.offset = 0;
+	d->range.size = sizeof(d->expected);
+	if (!rend_heap_flush(d->backend, d->range)) {
 		report_failure("heap upload flush");
-		goto done;
+		return 0;
 	}
-	if (!rend_command_list_begin(pool, 0, &commands) || !rend_command_list_end(commands)) {
+	if (!rend_command_list_begin(d->pool, 0, &d->commands) || !rend_command_list_end(d->commands)) {
 		report_failure("command-list recording");
-		goto done;
+		return 0;
 	}
-	submit.commands = &commands;
-	submit.command_count = 1;
-	submit.completion.timeline = timeline;
-	for (i = 1; i <= DEMO_CYCLES; i++) {
-		submit.completion.value = i;
-		if (!rend_queue_submit(queue, &submit)) {
+	d->submit.commands = &d->commands;
+	d->submit.command_count = 1;
+	d->submit.completion.timeline = d->timeline;
+	for (d->i = 1; d->i <= DEMO_CYCLES; d->i++) {
+		d->submit.completion.value = d->i;
+		if (!rend_queue_submit(d->queue, &d->submit)) {
 			report_failure("queue submission");
-			goto done;
+			return 0;
 		}
-		if (!rend_timeline_wait(timeline, i, UINT64_MAX)) {
+		if (!rend_timeline_wait(d->timeline, d->i, UINT64_MAX)) {
 			report_failure("timeline completion wait");
-			goto done;
+			return 0;
 		}
-		if (!rend_command_pool_reset(pool)) {
+		if (!rend_command_pool_reset(d->pool)) {
 			report_failure("command-pool cycle reset");
-			goto done;
+			return 0;
 		}
-		if (i < DEMO_CYCLES && (!rend_command_list_begin(pool, 0, &commands) || !rend_command_list_end(commands))) {
+		if (d->i < DEMO_CYCLES && (!rend_command_list_begin(d->pool, 0, &d->commands) ||
+		                           !rend_command_list_end(d->commands))) {
 			report_failure("next command-list recording");
-			goto done;
+			return 0;
 		}
 	}
-	if (!rend_heap_invalidate(backend, range)) {
+	if (!rend_heap_invalidate(d->backend, d->range)) {
 		report_failure("heap completion invalidate");
-		goto done;
+		return 0;
 	}
-	if (memcmp(heap_info.cpu_base, expected, sizeof(expected))) {
+	if (memcmp(d->heap_info.cpu_base, d->expected, sizeof(d->expected))) {
 		fprintf(stderr, "rend2 demo: mapped CPU heap data mismatch\n");
-		goto done;
+		return 0;
 	}
-	success = 1;
-done:
+	return 1;
+}
+
+static int demo_shutdown(RendDemo *d)
+{
 	/* Terminal failure may leave accepted work pending. Drain before retiring
 	 * objects; retain borrowed backing until process exit if retirement fails. */
-	if (backend) {
-		if (!rend_backend_wait_idle(backend)) {
+	if (d->backend) {
+		if (!rend_backend_wait_idle(d->backend)) {
 			report_failure("backend shutdown drain");
-			return 1;
+			return 0;
 		}
-		if (pool && !rend_command_pool_reset(pool)) {
+		if (d->pool && !rend_command_pool_reset(d->pool)) {
 			report_failure("final command-pool reset");
-			return 1;
+			return 0;
 		}
-		if (timeline && !rend_timeline_destroy(timeline)) {
+		if (d->timeline && !rend_timeline_destroy(d->timeline)) {
 			report_failure("timeline destruction");
-			return 1;
+			return 0;
 		}
-		if (heap && !rend_heap_destroy(backend, heap)) {
+		if (d->heap && !rend_heap_destroy(d->backend, d->heap)) {
 			report_failure("heap destruction");
-			return 1;
+			return 0;
 		}
-		if (!rend_backend_destroy(backend)) {
+		if (!rend_backend_destroy(d->backend)) {
 			report_failure("backend destruction");
-			return 1;
+			return 0;
 		}
 	}
-	if (discovery && !rend_discovery_destroy(discovery)) {
+	if (d->discovery && !rend_discovery_destroy(d->discovery)) {
 		report_failure("discovery destruction");
-		return 1;
+		return 0;
 	}
-	free(backend_allocation);
-	free(discovery_allocation);
+	free(d->backend_allocation);
+	free(d->discovery_allocation);
+	return 1;
+}
+
+int main(void)
+{
+	RendDemo demo = {0};
+	demo.family = UINT32_MAX;
+	int success =
+	    demo_discover(&demo) && demo_backend(&demo) && demo_heap(&demo) && demo_submit(&demo);
+	if (!demo_shutdown(&demo))
+		return 1;
 	if (success)
-		printf("rend2 demo: %u empty-command queue/timeline cycles and %u-byte mapped CPU write/read passed (not GPU data roundtrip)\n", DEMO_CYCLES, HEAP_BYTES);
+		printf("rend2 demo: %u empty-command queue/timeline cycles and %u-byte mapped CPU "
+		       "write/read passed (not GPU data roundtrip)\n",
+		       DEMO_CYCLES, HEAP_BYTES);
 	return success ? 0 : 1;
 }

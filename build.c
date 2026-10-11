@@ -104,23 +104,6 @@ build_multiplatform_demo(void)
 }
 
 static bool
-build_fuse_demo(void)
-{
-    Poof_CC cc = {0};
-    poof_mkdir("demos/fuse");
-    poof_cc_init(&cc, POOF_CC_GCC | POOF_CC_CLANG, POOF_TARGET_HOST);
-    cc.debug_mode = true;
-    cc.optimization = POOF_O0;
-    cc.output = "demos/fuse/demo";
-    poof_cmd_append(&cc.inputs, "demos/fuse/demo.c");
-    poof_cmd_append(&cc.includes, ".");
-    poof_cmd_append(&cc.defines, "FUSE_DEBUG");
-    poof_cmd_append(&cc.libs, "m");
-    poof_cmd_append(&cc.extra_flags, "-std=c99", "-Wall", "-Werror");
-    return poof_cc_run(&cc);
-}
-
-static bool
 build_grit_demo(void)
 {
     Poof_CC cc = {0};
@@ -131,6 +114,7 @@ build_grit_demo(void)
     cc.output = "demos/grit/demo";
     poof_cmd_append(&cc.inputs, "demos/grit/demo.c");
     poof_cmd_append(&cc.includes, ".");
+    poof_cmd_append(&cc.libs, "m");
     poof_cmd_append(&cc.extra_flags, "-std=c99", "-Wall", "-Werror");
     return poof_cc_run(&cc);
 }
@@ -190,22 +174,6 @@ build_dashboard_demo(void)
 	slangc_entry(&batch, "demos/dashboard/fuse_text.slang", "fragMain", "fragment", "demos/dashboard/fuse_text.frag.spv");
 	add_rend_demo(&batch, "demos/dashboard/dashboard.c", "demos/dashboard/dashboard", POOF_O0, "REND_DEBUG");
 	return poof_batch_run(&batch, "dashboard");
-}
-
-static bool
-build_cast_demo(void)
-{
-    Poof_CC cc = {0};
-    poof_mkdir("demos/cast");
-    poof_cc_init(&cc, POOF_CC_GCC | POOF_CC_CLANG, POOF_TARGET_HOST);
-    cc.debug_mode = true;
-    cc.optimization = POOF_O0;
-    cc.output = "demos/cast/demo";
-    poof_cmd_append(&cc.inputs, "demos/cast/demo.c");
-    poof_cmd_append(&cc.includes, ".");
-    poof_cmd_append(&cc.defines, "CAST_DEBUG");
-    poof_cmd_append(&cc.extra_flags, "-std=c99", "-Wall", "-Werror");
-    return poof_cc_run(&cc);
 }
 
 static bool
@@ -288,7 +256,7 @@ build_snake(void)
 	size_t i;
 
 	if (!poof_has_cmd("slangc") || !poof_has_cmd("spirv-val")) {
-		fprintf(stderr, "Rend2 snake requires Slang with descriptor-heap support and SPIRV-Tools\n");
+		fprintf(stderr, "Snake requires Slang and SPIRV-Tools\n");
 		return 0;
 	}
 	poof_mkdir("bin");
@@ -297,8 +265,8 @@ build_snake(void)
 		int ok;
 
 		poof_cmd_append(&cmd, "slangc", "demos/snake/shaders/snake.slang", "-target", "spirv", "-profile", "spirv_1_5",
-			"-emit-spirv-directly", "-fvk-use-entrypoint-name", "-fvk-use-c-layout", "-matrix-layout-row-major",
-			"-capability", "spvDescriptorHeapEXT", "-entry", shaders[i].entry, "-stage", shaders[i].stage,
+			"-emit-spirv-directly", "-fvk-use-c-layout", "-matrix-layout-column-major",
+			"-entry", shaders[i].entry, "-stage", shaders[i].stage,
 			"-reflection-json", shaders[i].reflection, "-o", shaders[i].artifact);
 		ok = poof_cmd_run(&cmd);
 		poof_cmd_free(&cmd);
@@ -350,8 +318,6 @@ main(int argc, char **argv)
 		return 1;
 	}
 	name = argv[2];
-	if (!strcmp(name, "cast")) return build_cast_demo() ? 0 : 1;
-	if (!strcmp(name, "fuse")) return build_fuse_demo() ? 0 : 1;
 	if (!strcmp(name, "grit")) return build_grit_demo() ? 0 : 1;
 	if (!strcmp(name, "peak")) return build_peak_demo() ? 0 : 1;
 	if (!strcmp(name, "multiplatform")) return build_multiplatform_demo() ? 0 : 1;
@@ -363,7 +329,23 @@ main(int argc, char **argv)
 	if (!strcmp(name, "rend-abi")) return build_rend_abi_demo() ? 0 : 1;
 	if (!strcmp(name, "rend2")) return build_rend2_demo() ? 0 : 1;
 	if (!strcmp(name, "snake")) return build_snake() ? 0 : 1;
+	if (!strcmp(name, "snake-web")) {
+		Poof_Cmd cmd = {0};
+		int ok;
+		poof_cmd_append(&cmd, "python3", "tools/build_web_demos.py", "snake");
+		ok = poof_cmd_run(&cmd);
+		poof_cmd_free(&cmd);
+		return ok ? 0 : 1;
+	}
+	if (!strcmp(name, "grit-web")) {
+		Poof_Cmd cmd = {0};
+		int ok;
+		poof_cmd_append(&cmd, "python3", "tools/build_web_demos.py", "grit");
+		ok = poof_cmd_run(&cmd);
+		poof_cmd_free(&cmd);
+		return ok ? 0 : 1;
+	}
 	fprintf(stderr, "unknown demo: %s\n", name);
-	fprintf(stderr, "demos: cast fuse grit peak multiplatform doc-generator compute teapot dashboard rend rend-abi rend2 snake\n");
+	fprintf(stderr, "demos: grit peak multiplatform doc-generator compute teapot dashboard rend rend-abi rend2 snake snake-web grit-web\n");
 	return 1;
 }

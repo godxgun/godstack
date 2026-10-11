@@ -38,19 +38,12 @@ typedef struct Docs {
 } Docs;
 
 static const char *const docs_default[] = {
-	"Cast.h",
-	"Cool.h",
-	"Fuse.h",
-	"Grit.h",
-	"Peak.h",
-	"Poof.h",
-	"Rend.h",
-	"Rend2.h",
-	"Type.h",
-	"Wire.h",
+    "Cast.h", "Cool.h", "Fuse.h",  "Grit.h", "Peak.h",
+    "Poof.h", "Rend.h", "Rend2.h", "Type.h", "Wire.h",
 };
 
-static int parse_header_line(const char *line, char *func_name, char *func_decl, char **comment_out);
+static int parse_header_line(const char *line, char *func_name, char *func_decl,
+                             char **comment_out);
 static void docs_name_from_path(const char *path, char *name, size_t cap);
 static int docs_add(Docs *docs, const char *path);
 static void docs_load(Docs *docs, int argc, char **argv);
@@ -64,8 +57,7 @@ static int docs_on_req(int fd, const WireHttpRequest *req, void *user);
 static int docs_serve(Docs *docs);
 static int docs_stdout(const char *path);
 
-int
-parse_header_line(const char *line, char *func_name, char *func_decl, char **comment_out)
+int parse_header_line(const char *line, char *func_name, char *func_decl, char **comment_out)
 {
 	char *comment_ptr;
 	char *open_paren;
@@ -88,8 +80,8 @@ parse_header_line(const char *line, char *func_name, char *func_decl, char **com
 	strncpy(func_decl, line, decl_len);
 	func_decl[decl_len] = '\0';
 
-	while (decl_len > 0 && (isspace((unsigned char)func_decl[decl_len - 1]) ||
-	    func_decl[decl_len - 1] == ';')) {
+	while (decl_len > 0 &&
+	       (isspace((unsigned char)func_decl[decl_len - 1]) || func_decl[decl_len - 1] == ';')) {
 		func_decl[--decl_len] = '\0';
 	}
 
@@ -103,7 +95,7 @@ parse_header_line(const char *line, char *func_name, char *func_decl, char **com
 
 	start_name = end_name;
 	while (start_name > func_decl &&
-	    (isalnum((unsigned char)start_name[-1]) || start_name[-1] == '_'))
+	       (isalnum((unsigned char)start_name[-1]) || start_name[-1] == '_'))
 		start_name--;
 
 	name_len = (size_t)(end_name - start_name) + 1;
@@ -115,8 +107,7 @@ parse_header_line(const char *line, char *func_name, char *func_decl, char **com
 	return 1;
 }
 
-void
-docs_name_from_path(const char *path, char *name, size_t cap)
+void docs_name_from_path(const char *path, char *name, size_t cap)
 {
 	const char *slash;
 	const char *start;
@@ -140,8 +131,7 @@ docs_name_from_path(const char *path, char *name, size_t cap)
 	name[n] = 0;
 }
 
-int
-docs_add(Docs *docs, const char *path)
+int docs_add(Docs *docs, const char *path)
 {
 	FILE *f;
 	DocsLib *lib;
@@ -162,8 +152,7 @@ docs_add(Docs *docs, const char *path)
 	return 1;
 }
 
-void
-docs_load(Docs *docs, int argc, char **argv)
+void docs_load(Docs *docs, int argc, char **argv)
 {
 	int i;
 
@@ -177,8 +166,7 @@ docs_load(Docs *docs, int argc, char **argv)
 		docs_add(docs, docs_default[i]);
 }
 
-void
-docs_write_cards(const char *path)
+void docs_write_cards(const char *path)
 {
 	FILE *header_file;
 	char *line_buf;
@@ -201,33 +189,31 @@ docs_write_cards(const char *path)
 	fclose(header_file);
 }
 
-void
-docs_page_begin(Docs *docs, const char *title)
+void docs_page_begin(Docs *docs, const char *title)
 {
 	int i;
 
-	cool_html_raw(COOL_SV(
-		"<!doctype html><html lang=\"en\"><head>"
-		"<meta charset=\"utf-8\">"
-		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-		"<title>"));
+	cool_html_raw(COOL_SV("<!doctype html><html lang=\"en\"><head>"
+	                      "<meta charset=\"utf-8\">"
+	                      "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+	                      "<title>"));
 	cool_html_txt(title, strlen(title));
 	cool_html_raw(COOL_SV(
-		"</title><style>"
-		"body{font-family:sans-serif;max-width:52rem;margin:2rem auto;padding:0 1rem;"
-		"background:#111;color:#ddd}"
-		"a{color:#9cf}"
-		"header a.home{color:#fff;text-decoration:none;font-weight:700}"
-		"nav{display:flex;flex-wrap:wrap;gap:.4rem 1rem;margin:1rem 0 2rem}"
-		"h1{font-size:1.4rem}"
-		".api-card{border:1px solid #333;border-radius:8px;padding:1rem;margin:1rem 0;"
-		"background:#1a1a1a}"
-		".api-name{margin:0 0 .5rem;font-family:ui-monospace,monospace}"
-		"code{display:block;overflow-x:auto;background:#000;padding:.75rem;border-radius:4px;"
-		"font-size:.9rem}"
-		".api-description{color:#aaa;margin-top:.75rem;white-space:pre-wrap}"
-		"</style></head><body><header><a class=\"home\" href=\"/\">godstack</a>"
-		"<h1>"));
+	    "</title><style>"
+	    "body{font-family:sans-serif;max-width:52rem;margin:2rem auto;padding:0 1rem;"
+	    "background:#111;color:#ddd}"
+	    "a{color:#9cf}"
+	    "header a.home{color:#fff;text-decoration:none;font-weight:700}"
+	    "nav{display:flex;flex-wrap:wrap;gap:.4rem 1rem;margin:1rem 0 2rem}"
+	    "h1{font-size:1.4rem}"
+	    ".api-card{border:1px solid #333;border-radius:8px;padding:1rem;margin:1rem 0;"
+	    "background:#1a1a1a}"
+	    ".api-name{margin:0 0 .5rem;font-family:ui-monospace,monospace}"
+	    "code{display:block;overflow-x:auto;background:#000;padding:.75rem;border-radius:4px;"
+	    "font-size:.9rem}"
+	    ".api-description{color:#aaa;margin-top:.75rem;white-space:pre-wrap}"
+	    "</style></head><body><header><a class=\"home\" href=\"/\">godstack</a>"
+	    "<h1>"));
 	cool_html_txt(title, strlen(title));
 	cool_html_raw(COOL_SV("</h1><nav>"));
 	for (i = 0; i < docs->n; i++)
@@ -235,14 +221,12 @@ docs_page_begin(Docs *docs, const char *title)
 	cool_html_raw(COOL_SV("</nav></header><main>"));
 }
 
-void
-docs_page_end(void)
+void docs_page_end(void)
 {
 	cool_html_raw(COOL_SV("</main></body></html>\n"));
 }
 
-int
-docs_send(int fd, void (*write_page)(Docs *, int), Docs *docs, int idx)
+int docs_send(int fd, void (*write_page)(Docs *, int), Docs *docs, int idx)
 {
 	char *body;
 	size_t len;
@@ -260,8 +244,7 @@ docs_send(int fd, void (*write_page)(Docs *, int), Docs *docs, int idx)
 	return 200;
 }
 
-void
-docs_write_index(Docs *docs, int idx)
+void docs_write_index(Docs *docs, int idx)
 {
 	(void)idx;
 	docs_page_begin(docs, "docs");
@@ -270,8 +253,7 @@ docs_write_index(Docs *docs, int idx)
 	docs_page_end();
 }
 
-void
-docs_write_lib(Docs *docs, int idx)
+void docs_write_lib(Docs *docs, int idx)
 {
 	docs_page_begin(docs, docs->lib[idx].name);
 	cool_html_raw(COOL_SV("<p><code>"));
@@ -281,8 +263,7 @@ docs_write_lib(Docs *docs, int idx)
 	docs_page_end();
 }
 
-int
-docs_on_req(int fd, const WireHttpRequest *req, void *user)
+int docs_on_req(int fd, const WireHttpRequest *req, void *user)
 {
 	Docs *docs;
 	int i;
@@ -299,8 +280,7 @@ docs_on_req(int fd, const WireHttpRequest *req, void *user)
 	return wire_http_error(fd, 404);
 }
 
-int
-docs_serve(Docs *docs)
+int docs_serve(Docs *docs)
 {
 	printf("listening on http://127.0.0.1:%d\n", DOCS_PORT);
 	fflush(stdout);
@@ -311,8 +291,7 @@ docs_serve(Docs *docs)
 	return 0;
 }
 
-int
-docs_stdout(const char *path)
+int docs_stdout(const char *path)
 {
 	FILE *header_file;
 
@@ -327,8 +306,7 @@ docs_stdout(const char *path)
 	return 0;
 }
 
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
 	Docs docs;
 	int serve;

@@ -1,31 +1,31 @@
 /* ===========================================================================
- * REND2 - Bounded Vulkan rendering core. Copyright (c) 2026 Vasco Alves.
+ * REND2 - Bounded rendering core. Copyright (c) 2026 Vasco Alves.
  * MIT license; see the complete license at the end of this file.
  *
- * Rend2.h is the self-contained distribution of the existing Rend2 C99 unity
- * module. The rend_* API, caller-backed storage, explicit capacities, native
- * resource ownership, diagnostics and completion behavior are unchanged.
+ * Rend2.h is the self-contained C99 distribution. The native backend remains
+ * Vulkan on native builds and WebGL2 on Emscripten, behind the same rend_* API.
+ * Backend availability is platform-specific; unsupported operations diagnose it.
  * No Peak, Grit, or original Rend2 source files are needed to use this header.
  *
  * USAGE:
  *     #define REND2_IMPLEMENTATION
  *     #include "Rend2.h"
  * Define REND2_IMPLEMENTATION in exactly one translation unit. Other translation
- * units include this header without the macro. Link the Vulkan loader (e.g.
- * cc -std=c99 app.c -lvulkan -lm). Repeated inclusion, including declaration-only
- * inclusion followed by implementation inclusion, is supported in one TU.
+ * units include this header without the macro. Native Vulkan builds link the
+ * Vulkan loader (e.g. cc -std=c99 app.c -lvulkan -lm); Emscripten WebGL2 builds
+ * use the flags documented below without Vulkan. Repeated inclusion, including
+ * declaration-only inclusion followed by implementation inclusion, is supported.
  * Do not also compile Rend2/rend.c or mix this API with legacy Rend/rend.h:
  * those modules share the rend_* namespace and are not API-compatible.
  *
  * DEPENDENCIES:
- * C99 standard headers and Vulkan SDK headers declaring Vulkan 1.4,
- * VK_EXT_descriptor_heap, VK_KHR_device_address_commands, and
- * VK_KHR_shader_untyped_pointers. Vulkan headers are included for the native
- * rend_vk_discovery_instance bridge. VK_NO_PROTOTYPES is not supported by the
- * implementation; it calls the Vulkan loader directly and loads extension
- * device entrypoints with vkGetDeviceProcAddr.
- * Prepared SPIR-V shaders must match the supported Slang typed-pointer root ABI
- * (vertMain/fragMain). No shader compiler is embedded in the library.
+ * The native backend requires C99, Vulkan SDK headers declaring Vulkan 1.4
+ * and the extensions above, plus the Vulkan loader. The Emscripten-only
+ * WebGL2 subset uses emscripten/html5.h and GLES3/gl3.h and deliberately
+ * excludes Vulkan headers and loader dependencies.
+ * Native SPIR-V shaders select either the legacy Slang typed-pointer root ABI
+ * (vertMain/fragMain) or PORTABLE_V1 (main). WebGL2 uses GLSL ES at runtime;
+ * no shader compiler is embedded in the native library.
  *
  * OWNERSHIP AND SUPPORTED SUBSET:
  * Discovery backing/family records stay live through backend destruction;
@@ -39,6 +39,23 @@
  * queue index zero, fixed object/work capacities and eight presentation images.
  * The snake subset provides data/image heaps, RGBA8/BGRA8 color and D32 depth,
  * indexed graphics with pointer roots, RGBA8 readback and Vulkan presentation.
+ * WebGL2 presents rendered RGBA8 textures with rend_webgl2_present_texture.
+ * The portable command subset adds float vertex/instance streams, vec4/mat4
+ * uniforms, triangle-list draws and RGBA8 offscreen readback on BOTH backends.
+ * Vulkan consumes conventional SPIR-V (main); WebGL2 consumes GLSL ES 300.
+ * The common coordinate convention is Vulkan clip space (Y down, Z in [0,W]),
+ * top-left viewport/scissor/readback rows. Browser vertex shaders must convert
+ * their final clip position to GL: y=-y, z=2*z-w. Set every shader-used uniform
+ * after binding the pipeline; uniform offsets describe the native push block.
+ * WebGL2 has no pointer roots, indexed device-address draws, descriptor heaps,
+ * sampled/storage images or native surface presentation; those fail with
+ * REND_DIAG_UNSUPPORTED. Canvas output blits RGBA8 color textures on the GPU.
+ * WebGL2 uses one queue/pool and a 64-operation log per command list, independent
+ * of the optional scratch/metadata byte reservations. CPU heap mappings require
+ * explicit flush before use; readback is synchronous during submission. Browser
+ * timeline waits may return TIMEOUT until the event loop yields; use wait_idle
+ * for an explicit synchronous drain. Caller backing and recorded objects obey
+ * the same reset-before-retirement rules as native Vulkan.
  * Samplers/descriptor heaps, general compute/task/mesh work, and DirectX/Metal
  * backends are not implemented. Version 2.0.0 denotes the Rend2 API generation,
  * not full conformance to Rend2/SPEC.md. Missing capabilities fail explicitly;
@@ -54,7 +71,8 @@
 #define REND2_PATCH 0
 
 /* CHANGE LOG
- * 2.0.0 - Single-header distribution of the bounded Rend2 Vulkan subset.
+ * 2.0.0 - Single-header distribution; common Vulkan/WebGL2 command API and
+ *         PORTABLE_V1 shader ABI. Parallel rend_webgl2_* API retired.
  */
 
 /* Rend 2 bounded Vulkan rendering core. Copyright (c) 2026, MIT license. */
@@ -73,7 +91,8 @@ typedef enum RendProfile
 typedef enum RendBackendKind
 {
 	REND_BACKEND_NONE = 0,
-	REND_BACKEND_VULKAN
+	REND_BACKEND_VULKAN,
+	REND_BACKEND_WEBGL2
 } RendBackendKind;
 typedef enum RendDiagnosticCode
 {
@@ -139,6 +158,13 @@ typedef struct RendParams
 		pipeline_count, timeline_count, presentation_count;
 	uint32_t queue_count, command_pool_count;
 	size_t scratch_bytes;
+	/* Trailing fields preserve zero-initialized/aggregate native callers.
+	 * NONE selects the platform default (Vulkan native, WebGL2 Emscripten).
+	 * WebGL2 accepts one queue and one pool, family/index zero, and records
+	 * at most 64 operations per list. Its discovery device is optional. */
+	RendBackendKind backend;
+	const char *canvas_selector; /* WebGL2 only; defaults to #canvas */
+	uint32_t canvas_width, canvas_height;
 } RendParams;
 typedef struct RendMemoryRequirements
 {
@@ -237,6 +263,24 @@ typedef struct RendShaderCode
 	const void *bytes;
 	size_t size;
 } RendShaderCode;
+/* Portable float attributes: binding 0 = vertices, 1 = instances;
+ * divisor must be 0 or 1 respectively, stride is shared within a binding. */
+typedef struct RendVertexAttribute
+{
+	uint32_t location, components, stride_bytes, offset_bytes, divisor;
+} RendVertexAttribute;
+typedef enum RendUniformType
+{
+	REND_UNIFORM_FLOAT4 = 1,
+	REND_UNIFORM_MATRIX4
+} RendUniformType;
+typedef struct RendUniformDesc
+{
+	const char *name; /* nonempty, <=63 bytes; copied while recording */
+	uint32_t offset; /* Vulkan push-constant byte offset, multiple of 4 */
+	RendUniformType type;
+	const float *values; /* 4 or 16 floats, copied while recording */
+} RendUniformDesc;
 typedef struct RendGraphicsPipelineDesc
 {
 	RendShaderCode vertex, fragment;
@@ -245,10 +289,17 @@ typedef struct RendGraphicsPipelineDesc
 	/* Required artifact identity: validated snake Slang pointer-root/SPIR-V
 	 * convention. */
 	uint32_t abi_tag;
+	/* PORTABLE_V1: native SPIR-V entry points main, conventional float vertex
+	 * input and a <=128-byte push-constant block; browser GLSL ES 300 source
+	 * (bytes + explicit size, no terminator required), ordinary named uniforms.
+	 * No descriptor sets, samplers, or pointer roots in this ABI. */
+	const RendVertexAttribute *attributes;
+	uint32_t attribute_count, uniform_bytes;
 } RendGraphicsPipelineDesc;
 enum
 {
-	REND_SHADER_ABI_SLANG_TYPED_POINTER_ROOT_V1 = 0x52530101u
+	REND_SHADER_ABI_SLANG_TYPED_POINTER_ROOT_V1 = 0x52530101u,
+	REND_SHADER_ABI_PORTABLE_V1 = 0x52530102u
 };
 typedef struct RendRenderAttachment
 {
@@ -427,6 +478,23 @@ int rend_cmd_draw_indexed(RendCommandList commands, uint64_t root_address,
 /* Snake subset: RGBA8 only, tightly packed rows (width*4), width/height within
  * texture; destination offset must be 4-byte aligned and range must cover
  * width*height*4. */
+/* Portable triangle lists, no indices: heap streams must remain valid until
+ * completion and command-pool reset. Float attributes live in the pipeline.
+ * instance_count must be >=1; an instance stream is needed only for divisor 1.
+ * Call viewport/scissor/depth state explicitly, just as for legacy indexed work. */
+typedef struct RendDrawDesc
+{
+	RendHeapRange vertices, instances;
+	uint32_t vertex_count, instance_count;
+} RendDrawDesc;
+int rend_cmd_draw(RendCommandList commands, const RendDrawDesc *desc);
+int rend_cmd_set_uniform(RendCommandList commands, const RendUniformDesc *desc);
+RendBackendKind rend_backend_kind(RendBackend backend);
+#if defined(__EMSCRIPTEN__)
+/* Blit a submitted RGBA8 color texture to this backend's canvas. The browser
+ * displays it when the caller yields to the event loop. No CPU readback. */
+int rend_webgl2_present_texture(RendBackend backend, RendTexture texture);
+#endif
 int rend_cmd_copy_texture_to_data(RendCommandList commands, RendTexture texture,
 				  RendHeapRange destination, uint32_t width,
 				  uint32_t height);
@@ -459,14 +527,15 @@ int rend_presentation_destroy(RendPresentation presentation);
 
 /* Vulkan-only native bridge. Define any required VK_USE_PLATFORM_* macros
  * before including Rend2.h (or include the host platform header first). */
-#if !defined(REND2_REND_VK_H) && !defined(REND2_REND_VULKAN_H)
+#if !defined(__EMSCRIPTEN__) && !defined(REND2_REND_VK_H) &&                   \
+    !defined(REND2_REND_VULKAN_H)
 #define REND2_REND_VK_H
 #define REND2_REND_VULKAN_H
 #include <vulkan/vulkan.h>
 
 /* Surface lifetime is caller-owned and must outlive its RendPresentation. */
 int rend_vk_discovery_instance(const RendDiscovery *discovery,
-			       VkInstance *out_instance);
+                               VkInstance *out_instance);
 #endif
 
 #endif /* REND2_H */
@@ -474,6 +543,579 @@ int rend_vk_discovery_instance(const RendDiscovery *discovery,
 #if defined(REND2_IMPLEMENTATION) && !defined(REND2_IMPLEMENTATION_INCLUDED)
 #define REND2_IMPLEMENTATION_INCLUDED
 
+/* Portable layout validation is identical on both backends. */
+static int rend_portable_layout(const RendGraphicsPipelineDesc *d) {
+  uint32_t i, j;
+  if (!d || d->abi_tag != REND_SHADER_ABI_PORTABLE_V1 || d->samples != 1 ||
+      d->uniform_bytes > 128 || d->uniform_bytes % 4 || !d->attributes ||
+      !d->attribute_count || d->attribute_count > 16 ||
+      (d->depth_format != REND_FORMAT_NONE && d->depth_format != REND_FORMAT_D32_FLOAT)) return 0;
+  for (i = 0; i < d->attribute_count; ++i) {
+    const RendVertexAttribute *a = &d->attributes[i];
+    if (a->location >= 16 || !a->components || a->components > 4 ||
+        a->divisor > 1 || !a->stride_bytes || a->stride_bytes > 255 ||
+        a->stride_bytes % 4 || a->offset_bytes % 4 ||
+        a->offset_bytes > a->stride_bytes ||
+        a->components * 4 > a->stride_bytes - a->offset_bytes) return 0;
+    for (j = 0; j < i; ++j)
+      if (d->attributes[j].location == a->location ||
+          (d->attributes[j].divisor == a->divisor &&
+           d->attributes[j].stride_bytes != a->stride_bytes)) return 0;
+  }
+  return 1;
+}
+#if defined(__EMSCRIPTEN__)
+#include <GLES3/gl3.h>
+#include <emscripten.h>
+#include <emscripten/html5.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include <math.h>
+/* Browser object records share the public opaque handles, not a parallel API.
+ * Commands are copied into a bounded log and execute only at queue_submit.
+ * Retained object references are released only by command_pool_reset. */
+#define REND_GL_OP_CAPACITY 64u
+struct RendHeapState { uint32_t live, refs; RendBackend backend; RendHeapKind kind; uint64_t size; unsigned char *cpu; GLuint buffer; };
+struct RendTextureState { uint32_t live, refs; RendBackend backend; RendHeap heap; RendTextureDesc desc; GLuint image, framebuffer; };
+struct RendTextureViewState { uint32_t live, refs; RendBackend backend; RendTexture texture; RendTextureViewDesc desc; };
+struct RendPipelineState { uint32_t live, refs; RendBackend backend; GLuint program; RendFormat format, depth_format; uint32_t attribute_count, uniform_bytes; RendVertexAttribute attributes[16]; };
+struct RendQueueState { RendBackend backend; uint32_t max_lists, max_waits; };
+struct RendTimelineState { uint32_t live, refs; RendBackend backend; RendQueue producer; uint64_t value, pending; GLsync fence; };
+struct RendPresentationState { uint32_t live; RendBackend backend; };
+enum { REND_GL_BEGIN=1, REND_GL_END, REND_GL_PIPELINE, REND_GL_VIEWPORT, REND_GL_SCISSOR, REND_GL_DEPTH, REND_GL_UNIFORM, REND_GL_DRAW, REND_GL_COPY };
+typedef struct RendGLOp {
+  uint32_t kind;
+  union {
+    struct { RendTextureView color, depth; float clear[4], clear_depth; uint32_t width, height; } render;
+    RendPipeline pipeline;
+    RendViewport viewport;
+    RendScissor scissor;
+    RendDepthState depth;
+    struct { RendUniformType type; char name[64]; float values[16]; } uniform;
+    RendDrawDesc draw;
+    struct { RendTexture texture; RendHeapRange destination; uint32_t width, height; } copy;
+  } u;
+} RendGLOp;
+struct RendCommandListState {
+  RendBackend backend; RendCommandPool pool;
+  uint32_t state, count, in_render, width, height, viewport_set, scissor_set, depth_set;
+  RendPipeline pipeline; RendFormat color_format, depth_format;
+  RendTimeline completion;
+  RendGLOp ops[REND_GL_OP_CAPACITY];
+};
+struct RendCommandPoolState { RendBackend backend; uint32_t count; RendCommandList commands; };
+struct RendBackendState {
+  uint32_t live, terminal, drained; EMSCRIPTEN_WEBGL_CONTEXT_HANDLE handle;
+  RendBackendKind kind;
+  uint32_t heap_count, texture_count, view_count, pipeline_count, timeline_count;
+  RendHeap heaps; RendTexture textures; RendTextureView views; RendPipeline pipelines; RendTimeline timelines;
+  struct RendQueueState queue; struct RendCommandPoolState pool;
+  GLuint vao;
+};
+struct RendDeviceInfo { RendBackendKind kind; };
+struct RendDiscovery { uint32_t live; struct RendDeviceInfo device; RendQueueFamilyInfo *family; };
+static RendDiagnostic rend_gl_diagnostic;
+static int rend_gl_fail(RendDiagnosticCode code, const char *message) {
+  rend_gl_diagnostic.code = code; rend_gl_diagnostic.native_code = 0;
+  snprintf(rend_gl_diagnostic.message, sizeof(rend_gl_diagnostic.message), "%s", message);
+  return 0;
+}
+static int rend_gl_ok(void) { rend_gl_fail(REND_DIAG_NONE, ""); return 1; }
+static int rend_gl_unsupported(void) { return rend_gl_fail(REND_DIAG_UNSUPPORTED, "operation unavailable in the bounded WebGL2 backend"); }
+static int rend_gl_valid(RendBackend b) { return b && b->live && b->kind == REND_BACKEND_WEBGL2; }
+static int rend_gl_retirable(RendBackend b) {
+  if (b->terminal && !b->drained) return rend_gl_fail(REND_DIAG_TERMINAL, "drain terminal backend before retiring resources");
+  return 1;
+}
+static int rend_gl_current(RendBackend b) {
+  EMSCRIPTEN_RESULT r;
+  if (!rend_gl_valid(b)) return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT, "invalid backend");
+  if (b->terminal || emscripten_is_webgl_context_lost(b->handle)) {
+    b->terminal = 1; return rend_gl_fail(REND_DIAG_TERMINAL, "WebGL2 context lost; drain and recreate");
+  }
+  r = emscripten_webgl_make_context_current(b->handle);
+  if (r != EMSCRIPTEN_RESULT_SUCCESS) { rend_gl_fail(REND_DIAG_NATIVE, "WebGL2 make-current failed"); rend_gl_diagnostic.native_code = r; return 0; }
+  return 1;
+}
+static int rend_gl_error(void) {
+  GLenum e = glGetError();
+  if (e == GL_NO_ERROR) return rend_gl_ok();
+  rend_gl_fail(REND_DIAG_NATIVE, "WebGL2 operation failed"); rend_gl_diagnostic.native_code = (int32_t)e; return 0;
+}
+int rend_last_diagnostic(RendDiagnostic *out) { if (!out) return 0; *out = rend_gl_diagnostic; return 1; }
+RendBackendKind rend_backend_kind(RendBackend b) { return rend_gl_valid(b) ? b->kind : REND_BACKEND_NONE; }
+int rend_discovery_memory_requirements(RendMemoryRequirements *out) {
+  if (!out) return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT, "null discovery requirements");
+  out->size = sizeof(RendDiscovery); out->alignment = 16; return rend_gl_ok();
+}
+int rend_discovery_create_with_extensions(void *storage, size_t size, RendQueueFamilyInfo *families, uint32_t capacity, const char *const *extensions, uint32_t count, RendDiscovery **out) {
+  RendDiscovery *d; (void)extensions;
+  if (out) *out = NULL;
+  if (count) return rend_gl_unsupported();
+  if (!storage || size < sizeof(*d) || (uintptr_t)storage % 16 || !families || !capacity || !out)
+    return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT, "invalid discovery storage");
+  d = storage; memset(d, 0, sizeof(*d)); d->live = 1; d->device.kind = REND_BACKEND_WEBGL2; d->family = families;
+  families[0] = (RendQueueFamilyInfo){0, 1, REND_QUEUE_GRAPHICS | REND_QUEUE_TRANSFER}; *out = d; return rend_gl_ok();
+}
+int rend_discovery_create(void *s, size_t n, RendQueueFamilyInfo *f, uint32_t c, RendDiscovery **out) { return rend_discovery_create_with_extensions(s,n,f,c,NULL,0,out); }
+int rend_discovery_destroy(RendDiscovery *d) { if (!d || !d->live) return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid discovery"); d->live=0; return rend_gl_ok(); }
+uint32_t rend_discovery_device_count(const RendDiscovery *d) { return d && d->live ? 1 : 0; }
+const RendDeviceInfo *rend_discovery_device(const RendDiscovery *d, uint32_t i) { return d && d->live && !i ? &d->device : NULL; }
+const RendQueueFamilyInfo *rend_device_queue_families(const RendDeviceInfo *d, uint32_t *n) {
+  const RendDiscovery *owner = d ? (const RendDiscovery *)((const unsigned char *)d - offsetof(RendDiscovery,device)) : NULL;
+  if (n) *n = owner && owner->live ? 1 : 0; return owner && owner->live ? owner->family : NULL;
+}
+RendBackendKind rend_device_backend(const RendDeviceInfo *d) { return d ? d->kind : REND_BACKEND_NONE; }
+const char *rend_device_name(const RendDeviceInfo *d) { return d ? "WebGL2" : NULL; }
+int rend_device_supports_profile(const RendDeviceInfo *d, RendProfile profile) {
+  if (!d) return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid device");
+  /* GRAPHICS_COMPUTE selects the bounded graphics subset, not compute support. */
+  return profile == REND_PROFILE_GRAPHICS_COMPUTE ? rend_gl_ok() : rend_gl_unsupported();
+}
+static int rend_gl_size_add(size_t *n, uint32_t count, size_t stride) {
+  if (*n > SIZE_MAX - 15 || count > (SIZE_MAX - *n - 15) / stride) return 0;
+  *n = (*n + 15) & ~(size_t)15; *n += (size_t)count * stride; return 1;
+}
+int rend_memory_requirements(const RendParams *p, RendMemoryRequirements *out) {
+  size_t n = sizeof(struct RendBackendState);
+  if (out) memset(out,0,sizeof(*out));
+  if (!p || !out) return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"null backend sizing argument");
+  if ((p->backend != REND_BACKEND_NONE && p->backend != REND_BACKEND_WEBGL2) || p->profile != REND_PROFILE_GRAPHICS_COMPUTE || p->sampler_count || p->presentation_count)
+    return rend_gl_unsupported();
+  if (p->device && p->device->kind != REND_BACKEND_WEBGL2) return rend_gl_unsupported();
+  if (!p->queues || p->queue_count != 1 || !p->command_pools || p->command_pool_count != 1 ||
+      p->queues[0].family_index || p->queues[0].queue_index || !p->queues[0].submission_count ||
+      !p->queues[0].max_submit_command_lists || p->queues[0].max_submit_command_lists > 64 ||
+      p->queues[0].max_submit_waits > 63 || p->command_pools[0].family_index || !p->command_pools[0].command_list_count ||
+      p->canvas_width > INT32_MAX || p->canvas_height > INT32_MAX)
+    return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid bounded WebGL2 queues/pool/canvas");
+#define REND_GL_SIZE(field, type) if (!rend_gl_size_add(&n,p->field,sizeof(struct type))) return rend_gl_fail(REND_DIAG_OVERFLOW,"backend size overflow")
+  REND_GL_SIZE(heap_count,RendHeapState); REND_GL_SIZE(texture_count,RendTextureState);
+  REND_GL_SIZE(texture_view_count,RendTextureViewState); REND_GL_SIZE(pipeline_count,RendPipelineState); REND_GL_SIZE(timeline_count,RendTimelineState);
+#undef REND_GL_SIZE
+  if (!rend_gl_size_add(&n,p->command_pools[0].command_list_count,sizeof(struct RendCommandListState)) || n > SIZE_MAX-15)
+    return rend_gl_fail(REND_DIAG_OVERFLOW,"command capacity overflow");
+  out->size=(n+15)&~(size_t)15; out->alignment=16; return rend_gl_ok();
+}
+int rend_place_in_memory(void *storage, size_t size, const RendParams *p, RendBackend *out) {
+  RendMemoryRequirements req; EmscriptenWebGLContextAttributes a; RendBackend b;
+  unsigned char *cursor; uint32_t i; const char *selector;
+  if (out) *out=NULL;
+  if (!out || !storage) return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"null backend storage/output");
+  if (!rend_memory_requirements(p,&req)) return 0;
+  if (size < req.size || (uintptr_t)storage % req.alignment) return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"undersized/misaligned backend storage");
+  memset(storage,0,req.size); b=storage; cursor=(unsigned char *)storage+sizeof(*b);
+#define REND_GL_TAKE(field, count, type) cursor=(unsigned char *)(((uintptr_t)cursor+15)&~(uintptr_t)15); b->field=(type)cursor; cursor+=(size_t)(count)*sizeof(*(b->field))
+  REND_GL_TAKE(heaps,p->heap_count,RendHeap); REND_GL_TAKE(textures,p->texture_count,RendTexture);
+  REND_GL_TAKE(views,p->texture_view_count,RendTextureView); REND_GL_TAKE(pipelines,p->pipeline_count,RendPipeline); REND_GL_TAKE(timelines,p->timeline_count,RendTimeline);
+#undef REND_GL_TAKE
+  cursor=(unsigned char *)(((uintptr_t)cursor+15)&~(uintptr_t)15); b->pool.commands=(RendCommandList)cursor;
+  b->heap_count=p->heap_count; b->texture_count=p->texture_count; b->view_count=p->texture_view_count; b->pipeline_count=p->pipeline_count; b->timeline_count=p->timeline_count;
+  b->queue.backend=b; b->queue.max_lists=p->queues[0].max_submit_command_lists; b->queue.max_waits=p->queues[0].max_submit_waits;
+  b->pool.backend=b; b->pool.count=p->command_pools[0].command_list_count;
+  for(i=0;i<b->pool.count;++i) { b->pool.commands[i].backend=b; b->pool.commands[i].pool=&b->pool; }
+  selector=p->canvas_selector?p->canvas_selector:"#canvas";
+  if (p->canvas_width && p->canvas_height && emscripten_set_canvas_element_size(selector,(int)p->canvas_width,(int)p->canvas_height) != EMSCRIPTEN_RESULT_SUCCESS)
+    return rend_gl_fail(REND_DIAG_NATIVE,"canvas sizing failed");
+  emscripten_webgl_init_context_attributes(&a); a.majorVersion=2; a.minorVersion=0; a.antialias=EM_FALSE; a.depth=EM_FALSE; a.stencil=EM_FALSE;
+  b->handle=emscripten_webgl_create_context(selector,&a);
+  if(b->handle<=0) return rend_gl_fail(REND_DIAG_NATIVE,"WebGL2 context creation failed");
+  b->live=1; b->drained=1; b->kind=REND_BACKEND_WEBGL2;
+  if(!rend_gl_current(b)) { emscripten_webgl_destroy_context(b->handle); b->live=0; return 0; }
+  glGenVertexArrays(1,&b->vao); glBindVertexArray(b->vao);
+  if(!rend_gl_error()) { emscripten_webgl_destroy_context(b->handle); b->live=0; return 0; }
+  *out=b; return rend_gl_ok();
+}
+int rend_backend_get_limits(RendBackend b,RendDeviceLimits *out) {
+  if(!rend_gl_valid(b)||!out) return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid backend/limits");
+  *out=(RendDeviceLimits){4,128,1}; return rend_gl_ok();
+}
+int rend_queue_get(RendBackend b,uint32_t index,RendQueue *out) { if(out)*out=NULL; if(!rend_gl_valid(b)||index||!out)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid queue index"); *out=&b->queue;return rend_gl_ok(); }
+int rend_command_pool_get(RendBackend b,uint32_t index,RendCommandPool *out) { if(out)*out=NULL; if(!rend_gl_valid(b)||index||!out)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid pool index"); *out=&b->pool;return rend_gl_ok(); }
+static GLuint rend_gl_compile(GLenum type,const RendShaderCode *code) {
+  GLuint shader=glCreateShader(type); GLint ok=0,length=(GLint)code->size; const GLchar *source=code->bytes;
+  if(!shader)return 0; glShaderSource(shader,1,&source,&length);glCompileShader(shader);glGetShaderiv(shader,GL_COMPILE_STATUS,&ok);
+  if(!ok) { glDeleteShader(shader);return 0; } return shader;
+}
+int rend_graphics_pipeline_create(RendBackend b,const RendGraphicsPipelineDesc *d,RendPipeline *out) {
+  uint32_t i; GLuint v,f,program; GLint ok=0; RendPipeline slot=NULL;
+  if(out)*out=NULL;
+  if(!out||!rend_gl_valid(b)||!d)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid pipeline request");
+  if(d->abi_tag!=REND_SHADER_ABI_PORTABLE_V1 || d->color_format!=REND_FORMAT_RGBA8_UNORM || d->samples!=1 ||
+     (d->depth_format!=REND_FORMAT_NONE && d->depth_format!=REND_FORMAT_D32_FLOAT))return rend_gl_unsupported();
+  if(!rend_portable_layout(d)||!d->vertex.bytes||!d->fragment.bytes||!d->vertex.size||!d->fragment.size||d->vertex.size>INT32_MAX||d->fragment.size>INT32_MAX)
+    return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid portable shader/layout");
+  for(i=0;i<b->pipeline_count;++i)if(!b->pipelines[i].live){slot=&b->pipelines[i];break;}
+  if(!slot)return rend_gl_fail(REND_DIAG_CAPACITY,"pipeline capacity exhausted");
+  if(!rend_gl_current(b))return 0;
+  v=rend_gl_compile(GL_VERTEX_SHADER,&d->vertex);f=rend_gl_compile(GL_FRAGMENT_SHADER,&d->fragment);
+  if(!v||!f){if(v)glDeleteShader(v);if(f)glDeleteShader(f);return rend_gl_fail(REND_DIAG_NATIVE,"GLSL ES compilation failed");}
+  program=glCreateProgram();glAttachShader(program,v);glAttachShader(program,f);glLinkProgram(program);glGetProgramiv(program,GL_LINK_STATUS,&ok);glDeleteShader(v);glDeleteShader(f);
+  if(!ok||!rend_gl_error()){glDeleteProgram(program);return rend_gl_fail(REND_DIAG_NATIVE,"GLSL ES linking failed");}
+  slot->backend=b;slot->program=program;slot->format=d->color_format;slot->depth_format=d->depth_format;slot->attribute_count=d->attribute_count;slot->uniform_bytes=d->uniform_bytes;
+  memcpy(slot->attributes,d->attributes,d->attribute_count*sizeof(*d->attributes));slot->live=1;*out=slot;return rend_gl_ok();
+}
+int rend_pipeline_destroy(RendBackend b,RendPipeline p) {
+  if(!rend_gl_valid(b)||!p||!p->live||p->backend!=b||p->refs)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid/referenced pipeline");
+  if(!rend_gl_retirable(b))return 0;
+  if(!b->terminal && !rend_gl_current(b))return 0;
+  if(!b->terminal){glDeleteProgram(p->program);if(!rend_gl_error())return 0;} memset(p,0,sizeof(*p));return rend_gl_ok();
+}
+/* Resource placement: WebGL2 exposes one host-visible data class and one
+ * logical texture-storage class. GPU objects still allocate through WebGL. */
+int rend_heap_classes(RendBackend b,RendHeapKind kind,RendHeapClassInfo *classes,uint32_t capacity,uint32_t *count) {
+  if(count)*count=0;
+  if(!rend_gl_valid(b)||!count||(!classes&&capacity))return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid heap-class query");
+  if(kind!=REND_HEAP_DATA&&kind!=REND_HEAP_TEXTURE_STORAGE)return rend_gl_unsupported();
+  *count=1;if(capacity)classes[0]=(RendHeapClassInfo){1,kind==REND_HEAP_DATA?REND_MEMORY_HOST_VISIBLE:REND_MEMORY_DEVICE_LOCAL};return rend_gl_ok();
+}
+int rend_heap_memory_requirements(RendBackend b,const RendHeapDesc *d,RendStorageRequirements *out) {
+  if(!rend_gl_valid(b)||!d||!out)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid heap requirements");
+  if(d->kind!=REND_HEAP_DATA&&d->kind!=REND_HEAP_TEXTURE_STORAGE)return rend_gl_unsupported();
+  if(d->memory_class!=1||!d->size||d->size>INT32_MAX||d->descriptor_count)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid/oversized heap");
+  *out=(RendStorageRequirements){d->size,4};return rend_gl_ok();
+}
+int rend_heap_create(RendBackend b,const RendHeapDesc *d,RendHeap *out) {
+  RendStorageRequirements req;RendHeap h=NULL;uint32_t i;
+  if(out)*out=NULL;if(!out)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"null heap output");
+  if(!rend_heap_memory_requirements(b,d,&req))return 0;
+  for(i=0;i<b->heap_count;++i)if(!b->heaps[i].live){h=&b->heaps[i];break;}
+  if(!h)return rend_gl_fail(REND_DIAG_CAPACITY,"heap capacity exhausted");
+  if(!rend_gl_current(b))return 0;
+  if(d->kind==REND_HEAP_DATA){
+    h->cpu=calloc(1,(size_t)d->size);if(!h->cpu)return rend_gl_fail(REND_DIAG_NATIVE,"data backing allocation failed");
+    glGenBuffers(1,&h->buffer);glBindBuffer(GL_ARRAY_BUFFER,h->buffer);glBufferData(GL_ARRAY_BUFFER,(GLsizeiptr)d->size,h->cpu,GL_DYNAMIC_DRAW);
+    if(!rend_gl_error()){glDeleteBuffers(1,&h->buffer);free(h->cpu);memset(h,0,sizeof(*h));return 0;}
+  }
+  h->backend=b;h->kind=d->kind;h->size=d->size;h->live=1;*out=h;return rend_gl_ok();
+}
+static int rend_gl_heap(RendBackend b,RendHeap h) { return rend_gl_valid(b)&&h&&h->live&&h->backend==b; }
+static int rend_gl_range(RendBackend b,RendHeapRange r) { return rend_gl_heap(b,r.heap)&&r.heap->kind==REND_HEAP_DATA&&r.offset<=r.heap->size&&r.size<=r.heap->size-r.offset; }
+int rend_heap_get_info(RendBackend b,RendHeap h,RendHeapInfo *out) {
+  if(!rend_gl_heap(b,h)||!out)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid heap info request");
+  memset(out,0,sizeof(*out));out->kind=h->kind;out->memory_class=1;out->size=h->size;out->cpu_base=h->cpu;out->cache_atom_size=1;
+  out->memory_properties=h->kind==REND_HEAP_DATA?REND_MEMORY_HOST_VISIBLE:REND_MEMORY_DEVICE_LOCAL;return rend_gl_ok();
+}
+int rend_heap_flush(RendBackend b,RendHeapRange r) {
+  if(!rend_gl_range(b,r))return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid flush range");
+  if(!rend_gl_current(b))return 0;glBindBuffer(GL_ARRAY_BUFFER,r.heap->buffer);
+  glBufferSubData(GL_ARRAY_BUFFER,(GLintptr)r.offset,(GLsizeiptr)r.size,r.heap->cpu+(size_t)r.offset);return rend_gl_error();
+}
+int rend_heap_invalidate(RendBackend b,RendHeapRange r) { if(!rend_gl_range(b,r))return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid invalidate range");return rend_gl_ok(); }
+int rend_heap_destroy(RendBackend b,RendHeap h) {
+  if(!rend_gl_heap(b,h)||h->refs)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid/referenced heap");
+  if(!rend_gl_retirable(b))return 0;
+  if(!b->terminal&&!rend_gl_current(b))return 0;
+  if(!b->terminal&&h->buffer){glDeleteBuffers(1,&h->buffer);if(!rend_gl_error())return 0;}free(h->cpu);memset(h,0,sizeof(*h));return rend_gl_ok();
+}
+int rend_texture_memory_requirements(RendBackend b,const RendTextureDesc *d,uint32_t memory_class,RendStorageRequirements *out) {
+  if(!rend_gl_valid(b)||!d||!out)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid texture requirements");
+  if((d->format!=REND_FORMAT_RGBA8_UNORM&&d->format!=REND_FORMAT_D32_FLOAT)||d->depth!=1||d->mip_levels!=1||d->array_layers!=1||d->samples!=1||
+     (d->usage&~(REND_TEXTURE_COLOR_ATTACHMENT|REND_TEXTURE_DEPTH_ATTACHMENT|REND_TEXTURE_TRANSFER_SRC)))return rend_gl_unsupported();
+  if(memory_class!=1||!d->width||!d->height||d->width>INT32_MAX||d->height>INT32_MAX||
+     (uint64_t)d->width*d->height>INT32_MAX/4 || !d->usage ||
+     (d->format==REND_FORMAT_D32_FLOAT&&(d->usage&~REND_TEXTURE_DEPTH_ATTACHMENT))||
+     (d->format==REND_FORMAT_RGBA8_UNORM&&(d->usage&REND_TEXTURE_DEPTH_ATTACHMENT)))
+    return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid texture extent/usage/class");
+  *out=(RendStorageRequirements){(uint64_t)d->width*d->height*4,4};return rend_gl_ok();
+}
+int rend_texture_create(RendBackend b,const RendTextureDesc *d,RendHeap heap,uint64_t offset,uint64_t size,RendTexture *out) {
+  RendTexture t=NULL;RendStorageRequirements req;uint32_t i;GLint max_size;
+  if(out)*out=NULL;
+  if(!out)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"null texture output");
+  if(!rend_texture_memory_requirements(b,d,1,&req))return 0;
+  if(!rend_gl_heap(b,heap)||heap->kind!=REND_HEAP_TEXTURE_STORAGE||offset%req.alignment||offset>heap->size||size>heap->size-offset||size<req.size)
+    return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid texture placement");
+  for(i=0;i<b->texture_count;++i)if(!b->textures[i].live){t=&b->textures[i];break;}
+  if(!t)return rend_gl_fail(REND_DIAG_CAPACITY,"texture capacity exhausted");
+  if(!rend_gl_current(b))return 0;
+  glGetIntegerv(GL_MAX_TEXTURE_SIZE,&max_size);if(d->width>(uint32_t)max_size||d->height>(uint32_t)max_size)return rend_gl_fail(REND_DIAG_UNSUPPORTED,"texture exceeds WebGL2 limit");
+  glGenTextures(1,&t->image);glBindTexture(GL_TEXTURE_2D,t->image);glTexStorage2D(GL_TEXTURE_2D,1,d->format==REND_FORMAT_D32_FLOAT?GL_DEPTH_COMPONENT32F:GL_RGBA8,(GLsizei)d->width,(GLsizei)d->height);
+  glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+  if(d->format==REND_FORMAT_RGBA8_UNORM){glGenFramebuffers(1,&t->framebuffer);glBindFramebuffer(GL_FRAMEBUFFER,t->framebuffer);glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,t->image,0);}
+  if(!rend_gl_error()){if(t->framebuffer)glDeleteFramebuffers(1,&t->framebuffer);glDeleteTextures(1,&t->image);memset(t,0,sizeof(*t));return 0;}
+  t->backend=b;t->heap=heap;t->desc=*d;t->live=1;++heap->refs;*out=t;return rend_gl_ok();
+}
+int rend_texture_view_create(RendBackend b,RendTexture t,const RendTextureViewDesc *d,RendTextureView *out) {
+  uint32_t i;RendTextureView v=NULL;if(out)*out=NULL;
+  if(!rend_gl_valid(b)||!t||!t->live||t->backend!=b||!d||!out)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid texture view");
+  if(d->format!=t->desc.format||d->view_type!=REND_VIEW_2D||d->aspect!=(t->desc.format==REND_FORMAT_D32_FLOAT?REND_ASPECT_DEPTH:REND_ASPECT_COLOR)||
+     d->base_mip||d->mip_count!=1||d->base_layer||d->layer_count!=1)return rend_gl_unsupported();
+  for(i=0;i<b->view_count;++i)if(!b->views[i].live){v=&b->views[i];break;}
+  if(!v)return rend_gl_fail(REND_DIAG_CAPACITY,"view capacity exhausted");
+  v->backend=b;v->texture=t;v->desc=*d;v->live=1;++t->refs;*out=v;return rend_gl_ok();
+}
+int rend_texture_view_destroy(RendBackend b,RendTextureView v) {
+  if(!rend_gl_valid(b)||!v||!v->live||v->backend!=b||v->refs)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid/referenced view");
+  if(!rend_gl_retirable(b))return 0;
+  --v->texture->refs;memset(v,0,sizeof(*v));return rend_gl_ok();
+}
+int rend_texture_destroy(RendBackend b,RendTexture t) {
+  if(!rend_gl_valid(b)||!t||!t->live||t->backend!=b||t->refs)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid/referenced texture");
+  if(!rend_gl_retirable(b))return 0;
+  if(!b->terminal&&!rend_gl_current(b))return 0;
+  if(!b->terminal){if(t->framebuffer)glDeleteFramebuffers(1,&t->framebuffer);glDeleteTextures(1,&t->image);if(!rend_gl_error())return 0;}
+  --t->heap->refs;memset(t,0,sizeof(*t));return rend_gl_ok();
+}
+/* Failed recording poisons the list, just like the Vulkan implementation. */
+static int rend_gl_command_fail(RendCommandList c,RendDiagnosticCode code,const char *message) { if(c&&c->state==1)c->state=4;return rend_gl_fail(code,message); }
+static int rend_gl_recording(RendCommandList c) { return c&&rend_gl_valid(c->backend)&&!c->backend->terminal&&c->state==1; }
+static RendGLOp *rend_gl_op(RendCommandList c,uint32_t kind) {
+  RendGLOp *op;
+  if(!rend_gl_recording(c)){rend_gl_command_fail(c,REND_DIAG_INVALID_ARGUMENT,"list is not recording");return NULL;}
+  if(c->count==REND_GL_OP_CAPACITY){rend_gl_command_fail(c,REND_DIAG_CAPACITY,"WebGL2 command log exhausted (64 operations)");return NULL;}
+  op=&c->ops[c->count++];memset(op,0,sizeof(*op));op->kind=kind;return op;
+}
+int rend_command_list_begin(RendCommandPool pool,uint32_t slot,RendCommandList *out) {
+  RendCommandList c;if(out)*out=NULL;
+  if(!pool||!rend_gl_valid(pool->backend)||pool->backend->terminal||slot>=pool->count||!out)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid command slot/pool");
+  c=&pool->commands[slot];if(c->state)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"reset pool before re-recording");
+  c->state=1;*out=c;return rend_gl_ok();
+}
+int rend_command_list_end(RendCommandList c) {
+  if(!rend_gl_recording(c)||c->in_render)return rend_gl_command_fail(c,REND_DIAG_INVALID_ARGUMENT,"unclosed render/list");c->state=2;return rend_gl_ok();
+}
+int rend_cmd_begin_render(RendCommandList c,const RendRenderDesc *d) {
+  RendTextureView color,depth=NULL;RendGLOp *op;uint32_t i;
+  if(!rend_gl_recording(c)||c->in_render||!d||!d->colors||d->color_count!=1||!d->width||!d->height)
+    return rend_gl_command_fail(c,REND_DIAG_INVALID_ARGUMENT,"invalid render pass");
+  color=d->colors[0].view;if(d->depth_attachment)depth=d->depth_attachment->view;
+  if(!color||!color->live||color->backend!=c->backend||color->desc.aspect!=REND_ASPECT_COLOR||!(color->texture->desc.usage&REND_TEXTURE_COLOR_ATTACHMENT)||
+     d->width>color->texture->desc.width||d->height>color->texture->desc.height)
+    return rend_gl_command_fail(c,REND_DIAG_INVALID_ARGUMENT,"invalid color attachment");
+  for(i=0;i<4;++i)if(!isfinite(d->colors[0].clear[i]))return rend_gl_command_fail(c,REND_DIAG_INVALID_ARGUMENT,"nonfinite clear color");
+  if(d->depth_attachment&&(!depth||!depth->live||depth->backend!=c->backend||depth->desc.aspect!=REND_ASPECT_DEPTH||
+     !(depth->texture->desc.usage&REND_TEXTURE_DEPTH_ATTACHMENT)||d->width>depth->texture->desc.width||d->height>depth->texture->desc.height||
+     !isfinite(d->depth_attachment->clear_depth)||d->depth_attachment->clear_depth<0||d->depth_attachment->clear_depth>1))
+    return rend_gl_command_fail(c,REND_DIAG_INVALID_ARGUMENT,"invalid depth attachment");
+  op=rend_gl_op(c,REND_GL_BEGIN);if(!op)return 0;
+  op->u.render.color=color;op->u.render.depth=depth;op->u.render.width=d->width;op->u.render.height=d->height;
+  memcpy(op->u.render.clear,d->colors[0].clear,sizeof(op->u.render.clear));op->u.render.clear_depth=depth?d->depth_attachment->clear_depth:1;
+  ++color->refs;if(depth)++depth->refs;c->in_render=1;c->width=d->width;c->height=d->height;
+  c->color_format=color->desc.format;c->depth_format=depth?depth->desc.format:REND_FORMAT_NONE;c->pipeline=NULL;
+  c->viewport_set=c->scissor_set=c->depth_set=0;return rend_gl_ok();
+}
+int rend_cmd_end_render(RendCommandList c) { if(!rend_gl_recording(c)||!c->in_render)return rend_gl_command_fail(c,REND_DIAG_INVALID_ARGUMENT,"not rendering");if(!rend_gl_op(c,REND_GL_END))return 0;c->in_render=0;return rend_gl_ok(); }
+int rend_cmd_set_pipeline(RendCommandList c,RendPipeline p) {
+  RendGLOp *op;if(!rend_gl_recording(c)||!c->in_render||!p||!p->live||p->backend!=c->backend||p->format!=c->color_format||p->depth_format!=c->depth_format)
+    return rend_gl_command_fail(c,REND_DIAG_INVALID_ARGUMENT,"pipeline/render mismatch");
+  op=rend_gl_op(c,REND_GL_PIPELINE);if(!op)return 0;op->u.pipeline=p;++p->refs;c->pipeline=p;return rend_gl_ok();
+}
+int rend_cmd_set_viewport(RendCommandList c,const RendViewport *v) {
+  RendGLOp *op;if(!rend_gl_recording(c)||!c->in_render||!v||!isfinite(v->x)||!isfinite(v->y)||!isfinite(v->width)||!isfinite(v->height)||!isfinite(v->min_depth)||!isfinite(v->max_depth)||
+     v->x<0||v->y<0||v->width<=0||v->height<=0||v->x+v->width>c->width||v->y+v->height>c->height||v->min_depth<0||v->max_depth>1||v->min_depth>v->max_depth)
+    return rend_gl_command_fail(c,REND_DIAG_INVALID_ARGUMENT,"invalid viewport");
+  /* GLES viewports are integer-valued; do not silently truncate. */
+  if(v->x!=floorf(v->x)||v->y!=floorf(v->y)||v->width!=floorf(v->width)||v->height!=floorf(v->height))return rend_gl_command_fail(c,REND_DIAG_UNSUPPORTED,"fractional WebGL2 viewport");
+  op=rend_gl_op(c,REND_GL_VIEWPORT);if(!op)return 0;op->u.viewport=*v;c->viewport_set=1;return rend_gl_ok();
+}
+int rend_cmd_set_scissor(RendCommandList c,const RendScissor *s) {
+  RendGLOp *op;if(!rend_gl_recording(c)||!c->in_render||!s||s->x<0||s->y<0||!s->width||!s->height||(uint64_t)s->x+s->width>c->width||(uint64_t)s->y+s->height>c->height)
+    return rend_gl_command_fail(c,REND_DIAG_INVALID_ARGUMENT,"invalid scissor");
+  op=rend_gl_op(c,REND_GL_SCISSOR);if(!op)return 0;op->u.scissor=*s;c->scissor_set=1;return rend_gl_ok();
+}
+int rend_cmd_set_depth_state(RendCommandList c,const RendDepthState *s) {
+  RendGLOp *op;if(!rend_gl_recording(c)||!c->in_render||!s||s->test_enable>1||s->write_enable>1||
+     (s->compare!=REND_COMPARE_NONE&&s->compare!=REND_COMPARE_LESS&&s->compare!=REND_COMPARE_ALWAYS)||(s->compare==REND_COMPARE_NONE&&s->test_enable)||
+     (s->test_enable&&c->depth_format==REND_FORMAT_NONE))return rend_gl_command_fail(c,REND_DIAG_INVALID_ARGUMENT,"invalid depth state");
+  op=rend_gl_op(c,REND_GL_DEPTH);if(!op)return 0;op->u.depth=*s;c->depth_set=1;return rend_gl_ok();
+}
+int rend_cmd_set_uniform(RendCommandList c,const RendUniformDesc *d) {
+  RendGLOp *op;uint32_t bytes=d&&d->type==REND_UNIFORM_FLOAT4?16:d&&d->type==REND_UNIFORM_MATRIX4?64:0;
+  if(!rend_gl_recording(c)||!c->in_render||!c->pipeline||!d||!d->name||!d->name[0]||strlen(d->name)>=64||!d->values||!bytes||d->offset%4||d->offset>c->pipeline->uniform_bytes||bytes>c->pipeline->uniform_bytes-d->offset)
+    return rend_gl_command_fail(c,REND_DIAG_INVALID_ARGUMENT,"invalid portable uniform");
+  if(!rend_gl_current(c->backend))return rend_gl_command_fail(c,rend_gl_diagnostic.code,"uniform context unavailable");
+  if(glGetUniformLocation(c->pipeline->program,d->name)<0)return rend_gl_command_fail(c,REND_DIAG_INVALID_ARGUMENT,"uniform not found/optimized out");
+  op=rend_gl_op(c,REND_GL_UNIFORM);if(!op)return 0;op->u.uniform.type=d->type;strcpy(op->u.uniform.name,d->name);memcpy(op->u.uniform.values,d->values,bytes);return rend_gl_ok();
+}
+int rend_cmd_draw(RendCommandList c,const RendDrawDesc *d) {
+  RendGLOp *op;uint32_t i,used[2]={0,0};
+  if(!rend_gl_recording(c)||!c->in_render||!c->pipeline||!d||!d->vertex_count||d->vertex_count%3||d->vertex_count>INT32_MAX||!d->instance_count||d->instance_count>INT32_MAX||!c->viewport_set||!c->scissor_set||!c->depth_set)
+    return rend_gl_command_fail(c,REND_DIAG_INVALID_ARGUMENT,"invalid portable draw/state");
+  for(i=0;i<c->pipeline->attribute_count;++i){const RendVertexAttribute *a=&c->pipeline->attributes[i];RendHeapRange r=a->divisor?d->instances:d->vertices;
+    uint32_t count=a->divisor?d->instance_count:d->vertex_count;
+    uint64_t bytes=(uint64_t)(count-1)*a->stride_bytes+a->offset_bytes+a->components*4;
+    if(!rend_gl_range(c->backend,r)||r.offset%4||bytes>r.size)return rend_gl_command_fail(c,REND_DIAG_INVALID_ARGUMENT,"attribute exceeds stream");used[a->divisor]=1;
+  }
+  op=rend_gl_op(c,REND_GL_DRAW);if(!op)return 0;op->u.draw=*d;
+  /* Drop unused streams so retention/replay never dereference optional garbage. */
+  if(used[0])++d->vertices.heap->refs;else memset(&op->u.draw.vertices,0,sizeof(RendHeapRange));
+  if(used[1])++d->instances.heap->refs;else memset(&op->u.draw.instances,0,sizeof(RendHeapRange));return rend_gl_ok();
+}
+int rend_cmd_barrier(RendCommandList c,const RendBarrier *barrier) {
+  uint32_t stages=REND_STAGE_HOST|REND_STAGE_TRANSFER|REND_STAGE_VERTEX|REND_STAGE_FRAGMENT|REND_STAGE_COLOR_OUTPUT|REND_STAGE_EARLY_DEPTH_STENCIL|REND_STAGE_LATE_DEPTH_STENCIL|REND_STAGE_GRAPHICS;
+  if(!rend_gl_recording(c)||c->in_render||!barrier)return rend_gl_command_fail(c,REND_DIAG_INVALID_ARGUMENT,"invalid barrier");
+  if((barrier->producer_stages|barrier->consumer_stages)&~stages)return rend_gl_command_fail(c,REND_DIAG_UNSUPPORTED,"unsupported WebGL2 barrier stages");
+  if((barrier->producer_access|barrier->consumer_access)&~(REND_ACCESS_READ|REND_ACCESS_WRITE)||(!barrier->producer_stages&&barrier->producer_access)||(!barrier->consumer_stages&&barrier->consumer_access))
+    return rend_gl_command_fail(c,REND_DIAG_INVALID_ARGUMENT,"invalid barrier access");
+  /* WebGL commands are ordered; uploads require explicit heap_flush. */return rend_gl_ok();
+}
+int rend_cmd_draw_indexed(RendCommandList c,uint64_t root,uint64_t index,RendIndexType type,uint32_t count,uint32_t instances,uint32_t first,int32_t offset,uint32_t first_instance) {
+  (void)root;(void)index;(void)type;(void)count;(void)instances;(void)first;(void)offset;(void)first_instance;
+  return rend_gl_command_fail(c,REND_DIAG_UNSUPPORTED,"WebGL2 does not support pointer-root/device-address indexed draws; use portable rend_cmd_draw");
+}
+int rend_cmd_copy_texture_to_data(RendCommandList c,RendTexture t,RendHeapRange dst,uint32_t width,uint32_t height) {
+  RendGLOp *op;uint64_t bytes=(uint64_t)width*height*4;
+  if(!rend_gl_recording(c)||c->in_render||!t||!t->live||t->backend!=c->backend||t->desc.format!=REND_FORMAT_RGBA8_UNORM||!(t->desc.usage&REND_TEXTURE_TRANSFER_SRC)||
+     !width||!height||width>t->desc.width||height>t->desc.height||!rend_gl_range(c->backend,dst)||dst.offset%4||bytes>dst.size)
+    return rend_gl_command_fail(c,REND_DIAG_INVALID_ARGUMENT,"invalid RGBA8 readback");
+  op=rend_gl_op(c,REND_GL_COPY);if(!op)return 0;op->u.copy.texture=t;op->u.copy.destination=dst;op->u.copy.width=width;op->u.copy.height=height;++t->refs;++dst.heap->refs;return rend_gl_ok();
+}
+static int rend_gl_timeline_poll(RendTimeline t) {
+  GLenum result;
+  if(!t||!t->live)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid timeline");
+  if(!t->fence)return 1;
+  result=glClientWaitSync(t->fence,0,0);
+  if(result==GL_WAIT_FAILED)return rend_gl_fail(REND_DIAG_NATIVE,"WebGL2 fence query failed");
+  if(result!=GL_TIMEOUT_EXPIRED){t->value=t->pending;glDeleteSync(t->fence);t->fence=NULL;}return 1;
+}
+int rend_timeline_create(RendQueue q,uint64_t initial,RendTimeline *out) {
+  RendBackend b;uint32_t i;if(out)*out=NULL;
+  if(!q||!rend_gl_valid(q->backend)||!out)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid timeline producer");b=q->backend;
+  for(i=0;i<b->timeline_count;++i)if(!b->timelines[i].live){RendTimeline t=&b->timelines[i];t->backend=b;t->producer=q;t->value=t->pending=initial;t->live=1;*out=t;return rend_gl_ok();}
+  return rend_gl_fail(REND_DIAG_CAPACITY,"timeline capacity exhausted");
+}
+int rend_timeline_query(RendTimeline t,uint64_t *value) {
+  if(!t||!t->live||!value)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid timeline query");
+  if(!rend_gl_current(t->backend)||!rend_gl_timeline_poll(t))return 0;*value=t->value;return rend_gl_ok();
+}
+int rend_timeline_wait(RendTimeline t,uint64_t value,uint64_t timeout) {
+  uint64_t done;GLenum result;GLint64 max_timeout;
+  if(!rend_timeline_query(t,&done))return 0;if(done>=value)return rend_gl_ok();
+  if(value>t->pending||!t->fence)return rend_gl_fail(REND_DIAG_TIMEOUT,"timeline value not submitted");
+  glGetInteger64v(GL_MAX_SERVER_WAIT_TIMEOUT,&max_timeout);
+  /* WebGL disallows long synchronous waits. Report rather than imply infinity. */
+  if(timeout>(uint64_t)max_timeout)timeout=(uint64_t)max_timeout;
+  result=glClientWaitSync(t->fence,GL_SYNC_FLUSH_COMMANDS_BIT,(GLuint64)timeout);
+  if(result==GL_TIMEOUT_EXPIRED)return rend_gl_fail(REND_DIAG_TIMEOUT,"WebGL2 wait timed out; poll in a later event-loop turn");
+  if(result==GL_WAIT_FAILED)return rend_gl_fail(REND_DIAG_NATIVE,"WebGL2 fence wait failed");
+  t->value=t->pending;glDeleteSync(t->fence);t->fence=NULL;return rend_gl_ok();
+}
+int rend_timeline_destroy(RendTimeline t) {
+  if(!t||!t->live||t->refs)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid/referenced timeline");
+  if(!rend_gl_retirable(t->backend))return 0;
+  if(!t->backend->terminal){if(!rend_gl_current(t->backend)||!rend_gl_timeline_poll(t))return 0;if(t->fence)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"timeline still pending");}
+  memset(t,0,sizeof(*t));return rend_gl_ok();
+}
+int rend_command_pool_reset(RendCommandPool p) {
+  uint32_t i,j;if(!p||!rend_gl_valid(p->backend))return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid command pool");
+  if(!rend_gl_retirable(p->backend))return 0;
+  if(!p->backend->terminal&&!rend_gl_current(p->backend))return 0;
+  for(i=0;i<p->count;++i){RendCommandList c=&p->commands[i];
+    if(c->completion&&!p->backend->terminal){if(!rend_gl_timeline_poll(c->completion))return 0;if(c->completion->fence)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"list still pending");}}
+  for(i=0;i<p->count;++i){RendCommandList c=&p->commands[i];
+    for(j=0;j<c->count;++j){RendGLOp *op=&c->ops[j];switch(op->kind){
+      case REND_GL_BEGIN:--op->u.render.color->refs;if(op->u.render.depth)--op->u.render.depth->refs;break;
+      case REND_GL_PIPELINE:--op->u.pipeline->refs;break;
+      case REND_GL_DRAW:if(op->u.draw.vertices.heap)--op->u.draw.vertices.heap->refs;if(op->u.draw.instances.heap)--op->u.draw.instances.heap->refs;break;
+      case REND_GL_COPY:--op->u.copy.texture->refs;--op->u.copy.destination.heap->refs;break;
+      default:break;
+    }}
+    if(c->completion)--c->completion->refs;memset(c,0,sizeof(*c));c->backend=p->backend;c->pool=p;
+  }return rend_gl_ok();
+}
+static int rend_gl_replay(RendCommandList c) {
+  RendPipeline pipeline=NULL;uint32_t i,j,height=0;RendBackend b=c->backend;
+  glBindVertexArray(b->vao);
+  for(i=0;i<c->count;++i){RendGLOp *op=&c->ops[i];switch(op->kind){
+    case REND_GL_BEGIN:{RendTexture t=op->u.render.color->texture;RendTextureView depth=op->u.render.depth;
+      glBindFramebuffer(GL_FRAMEBUFFER,t->framebuffer);glFramebufferTexture2D(GL_FRAMEBUFFER,GL_DEPTH_ATTACHMENT,GL_TEXTURE_2D,depth?depth->texture->image:0,0);
+      if(glCheckFramebufferStatus(GL_FRAMEBUFFER)!=GL_FRAMEBUFFER_COMPLETE)return rend_gl_fail(REND_DIAG_NATIVE,"incomplete framebuffer");
+      height=t->desc.height;glEnable(GL_SCISSOR_TEST);glScissor(0,(GLint)(height-op->u.render.height),(GLsizei)op->u.render.width,(GLsizei)op->u.render.height);
+      glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE);glDepthMask(GL_TRUE);glClearColor(op->u.render.clear[0],op->u.render.clear[1],op->u.render.clear[2],op->u.render.clear[3]);
+      glClearDepthf(op->u.render.clear_depth);glClear(GL_COLOR_BUFFER_BIT|(depth?GL_DEPTH_BUFFER_BIT:0));pipeline=NULL;break;}
+    case REND_GL_END:break;
+    case REND_GL_PIPELINE:pipeline=op->u.pipeline;glUseProgram(pipeline->program);break;
+    case REND_GL_VIEWPORT:{RendViewport *v=&op->u.viewport;glViewport((GLint)v->x,(GLint)(height-v->y-v->height),(GLsizei)v->width,(GLsizei)v->height);glDepthRangef(v->min_depth,v->max_depth);break;}
+    case REND_GL_SCISSOR:{RendScissor *s=&op->u.scissor;glEnable(GL_SCISSOR_TEST);glScissor(s->x,(GLint)(height-s->y-s->height),(GLsizei)s->width,(GLsizei)s->height);break;}
+    case REND_GL_DEPTH:{RendDepthState *s=&op->u.depth;if(s->test_enable)glEnable(GL_DEPTH_TEST);else glDisable(GL_DEPTH_TEST);glDepthMask(s->write_enable?GL_TRUE:GL_FALSE);glDepthFunc(s->compare==REND_COMPARE_LESS?GL_LESS:GL_ALWAYS);break;}
+    case REND_GL_UNIFORM:{GLint loc=glGetUniformLocation(pipeline->program,op->u.uniform.name);if(op->u.uniform.type==REND_UNIFORM_FLOAT4)glUniform4fv(loc,1,op->u.uniform.values);else glUniformMatrix4fv(loc,1,GL_FALSE,op->u.uniform.values);break;}
+    case REND_GL_DRAW:{RendDrawDesc *d=&op->u.draw;
+      for(j=0;j<16;++j){glDisableVertexAttribArray(j);glVertexAttribDivisor(j,0);}
+      for(j=0;j<pipeline->attribute_count;++j){RendVertexAttribute *a=&pipeline->attributes[j];RendHeapRange r=a->divisor?d->instances:d->vertices;
+        glBindBuffer(GL_ARRAY_BUFFER,r.heap->buffer);glEnableVertexAttribArray(a->location);glVertexAttribPointer(a->location,(GLint)a->components,GL_FLOAT,GL_FALSE,(GLsizei)a->stride_bytes,(const void *)(uintptr_t)(r.offset+a->offset_bytes));glVertexAttribDivisor(a->location,a->divisor);}
+      glDrawArraysInstanced(GL_TRIANGLES,0,(GLsizei)d->vertex_count,(GLsizei)d->instance_count);break;}
+    case REND_GL_COPY:{RendTexture t=op->u.copy.texture;RendHeapRange dst=op->u.copy.destination;uint32_t row,w=op->u.copy.width,h=op->u.copy.height;
+      glBindFramebuffer(GL_FRAMEBUFFER,t->framebuffer);glReadBuffer(GL_COLOR_ATTACHMENT0);glPixelStorei(GL_PACK_ALIGNMENT,4);
+      /* CPU rows and viewport/scissor coordinates use top-left origins on BOTH
+       * backends. Portable GLSL must map Vulkan clip Y/Z to GL (-Y,2Z-W). */
+      for(row=0;row<h;++row)glReadPixels(0,(GLint)(t->desc.height-1-row),(GLsizei)w,1,GL_RGBA,GL_UNSIGNED_BYTE,dst.heap->cpu+(size_t)dst.offset+(size_t)row*w*4);
+      glBindBuffer(GL_ARRAY_BUFFER,dst.heap->buffer);glBufferSubData(GL_ARRAY_BUFFER,(GLintptr)dst.offset,(GLsizeiptr)((size_t)w*h*4),dst.heap->cpu+(size_t)dst.offset);break;}
+    default:return rend_gl_fail(REND_DIAG_NATIVE,"invalid command opcode");
+    }if(!rend_gl_error())return 0;
+  }return rend_gl_ok();
+}
+int rend_queue_submit(RendQueue q,const RendSubmitDesc *d) {
+  RendBackend b;RendTimeline completion;uint32_t i,j;
+  if(!q||!rend_gl_valid(q->backend)||!d||!d->commands||!d->command_count||d->command_count>q->max_lists||d->wait_count>q->max_waits||(!d->waits&&d->wait_count))return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid submission");
+  b=q->backend;completion=d->completion.timeline;
+  if(!completion||!completion->live||completion->backend!=b||completion->producer!=q||d->completion.value<=completion->pending)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid completion point");
+  if(!rend_gl_current(b))return 0;
+  for(i=0;i<d->command_count;++i){RendCommandList c=d->commands[i];if(!c||c->backend!=b||c->state!=2)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid executable list");
+    for(j=0;j<i;++j)if(d->commands[j]==c)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"duplicate command list");}
+  for(i=0;i<d->wait_count;++i){RendTimeline t=d->waits[i].point.timeline;
+    if(!t||!t->live||t->backend!=b||t==completion||!d->waits[i].consumer_stages||
+       (d->waits[i].consumer_stages&~(REND_STAGE_TRANSFER|REND_STAGE_VERTEX|REND_STAGE_FRAGMENT|REND_STAGE_COLOR_OUTPUT|REND_STAGE_GRAPHICS)))return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid timeline wait");
+    for(j=0;j<i;++j)if(d->waits[j].point.timeline==t)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"duplicate wait");
+    if(d->waits[i].point.value>t->pending)return rend_gl_fail(REND_DIAG_TIMEOUT,"WebGL2 cannot wait on a future unsubmitted signal");
+  }
+  /* Same queue is ordered. A later fence subsumes all earlier signals. */
+  b->drained=0;
+  for(i=0;i<d->command_count;++i)if(!rend_gl_replay(d->commands[i])){b->terminal=1;return rend_gl_fail(REND_DIAG_TERMINAL,"WebGL2 submission failed after execution began; drain");}
+  if(completion->fence)glDeleteSync(completion->fence);
+  completion->fence=glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE,0);completion->pending=d->completion.value;
+  if(!completion->fence||!rend_gl_error()){b->terminal=1;return rend_gl_fail(REND_DIAG_TERMINAL,"completion fence creation failed; drain");}
+  glFlush();for(i=0;i<d->command_count;++i){RendCommandList c=d->commands[i];c->state=3;c->completion=completion;++completion->refs;}return rend_gl_ok();
+}
+int rend_backend_wait_idle(RendBackend b) {
+  uint32_t i;if(!rend_gl_valid(b))return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid backend");
+  /* Terminal may mean a partially executed submission, not context loss. */
+  if(!emscripten_is_webgl_context_lost(b->handle)) {
+    if(emscripten_webgl_make_context_current(b->handle)!=EMSCRIPTEN_RESULT_SUCCESS)return rend_gl_fail(REND_DIAG_NATIVE,"terminal drain make-current failed");
+    glFinish();if(!rend_gl_error())return 0;
+    for(i=0;i<b->timeline_count;++i)if(b->timelines[i].fence)glDeleteSync(b->timelines[i].fence);
+  } else b->terminal=1;
+  for(i=0;i<b->timeline_count;++i){RendTimeline t=&b->timelines[i];t->fence=NULL;t->value=t->pending;}
+  b->drained=1;return rend_gl_ok();
+}
+int rend_backend_destroy(RendBackend b) {
+  uint32_t i;EMSCRIPTEN_RESULT r;
+  if(!rend_gl_valid(b))return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid backend");
+  if(!rend_gl_retirable(b))return 0;
+  for(i=0;i<b->pool.count;++i)if(b->pool.commands[i].state)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"reset command pool before backend destruction");
+  for(i=0;i<b->heap_count;++i)if(b->heaps[i].live)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"destroy heaps before backend");
+  for(i=0;i<b->texture_count;++i)if(b->textures[i].live)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"destroy textures before backend");
+  for(i=0;i<b->view_count;++i)if(b->views[i].live)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"destroy views before backend");
+  for(i=0;i<b->pipeline_count;++i)if(b->pipelines[i].live)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"destroy pipelines before backend");
+  for(i=0;i<b->timeline_count;++i)if(b->timelines[i].live)return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"destroy timelines before backend");
+  if(!b->terminal){if(!rend_gl_current(b))return 0;glDeleteVertexArrays(1,&b->vao);}
+  r=emscripten_webgl_destroy_context(b->handle);if(r!=EMSCRIPTEN_RESULT_SUCCESS)return rend_gl_fail(REND_DIAG_NATIVE,"context destruction failed");b->live=0;return rend_gl_ok();
+}
+int rend_webgl2_present_texture(RendBackend b, RendTexture t) {
+  int width, height;
+  if(!rend_gl_valid(b)||!t||!t->live||t->backend!=b||t->desc.format!=REND_FORMAT_RGBA8_UNORM||
+     !(t->desc.usage&REND_TEXTURE_COLOR_ATTACHMENT))
+    return rend_gl_fail(REND_DIAG_INVALID_ARGUMENT,"invalid canvas presentation texture");
+  if(!rend_gl_current(b))return 0;
+  if(emscripten_webgl_get_drawing_buffer_size(b->handle,&width,&height)!=EMSCRIPTEN_RESULT_SUCCESS)
+    return rend_gl_fail(REND_DIAG_NATIVE,"canvas dimensions unavailable");
+  glDisable(GL_SCISSOR_TEST);
+  glBindFramebuffer(GL_READ_FRAMEBUFFER,t->framebuffer);
+  glBindFramebuffer(GL_DRAW_FRAMEBUFFER,0);
+  glBlitFramebuffer(0,0,(GLint)t->desc.width,(GLint)t->desc.height,0,0,width,height,GL_COLOR_BUFFER_BIT,GL_NEAREST);
+  glBindFramebuffer(GL_FRAMEBUFFER,0);
+  return rend_gl_error()?rend_gl_ok():0;
+}
+/* WSI and native surface interoperability are not silently emulated. */
+int rend_device_surface_support(const RendDeviceInfo *d,uint64_t surface,uint32_t family,int *out) { (void)d;(void)surface;(void)family;if(out)*out=0;return rend_gl_unsupported(); }
+int rend_presentation_create(RendBackend b,uint64_t surface,uint32_t width,uint32_t height,RendPresentation *out) { (void)b;(void)surface;(void)width;(void)height;if(out)*out=NULL;return rend_gl_unsupported(); }
+int rend_presentation_get_info(RendPresentation p,RendPresentationInfo *out) { (void)p;if(out)memset(out,0,sizeof(*out));return rend_gl_unsupported(); }
+int rend_presentation_acquire(RendPresentation p,uint64_t timeout,RendTextureView *out) { (void)p;(void)timeout;if(out)*out=NULL;return rend_gl_unsupported(); }
+int rend_presentation_present(RendPresentation p,RendQueue q) { (void)p;(void)q;return rend_gl_unsupported(); }
+int rend_presentation_destroy(RendPresentation p) { (void)p;return rend_gl_unsupported(); }
+#else
 #include <math.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -573,6 +1215,9 @@ typedef struct RendPipelineState
 	uint32_t live, refs;
 	RendBackend backend;
 	VkPipeline pipeline;
+	VkPipelineLayout layout;
+	uint32_t portable, attribute_count, uniform_bytes;
+	RendVertexAttribute attributes[16];
 	RendFormat format, depth_format;
 } RendPipelineRecord;
 struct RendPresentationState
@@ -986,6 +1631,10 @@ rend_memory_requirements(const RendParams *params,
 	}
 	rend_vk_set_diagnostic(REND_DIAG_INVALID_ARGUMENT, 0,
 			       "invalid context configuration");
+	if (params->backend != REND_BACKEND_NONE && params->backend != REND_BACKEND_VULKAN) {
+		rend_vk_set_diagnostic(REND_DIAG_UNSUPPORTED, 0, "backend unavailable in native build");
+		return 0;
+	}
 	if (!rend_context_size(params, &bytes)) {
 		if (rend_diagnostic.code == REND_DIAG_NONE)
 			rend_vk_set_diagnostic(REND_DIAG_INVALID_ARGUMENT, 0, "invalid context configuration");
@@ -1771,7 +2420,7 @@ rend_heap_memory_requirements(RendBackend b, const RendHeapDesc *d,
 		VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 		VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
 		VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT |
-		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 	create.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	result = vkCreateBuffer(b->device, &create, NULL, &buffer);
 	if (result != VK_SUCCESS)
@@ -1856,7 +2505,7 @@ rend_heap_create(RendBackend b, const RendHeapDesc *d, RendHeap *out)
 			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 			VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
 			VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT |
-			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 	else
 	{
 		rend_vk_set_diagnostic(REND_DIAG_UNSUPPORTED, 0,
@@ -2031,6 +2680,12 @@ rend_graphics_pipeline_create(RendBackend b,
 	VkPipelineCreateFlags2CreateInfo flags;
 	VkPipelineShaderStageCreateInfo stages[2];
 	VkPipelineVertexInputStateCreateInfo vi;
+	VkVertexInputAttributeDescription attrs[16];
+	VkVertexInputBindingDescription bindings[2];
+	VkPipelineLayoutCreateInfo lci;
+	VkPushConstantRange push_range;
+	VkPipelineLayout layout = VK_NULL_HANDLE;
+	uint32_t portable = d && d->abi_tag == REND_SHADER_ABI_PORTABLE_V1;
 	VkPipelineInputAssemblyStateCreateInfo ia;
 	VkPipelineViewportStateCreateInfo vp;
 	VkPipelineRasterizationStateCreateInfo rs;
@@ -2050,15 +2705,16 @@ rend_graphics_pipeline_create(RendBackend b,
 	if (out)
 		*out = NULL;
 	if (!out || !b || b->magic != REND_BACKEND_MAGIC || !d ||
-	    d->abi_tag != REND_SHADER_ABI_SLANG_TYPED_POINTER_ROOT_V1 ||
+	    (!portable && d->abi_tag != REND_SHADER_ABI_SLANG_TYPED_POINTER_ROOT_V1) ||
+	    (portable && !rend_portable_layout(d)) ||
 	    !d->vertex.bytes || !d->fragment.bytes || d->vertex.size < 20 ||
 	    d->fragment.size < 20 || d->vertex.size % 4 || d->fragment.size % 4 ||
+	    (uintptr_t)d->vertex.bytes % sizeof(uint32_t) ||
+	    (uintptr_t)d->fragment.bytes % sizeof(uint32_t) ||
 	    ((const uint32_t *)d->vertex.bytes)[0] != 0x07230203 ||
 	    ((const uint32_t *)d->fragment.bytes)[0] != 0x07230203 ||
 	    !(fmt = rend_pipe_format(d->color_format)) ||
-	    d->depth_format != REND_FORMAT_D32_FLOAT || d->samples != 1 ||
-	    (uintptr_t)d->vertex.bytes % sizeof(uint32_t) ||
-	    (uintptr_t)d->fragment.bytes % sizeof(uint32_t))
+	    (!portable && d->depth_format != REND_FORMAT_D32_FLOAT) || d->samples != 1)
 	{
 		rend_vk_set_diagnostic(
 			REND_DIAG_INVALID_ARGUMENT, 0,
@@ -2105,18 +2761,40 @@ rend_graphics_pipeline_create(RendBackend b,
 	memset(stages, 0, sizeof(stages));
 	stages[0].sType = stages[1].sType =
 		VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	stages[0].pNext = stages[1].pNext = &mapping;
+	stages[0].pNext = stages[1].pNext = portable ? NULL : &mapping;
 	stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
 	stages[0].module = modules[0];
-	stages[0].pName = "vertMain";
+	stages[0].pName = portable ? "main" : "vertMain";
 	stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 	stages[1].module = modules[1];
-	stages[1].pName = "fragMain";
+	stages[1].pName = portable ? "main" : "fragMain";
 	memset(&flags, 0, sizeof(flags));
 	flags.sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO;
-	flags.flags = VK_PIPELINE_CREATE_2_DESCRIPTOR_HEAP_BIT_EXT;
+	flags.flags = portable ? 0 : VK_PIPELINE_CREATE_2_DESCRIPTOR_HEAP_BIT_EXT;
 	memset(&vi, 0, sizeof(vi));
 	vi.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	if (portable) {
+		uint32_t used[2] = {0, 0}, binding_count = 0;
+		static const VkFormat formats[4] = {VK_FORMAT_R32_SFLOAT,
+			VK_FORMAT_R32G32_SFLOAT, VK_FORMAT_R32G32B32_SFLOAT, VK_FORMAT_R32G32B32A32_SFLOAT};
+		for (i = 0; i < d->attribute_count; ++i) {
+			const RendVertexAttribute *a = &d->attributes[i];
+			attrs[i].location = a->location; attrs[i].binding = a->divisor;
+			attrs[i].format = formats[a->components - 1]; attrs[i].offset = a->offset_bytes;
+			if (!used[a->divisor]++) {
+				bindings[binding_count].binding = a->divisor;
+				bindings[binding_count].stride = a->stride_bytes;
+				bindings[binding_count++].inputRate = a->divisor ? VK_VERTEX_INPUT_RATE_INSTANCE : VK_VERTEX_INPUT_RATE_VERTEX;
+			}
+		}
+		vi.vertexAttributeDescriptionCount = d->attribute_count; vi.pVertexAttributeDescriptions = attrs;
+		vi.vertexBindingDescriptionCount = binding_count; vi.pVertexBindingDescriptions = bindings;
+		memset(&lci, 0, sizeof(lci)); lci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+		push_range = (VkPushConstantRange){VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, d->uniform_bytes};
+		lci.pushConstantRangeCount = d->uniform_bytes ? 1 : 0; lci.pPushConstantRanges = &push_range;
+		r = vkCreatePipelineLayout(b->device, &lci, NULL, &layout);
+		if (r != VK_SUCCESS) goto fail;
+	}
 	memset(&ia, 0, sizeof(ia));
 	ia.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
 	ia.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -2150,10 +2828,11 @@ rend_graphics_pipeline_create(RendBackend b,
 	rendering.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
 	rendering.colorAttachmentCount = 1;
 	rendering.pColorAttachmentFormats = &fmt;
-	rendering.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT;
+	rendering.depthAttachmentFormat = rend_pipe_format(d->depth_format);
 	memset(&ci, 0, sizeof(ci));
 	ci.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	ci.pNext = &flags;
+	ci.layout = layout;
 	ci.stageCount = 2;
 	ci.pStages = stages;
 	ci.pVertexInputState = &vi;
@@ -2174,12 +2853,18 @@ rend_graphics_pipeline_create(RendBackend b,
 	if (r != VK_SUCCESS)
 		goto fail;
 	p->backend = b;
+	p->layout = layout; p->portable = portable;
+	if (portable) {
+		p->attribute_count = d->attribute_count; p->uniform_bytes = d->uniform_bytes;
+		memcpy(p->attributes, d->attributes, d->attribute_count * sizeof(*d->attributes));
+	}
 	p->format = d->color_format;
 	p->depth_format = d->depth_format;
 	p->live = 1;
 	*out = p;
 	return 1;
 fail:
+	if (layout) vkDestroyPipelineLayout(b->device, layout, NULL);
 	if (modules[0])
 		vkDestroyShaderModule(b->device, modules[0], NULL);
 	if (modules[1])
@@ -2196,6 +2881,7 @@ rend_pipeline_destroy(RendBackend b, RendPipeline p)
 	    !p->live || p->refs)
 		return 0;
 	vkDestroyPipeline(b->device, p->pipeline, NULL);
+	if (p->layout) vkDestroyPipelineLayout(b->device, p->layout, NULL);
 	memset(p, 0, sizeof(*p));
 	return 1;
 }
@@ -3281,7 +3967,7 @@ rend_cmd_begin_render(RendCommandList c, const RendRenderDesc *x)
 	VkRenderingInfo info;
 	uint32_t i;
 	if (!rend_list_recording(c) || c->in_render || !x || !x->width ||
-	    !x->height || !x->colors || x->color_count != 1 || !x->depth_attachment)
+	    !x->height || !x->colors || x->color_count != 1)
 		return rend_command_fail(c);
 	c->has_depth = 0;
 	c->depth_target = NULL;
@@ -3380,7 +4066,8 @@ rend_cmd_set_pipeline(RendCommandList c, RendPipeline p)
 {
 	if (!rend_list_recording(c) || !c->in_render || !p || !p->live ||
 	    p->backend != c->backend || p->format != c->active_color_format ||
-	    !c->has_depth || p->depth_format != REND_FORMAT_D32_FLOAT ||
+	    (p->depth_format == REND_FORMAT_D32_FLOAT && !c->has_depth) ||
+	    (p->depth_format == REND_FORMAT_NONE && c->has_depth) ||
 	    !rend_ref(c, REND_REF_PIPELINE, p))
 		return rend_command_fail(c);
 	vkCmdBindPipeline(c->command, VK_PIPELINE_BIND_POINT_GRAPHICS, p->pipeline);
@@ -3436,7 +4123,8 @@ rend_cmd_set_depth_state(RendCommandList c, const RendDepthState *s)
 	if (!rend_list_recording(c) || !c->in_render || !s || s->test_enable > 1 ||
 	    s->write_enable > 1 ||
 	    (op = rend_compare(s->compare)) == VK_COMPARE_OP_MAX_ENUM ||
-	    (s->compare == REND_COMPARE_NONE && s->test_enable))
+	    (s->compare == REND_COMPARE_NONE && s->test_enable) ||
+	    (s->test_enable && !c->has_depth))
 		return rend_command_fail(c);
 	vkCmdSetDepthTestEnable(c->command, s->test_enable);
 	vkCmdSetDepthWriteEnable(c->command, s->write_enable);
@@ -3455,6 +4143,10 @@ rend_cmd_draw_indexed(RendCommandList c, uint64_t root, uint64_t index,
 	VkDeviceAddress address = root;
 	VkIndexType index_type;
 	uint32_t width;
+	if (c && c->pipeline && c->pipeline->portable) {
+		rend_vk_set_diagnostic(REND_DIAG_UNSUPPORTED, 0, "pointer-root indexed draw requires legacy shader ABI");
+		return rend_command_fail(c);
+	}
 	if (!rend_list_recording(c) || !c->in_render || !c->pipeline || !root ||
 	    root % c->backend->root_alignment || !index || !count || !instances ||
 	    !c->viewport_set || !c->scissor_set || !c->depth_state_set ||
@@ -3481,6 +4173,55 @@ rend_cmd_draw_indexed(RendCommandList c, uint64_t root, uint64_t index,
 	c->backend->push_data(c->command, &push);
 	vkCmdDrawIndexed(c->command, count, instances, 0, offset, first_instance);
 	return 1;
+}
+RendBackendKind
+rend_backend_kind(RendBackend b)
+{
+	return b && b->magic == REND_BACKEND_MAGIC ? REND_BACKEND_VULKAN : REND_BACKEND_NONE;
+}
+int
+rend_cmd_set_uniform(RendCommandList c, const RendUniformDesc *d)
+{
+	uint32_t bytes = d && d->type == REND_UNIFORM_FLOAT4 ? 16 :
+		d && d->type == REND_UNIFORM_MATRIX4 ? 64 : 0;
+	if (!rend_list_recording(c) || !c->in_render || !c->pipeline ||
+	    !c->pipeline->portable || !d || !d->name || !d->name[0] ||
+	    strlen(d->name) >= 64 || !d->values || !bytes ||
+	    d->offset % 4 || d->offset > c->pipeline->uniform_bytes ||
+	    bytes > c->pipeline->uniform_bytes - d->offset) {
+		rend_vk_set_diagnostic(REND_DIAG_INVALID_ARGUMENT, 0, "invalid portable uniform or pipeline ABI");
+		return rend_command_fail(c);
+	}
+	vkCmdPushConstants(c->command, c->pipeline->layout,
+		VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+		d->offset, bytes, d->values);
+	return 1;
+}
+int
+rend_cmd_draw(RendCommandList c, const RendDrawDesc *d)
+{
+	uint32_t i;
+	if (!rend_list_recording(c) || !c->in_render || !c->pipeline ||
+	    !c->pipeline->portable || !d || !d->vertex_count || d->vertex_count % 3 ||
+	    d->vertex_count > INT32_MAX || !d->instance_count || d->instance_count > INT32_MAX || !c->viewport_set || !c->scissor_set || !c->depth_state_set)
+		goto invalid;
+	for (i = 0; i < c->pipeline->attribute_count; ++i) {
+		const RendVertexAttribute *a = &c->pipeline->attributes[i];
+		RendHeapRange range = a->divisor ? d->instances : d->vertices;
+		RendHeap h = range.heap;
+		uint32_t count = a->divisor ? d->instance_count : d->vertex_count;
+		uint64_t bytes = (uint64_t)(count - 1) * a->stride_bytes + a->offset_bytes + a->components * 4;
+		VkDeviceSize offset = range.offset;
+		if (!h || !h->live || h->backend != c->backend || h->kind != REND_HEAP_DATA ||
+		    range.offset % 4 || range.offset > h->size || range.size > h->size - range.offset ||
+		    bytes > range.size || !rend_ref(c, REND_REF_HEAP, h)) goto invalid;
+		vkCmdBindVertexBuffers(c->command, a->divisor, 1, &h->buffer, &offset);
+	}
+	vkCmdDraw(c->command, d->vertex_count, d->instance_count, 0, 0);
+	return 1;
+invalid:
+	rend_vk_set_diagnostic(REND_DIAG_INVALID_ARGUMENT, 0, "invalid portable draw/stream or pipeline ABI");
+	return rend_command_fail(c);
 }
 int
 rend_cmd_copy_texture_to_data(RendCommandList c, RendTexture t,
@@ -3953,6 +4694,7 @@ rend_backend_destroy(RendBackend b)
 	b->device = VK_NULL_HANDLE;
 	return 1;
 }
+#endif /* !__EMSCRIPTEN__ */
 
 #endif /* REND2_IMPLEMENTATION && !REND2_IMPLEMENTATION_INCLUDED */
 

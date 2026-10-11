@@ -67,30 +67,48 @@ def invoke(demo, frames, ppm):
 
 
 def check_compiled_abi():
-    expected = {"mvp": (0, 64), "vertices": (64, 8), "instances": (72, 8),
-                "instance_count": (80, 4), "reserved": (84, 4)}
     for stage in ("vertex", "fragment"):
         reflection_path = ROOT / f"bin/snake.{stage}.json"
-        if not reflection_path.is_file():
-            raise ValueError(f"missing generated Slang reflection: {reflection_path}")
         reflection = json.loads(reflection_path.read_text())
         parameters = reflection.get("parameters", [])
-        if len(parameters) != 1 or parameters[0].get("name") != "root":
-            raise ValueError(f"{stage} shader must reflect a single root parameter")
-        root = parameters[0]["type"]["elementType"]
-        sizes = [item for item in root.get("sizes", []) if item.get("kind") == "uniform"]
-        if not sizes or (sizes[0]["value"], sizes[0]["alignment"]) != (88, 8):
-            raise ValueError(f"{stage} reflected root size/alignment mismatch")
-        fields = {field["name"]: field for field in root.get("fields", [])}
-        if set(fields) != set(expected):
-            raise ValueError(f"{stage} reflected root fields mismatch: {set(fields)}")
-        for name, layout in expected.items():
-            binding = fields[name]["binding"]
-            if (binding["offset"], binding["size"]) != layout:
-                raise ValueError(f"{stage} root field layout mismatch: {name}")
-        if fields["vertices"]["type"].get("kind") != "pointer" or fields["instances"]["type"].get("kind") != "pointer":
-            raise ValueError(f"{stage} root pointer ABI mismatch")
+        if len(parameters) != 1 or parameters[0].get("binding", {}).get("kind") != "pushConstantBuffer":
+            raise ValueError(f"{stage} shader must reflect one push constant block")
+        block = parameters[0]["type"]["elementType"]
+        fields = block.get("fields", [])
+        if len(fields) != 1 or fields[0].get("name") != "transform":
+            raise ValueError(f"{stage} push block must contain only transform")
+        matrix = fields[0]
+        if (matrix["binding"].get("offset"), matrix["binding"].get("size")) != (0, 64):
+            raise ValueError(f"{stage} matrix must occupy the 64-byte push block")
+        if (matrix["type"].get("rowCount"), matrix["type"].get("columnCount")) != (4, 4):
+            raise ValueError(f"{stage} transform must be a 4x4 matrix")
+        if stage == "vertex":
+            entry = next(entry for entry in reflection["entryPoints"] if entry["stage"] == "vertex")
+            inputs = entry["parameters"][0]["type"]["fields"]
+            actual = [(field["name"], field["binding"]["index"], field["type"].get("elementCount", 1))
+                      for field in inputs]
+            expected = [("position", 0, 3), ("shade", 1, 1), ("offset", 2, 3), ("scale", 3, 3), ("color", 4, 3)]
+            if actual != expected:
+                raise ValueError(f"vertex attributes do not match Snake buffers: {actual}")
 
+
+def check_scene(image, frames):
+    width, height, pixels = image
+    if (width, height) != (960, 720):
+        raise ValueError(f"unexpected render extent: {width}x{height}")
+    clear = (10, 13, 15)  # round(0.04, 0.05, 0.06) * 255
+    colors = {tuple(pixels[i:i + 3]) for i in range(0, len(pixels), 3)}
+    non_clear = sum(1 for i in range(0, len(pixels), 3)
+                    if tuple(pixels[i:i + 3]) != clear)
+    green = sum(1 for i in range(0, len(pixels), 3)
+                if pixels[i + 1] > 2 * pixels[i] and pixels[i + 1] > 2 * pixels[i + 2])
+    red = sum(1 for i in range(0, len(pixels), 3)
+              if pixels[i] > 2 * pixels[i + 1] and pixels[i] > 2 * pixels[i + 2])
+    if len(colors) < 10 or non_clear < 10000 or green < 100 or red < 100:
+        raise ValueError(f"snake scene missing (colors={len(colors)}, "
+                         f"non-clear={non_clear}, green={green}, red={red})")
+    print(f"snake stress: {width}x{height}, deterministic {frames}-frame PPM; "
+      f"{len(colors)} colors, {non_clear} non-clear pixels")
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -112,22 +130,8 @@ def main():
         image_b = invoke(demo, args.frames, second)
         if image_a != image_b:
             raise ValueError("repeated fixed-frame render differs")
-        width, height, pixels = image_a
-        if (width, height) != (960, 720):
-            raise ValueError(f"unexpected render extent: {width}x{height}")
-        clear = (10, 13, 15)  # round(0.04, 0.05, 0.06) * 255
-        colors = {tuple(pixels[i:i + 3]) for i in range(0, len(pixels), 3)}
-        non_clear = sum(1 for i in range(0, len(pixels), 3)
-                        if tuple(pixels[i:i + 3]) != clear)
-        green = sum(1 for i in range(0, len(pixels), 3)
-                    if pixels[i + 1] > 2 * pixels[i] and pixels[i + 1] > 2 * pixels[i + 2])
-        red = sum(1 for i in range(0, len(pixels), 3)
-                  if pixels[i] > 2 * pixels[i + 1] and pixels[i] > 2 * pixels[i + 2])
-        if len(colors) < 10 or non_clear < 10000 or green < 100 or red < 100:
-            raise ValueError(f"snake scene missing (colors={len(colors)}, non-clear={non_clear}, green={green}, red={red})")
-    print(f"snake stress: {width}x{height}, deterministic {args.frames}-frame PPM; "
-          f"{len(colors)} colors, {non_clear} non-clear pixels")
-    print("snake stress: shared C/Slang root sizes, pointer widths, and offsets match generated reflection")
+        check_scene(image_a, args.frames)
+    print("snake stress: vertex/instance attributes and 64-byte matrix push block match generated reflection")
     return 0
 
 

@@ -24,8 +24,7 @@ static PeakCtx *demo_peak;
 #define TARGET_PASSES 24
 #define FRAMES 8
 
-static int
-check(int condition, const char *what)
+static int check(int condition, const char *what)
 {
 	if (!condition) {
 		fprintf(stderr, "rend demo: %s failed\n", what);
@@ -34,32 +33,15 @@ check(int condition, const char *what)
 	return 1;
 }
 
-int
-main(void)
+static int render_targets(RendRenderer renderer, RendTexture *targets)
 {
-	RendRenderer renderer = NULL;
-	RendTexture targets[TARGET_COUNT] = {0};
 	unsigned char pixels[WIDTH * HEIGHT * 4];
-	int ok = 0, i, j;
-
-	demo_peak = peak_init_legacy();
-	if (!check(demo_peak != NULL, "Peak initialization"))
-		goto done;
-	renderer = rend_renderer_create_offscreen(WIDTH, HEIGHT, REND_FORMAT_R8G8B8A8_UNORM, REND_BACKEND_VULKAN_14, NULL);
-	if (!check(renderer != NULL, "Vulkan offscreen renderer creation (device/driver required)"))
-		goto done;
-	for (i = 0; i < TARGET_COUNT; i++) {
-		uint32_t extent = i ? WIDTH : WIDTH / 2;
-		targets[i] = rend_texture_create(renderer, extent, extent, 1, 1, 1, REND_FORMAT_R8G8B8A8_UNORM);
-		if (!check(rend_texture_width(&targets[i]) == extent && rend_texture_height(&targets[i]) == extent, "texture target creation"))
-			goto done;
-	}
-
+	int i, j;
 	/* Alternate target extents repeatedly within each real asynchronous frame,
 	 * forcing pass-local depth replacement through the public render API. */
 	for (i = 0; i < FRAMES; i++) {
 		if (!check(rend_renderer_frame_begin(renderer), "frame begin"))
-			goto done;
+			return 0;
 		for (j = 0; j < TARGET_PASSES; j++) {
 			RendTexture *target = &targets[j % TARGET_COUNT];
 			rend_cmd_render_begin_texture(renderer, target);
@@ -71,20 +53,28 @@ main(void)
 	}
 	rend_renderer_read(renderer, pixels, sizeof(pixels));
 	for (i = 0; i < WIDTH * HEIGHT; i++) {
-		if (pixels[i * 4] != 255 || pixels[i * 4 + 1] != 0 || pixels[i * 4 + 2] != 0 || pixels[i * 4 + 3] != 255) {
+		if (pixels[i * 4] != 255 || pixels[i * 4 + 1] != 0 || pixels[i * 4 + 2] != 0 ||
+		    pixels[i * 4 + 3] != 255) {
 			fprintf(stderr, "rend demo: base clear mismatch at pixel %d\n", i);
-			goto done;
+			return 0;
 		}
 	}
 
+	return 1;
+}
+
+static int transfer_targets(RendRenderer renderer, RendTexture *targets)
+{
+	unsigned char pixels[WIDTH * HEIGHT * 4];
+	int i, j;
 	/* Base clear -> texture blit -> preserving passes -> completion/readback. */
 	for (i = 0; i < FRAMES; i++) {
 		if (!check(rend_renderer_frame_begin(renderer), "transfer frame begin"))
-			goto done;
+			return 0;
 		rend_cmd_render_begin(renderer, 0.f, 1.f, 0.f, 1.f);
 		rend_cmd_render_end(renderer);
-		rend_cmd_blit(renderer, &targets[0], rend_renderer_color_target(renderer),
-			0, 0, WIDTH / 2, HEIGHT / 2, 0, 0, WIDTH / 2, HEIGHT / 2);
+		rend_cmd_blit(renderer, &targets[0], rend_renderer_color_target(renderer), 0, 0, WIDTH / 2,
+		              HEIGHT / 2, 0, 0, WIDTH / 2, HEIGHT / 2);
 		rend_cmd_render_begin_preserve(renderer);
 		rend_cmd_render_end(renderer);
 		rend_cmd_render_begin_preserve(renderer);
@@ -98,12 +88,40 @@ main(void)
 			if (pixels[j * 4] != 0 || pixels[j * 4 + 1] != expected_green ||
 			    pixels[j * 4 + 2] != 0 || pixels[j * 4 + 3] != expected_alpha) {
 				fprintf(stderr, "rend demo: blit/preserve mismatch frame %d pixel %d\n", i, j);
-				goto done;
+				return 0;
 			}
 		}
 	}
+	return 1;
+}
+
+int main(void)
+{
+	RendRenderer renderer = NULL;
+	RendTexture targets[TARGET_COUNT] = {0};
+	int ok = 0, i;
+
+	demo_peak = peak_init_legacy();
+	if (!check(demo_peak != NULL, "Peak initialization"))
+		goto done;
+	renderer = rend_renderer_create_offscreen(WIDTH, HEIGHT, REND_FORMAT_R8G8B8A8_UNORM,
+	                                          REND_BACKEND_VULKAN_14, NULL);
+	if (!check(renderer != NULL, "Vulkan offscreen renderer creation (device/driver required)"))
+		goto done;
+	for (i = 0; i < TARGET_COUNT; i++) {
+		uint32_t extent = i ? WIDTH : WIDTH / 2;
+		targets[i] =
+		    rend_texture_create(renderer, extent, extent, 1, 1, 1, REND_FORMAT_R8G8B8A8_UNORM);
+		if (!check(rend_texture_width(&targets[i]) == extent &&
+		               rend_texture_height(&targets[i]) == extent,
+		           "texture target creation"))
+			goto done;
+	}
+
+	if (!render_targets(renderer, targets) || !transfer_targets(renderer, targets))
+		goto done;
 	ok = 1;
-	done:
+done:
 	if (renderer) {
 		for (i = 0; i < TARGET_COUNT; i++)
 			if (rend_texture_width(&targets[i]))

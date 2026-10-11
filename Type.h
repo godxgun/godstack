@@ -8,20 +8,20 @@
  * FEATURES:
  * - Take either codepoints or UTF-8 bytes. Layout validates UTF-8, then
  *   walks codepoints.
- * - Load sfnt fonts (TrueType glyf, or color CBDT/CBLC) and rasterize into
- *   an atlas:
+ * - Load explicitly trusted sfnt TrueType glyf fonts into a coverage atlas:
  *      - Coverage bitmaps with box-filter antialiasing.
- *      - Color emoji into a separate RGBA atlas.
+ *      - Color emoji and CFF are not implemented.
  *      - Glyph metrics, advance, and bearings.
  *      - Signed-distance bitmaps are declared and return TYPE_ERR_UNIMPLEMENTED.
- * - East Asian Width (UAX #11) and emoji (UAX #51) for layout.
- *      - BMP: property table painted from the UAX ranges.
- *      - Plane 1: compact page map (emoji / kana).
- *      - Planes 2+: binary search on the same ranges (CJK unified).
+ * - Glyph-ID runs accept external shaping/bidi results with clusters and
+ *   fractional advances/offsets. UTF-8 layout remains an unshaped helper.
+ * - Width/emoji/combining property queries are currently placeholders.
  *
  * ANTI-FEATURES:
- * - Does not allocate. Call the memory function, then place into your buffer.
- * - Does not read files. Font bytes must outlive every face that points at them.
+ * - No heap allocation. Place persistent state in caller storage and bind a
+ *   caller-owned temporary scratch view before cold-glyph rendering.
+ * - Does not read files. Font bytes must remain immutable and outlive every
+ *   face that points at them. Unqualified/imported fonts are rejected.
  * - Does not grow the face list, the fallback list, or the glyph cache.
  *   Sizes are fixed when the context is placed.
  *
@@ -35,7 +35,11 @@
  *     unsigned char *buf = ...; // type_memory(&params) bytes
  *     TypeCtx *type = type_place(buf, type_memory(&params), &params);
  *     uint32_t id;
- *     type_add_font(type, bytes, len, NULL, &id);
+ *     // Only bundled, qualified bytes: imported bytes are rejected by default.
+ *     type_add_font_trusted(type, bytes, len, NULL, &id);
+ *     TypeScratch scratch;
+ *     type_scratch_init(&scratch, temporary_bytes, temporary_capacity);
+ *     type_set_scratch(type, &scratch); // detach before temporary arena reset
  *     TypeGlyph g;
  *     type_glyph(type, 'A', 16.0f, &g);
  *
@@ -45,10 +49,12 @@
 #define TYPE_H
 
 #define TYPE_MAJOR 0
-#define TYPE_MINOR 1
+#define TYPE_MINOR 2
 #define TYPE_PATCH 0
 
 /* CHANGE LOG
+ * 0.2.0 - caller scratch; fail-closed font admission; external shaped runs.
+ *         See docs/type-integration.md for intentional compatibility breaks.
  * 0.1.0 - @vasco - public API from velocitty type.zig; caller-provided memory
  */
 
@@ -86,7 +92,24 @@ typedef enum {
 	TYPE_ERR_INVALID_UTF8,
 	TYPE_ERR_UNIMPLEMENTED,
 	TYPE_ERR_BUF_TOO_SMALL,
+	TYPE_ERR_SCRATCH_REQUIRED,
+	TYPE_ERR_SCRATCH_FULL,
+	TYPE_ERR_UNTRUSTED_FONT,
 } TypeError;
+
+/* Caller-owned temporary-arena view. No allocation or heap fallback.
+ * Initialize once per borrowed slice. Operations restore used, retain peak and
+ * failed diagnostics. Do not share a view across concurrent/reentrant calls.
+ * data must not overlap context, font bytes, output or bitmap storage. */
+typedef struct TypeScratch {
+	uint8_t *data;
+	size_t capacity, used, peak;
+	int failed;
+} TypeScratch;
+
+void type_scratch_init(TypeScratch *scratch, void *data, size_t capacity);
+/* Borrow until detached (NULL). No operation may overlap an arena reset. */
+void type_set_scratch(TypeCtx *ctx, TypeScratch *scratch);
 
 typedef enum {
 	TYPE_AA_NONE = 0, /* binary coverage */
@@ -129,8 +152,8 @@ typedef struct TypeFaceParams {
 /*
  * atlas_* and cache_capacity must be > 0 (type_params_default fills the
  * velocitty defaults). max_faces and max_fallbacks bound storage inside the
- * context buffer. ligatures is stored for shaping; this API does not apply
- * GSUB yet. color_emoji 0 drops CBDT/CBLC on add. antialias is TypeAntiAlias.
+ * context buffer. ligatures/color_emoji are reserved; the unshaped helper
+ * applies neither GSUB nor color glyphs. antialias is TypeAntiAlias.
  */
 typedef struct TypeParams {
 	uint32_t atlas_width;
@@ -183,6 +206,30 @@ typedef struct TypeCell {
 	uint32_t codepoint;
 } TypeCell;
 
+/* External shaper output, in visual glyph order. cluster is a UTF-8 byte
+ * offset in the caller's logical text, never a glyph index. Positions are
+ * pixels, fractional, y down (negate HarfBuzz y values on import). font_id
+ * and glyph_id must refer to exactly the face shaped, including glyph 0.
+ * Run size uses the same integer-pixel rounding as type_glyph. */
+typedef struct TypeShapedGlyph {
+	uint32_t font_id, glyph_id, cluster;
+	float x_advance, y_advance, x_offset, y_offset;
+} TypeShapedGlyph;
+
+typedef struct TypePositionedGlyph {
+	TypeGlyph glyph;
+	uint32_t cluster;
+	float x, y;
+} TypePositionedGlyph;
+
+/* Ink bounds relative to initial baseline; advance includes invisible glyphs.
+ * has_ink == 0 means all bounds are zero. */
+typedef struct TypeTextMetrics {
+	float advance_x, advance_y;
+	float min_x, min_y, max_x, max_y;
+	uint8_t has_ink;
+} TypeTextMetrics;
+
 typedef struct TypeGlyphKey {
 	uint32_t font_id;
 	uint32_t glyph_id;
@@ -213,7 +260,13 @@ void type_face_params_default(TypeFaceParams *face);    /* weight unset, roman. 
 size_t type_ttf_memory(void);
 size_t type_otf_memory(void);
 
-TypeTTF *type_ttf_place(void *buf, size_t bufsize, const void *bytes, size_t len); /* NULL on short buf or invalid font. */
+/* Default admission is fail-closed: returns NULL without parsing bytes.
+ * trusted is ONLY for independently qualified/bundled immutable fonts. A
+ * bounded directory preflight is not validation of nested font structures;
+ * stb_truetype remains unsafe for malicious fonts. TTC/CFF unsupported.
+ * Placement buffers must be 16-byte aligned. */
+TypeTTF *type_ttf_place(void *buf, size_t bufsize, const void *bytes, size_t len);
+TypeTTF *type_ttf_place_trusted(void *buf, size_t bufsize, const void *bytes, size_t len);
 TypeOTF *type_otf_place(void *buf, size_t bufsize, const void *bytes, size_t len);
 
 TypeError type_ttf_error(const TypeTTF *font); /* TYPE_OK, or why place failed. place(NULL buf) is not required. */
@@ -246,8 +299,12 @@ TypeError type_font_bitmap_info(const TypeFont *font, uint16_t glyph_id, float s
 size_t type_bitmap_bytes(const TypeBitmap *info); /* width*height, or *4 when color */
 
 /* pixels must hold type_bitmap_bytes of the info at this size. Empty glyphs
- * (width or height 0) succeed and leave pixels untouched. */
+ * (width or height 0) succeed and leave pixels untouched. On raster scratch
+ * exhaustion coverage is zeroed and out is not published. */
+/* Legacy entry point needs no scratch for empty glyphs; otherwise returns
+ * TYPE_ERR_SCRATCH_REQUIRED. Use the explicit-scratch variant for rendering. */
 TypeError type_font_render_bitmap(const TypeFont *font, uint16_t glyph_id, float size_px, TypeAntiAlias aa, void *pixels, size_t len, TypeBitmap *out);
+TypeError type_font_render_bitmap_scratch(const TypeFont *font, uint16_t glyph_id, float size_px, TypeAntiAlias aa, void *pixels, size_t len, TypeScratch *scratch, TypeBitmap *out);
 TypeError type_font_render_sdf(const TypeFont *font, uint16_t glyph_id, float size_px, void *pixels, size_t len, TypeBitmap *out);
 
 /* ---------------------------------------------------------------------------
@@ -288,9 +345,12 @@ void type_atlas_rgba_clear(TypeAtlasRgba *atlas);
  * and warms ASCII again.
  */
 size_t type_memory(const TypeParams *params); /* 0 when params are unusable. */
-TypeCtx *type_place(void *buf, size_t bufsize, const TypeParams *params);
+TypeCtx *type_place(void *buf, size_t bufsize, const TypeParams *params); /* buf must be 16-byte aligned. */
 
+/* Default rejects ALL imported/unqualified bytes without invoking stb.
+ * Trust is provenance, not file extension, hash alone, or successful preflight. */
 TypeError type_add_font(TypeCtx *ctx, const void *bytes, size_t len, const TypeFaceParams *face, uint32_t *out_id);
+TypeError type_add_font_trusted(TypeCtx *ctx, const void *bytes, size_t len, const TypeFaceParams *face, uint32_t *out_id);
 void type_clear_fonts(TypeCtx *ctx); /* Drops faces. Font bytes may be freed after this returns. */
 void type_select(TypeCtx *ctx, uint32_t font_id);
 TypeError type_set_fallbacks(TypeCtx *ctx, const uint32_t *ids, uint32_t count);
@@ -310,6 +370,18 @@ TypeError type_peek_glyph_styled(const TypeCtx *ctx, uint32_t codepoint, float s
 TypeError type_glyph(TypeCtx *ctx, uint32_t codepoint, float size_px, TypeGlyph *out);
 TypeError type_glyph_styled(TypeCtx *ctx, uint32_t codepoint, float size_px, TypeStyle style, TypeGlyph *out);
 TypeError type_warm_ascii(TypeCtx *ctx, float size_px);
+
+/* Raster/cache by font-local ID, with no codepoint remapping or ASCII warmup. */
+TypeError type_glyph_id(TypeCtx *ctx, uint32_t font_id, uint32_t glyph_id, float size_px, TypeGlyph *out);
+/* No shaping, bidi, wrapping or fallback is invented here. Use the actual
+ * shaper's glyph order, IDs, clusters and positions. On error, written and
+ * metrics describe the completed prefix; atlas/cache may retain that prefix.
+ * metrics can be requested with out == NULL (cap still bounds the operation).
+ * Glyph advance in out remains nominal; metrics uses shaped advances. */
+TypeError type_layout_shaped(TypeCtx *ctx, const TypeShapedGlyph *run, uint32_t count, float size_px, TypePositionedGlyph *out, uint32_t cap, uint32_t *written, TypeTextMetrics *metrics);
+/* Same ink/advance computation without rasterization, scratch, atlas mutation
+ * or cache statistics. count itself is the caller's work bound. */
+TypeError type_measure_shaped(const TypeCtx *ctx, const TypeShapedGlyph *run, uint32_t count, float size_px, uint32_t *written, TypeTextMetrics *metrics);
 
 /* Clear both atlases and the LRU, then warm ASCII at the last size. */
 void type_clear_atlas(TypeCtx *ctx);
@@ -345,37 +417,47 @@ int type_is_combining(uint32_t codepoint);
 #if defined(TYPE_IMPLEMENTATION) && !defined(TYPE_IMPLEMENTATION_ONCE)
 #define TYPE_IMPLEMENTATION_ONCE
 /* t_ttf.c - TrueType glyf faces. Copyright (c) 2025-2026 Vasco Alves
- * Raster is stb_truetype. Shape scratch is a fixed buffer, reset each call.
+ * Raster is stb_truetype. Scratch is an explicit caller-owned bounded view.
  * Font bytes are borrowed for the life of the placed face.
  */
 
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <math.h>
+#include <float.h>
 
-
-static unsigned char ttf_scratch[1 << 20];
-static size_t ttf_scratch_used;
-
+/* Type's embedded rasterizer must not silently use an external heap hook. */
+#if defined(STBTT_malloc) || defined(STBTT_free)
+#error "Type requires its caller-owned scratch allocator; remove STBTT allocation overrides"
+#endif
 static void *ttf_scratch_alloc(size_t size, void *user);
 static void ttf_scratch_free(void *p, void *user);
-static void ttf_scratch_reset(void);
 static int16_t ttf_clamp_i16(int v);
 static uint16_t ttf_upem(const struct TypeTTF *font);
 
 static void *
 ttf_scratch_alloc(size_t size, void *user)
 {
-	size_t n;
+	TypeScratch *s = (TypeScratch *)user;
+	size_t pad;
 	void *p;
 
-	(void)user;
-	n = (size + 15u) & ~(size_t)15u;
-	if (n < size || ttf_scratch_used + n > sizeof ttf_scratch)
+	if (!s)
 		return NULL;
-	p = ttf_scratch + ttf_scratch_used;
-	ttf_scratch_used += n;
+	if (!s->data || s->used > s->capacity)
+		goto full;
+	pad = (size_t)(-(uintptr_t)(s->data + s->used)) & 15u;
+	if (pad > s->capacity - s->used || size > s->capacity - s->used - pad)
+		goto full;
+	p = s->data + s->used + pad;
+	s->used += pad + size;
+	if (s->used > s->peak)
+		s->peak = s->used;
 	return p;
+full:
+	s->failed = 1;
+	return NULL;
 }
 
 static void
@@ -385,10 +467,14 @@ ttf_scratch_free(void *p, void *user)
 	(void)user;
 }
 
-static void
-ttf_scratch_reset(void)
+void
+type_scratch_init(TypeScratch *scratch, void *data, size_t capacity)
 {
-	ttf_scratch_used = 0;
+	if (!scratch)
+		return;
+	memset(scratch, 0, sizeof *scratch);
+	scratch->data = (uint8_t *)data;
+	scratch->capacity = data ? capacity : 0;
 }
 
 #ifndef STBTT_malloc
@@ -2865,7 +2951,6 @@ static stbtt__active_edge *stbtt__new_active(stbtt__hheap *hh, stbtt__edge *e, i
 {
    stbtt__active_edge *z = (stbtt__active_edge *) stbtt__hheap_alloc(hh, sizeof(*z), userdata);
    float dxdy = (e->x1 - e->x0) / (e->y1 - e->y0);
-   STBTT_assert(z != NULL);
    if (!z) return z;
 
    
@@ -2887,8 +2972,6 @@ static stbtt__active_edge *stbtt__new_active(stbtt__hheap *hh, stbtt__edge *e, i
 {
    stbtt__active_edge *z = (stbtt__active_edge *) stbtt__hheap_alloc(hh, sizeof(*z), userdata);
    float dxdy = (e->x1 - e->x0) / (e->y1 - e->y0);
-   STBTT_assert(z != NULL);
-   
    if (!z) return z;
    z->fdx = dxdy;
    z->fdy = dxdy != 0.0f ? (1.0f/dxdy) : 0.0f;
@@ -2961,6 +3044,7 @@ static void stbtt__rasterize_sorted_edges(stbtt__bitmap *result, stbtt__edge *e,
       scanline = (unsigned char *) STBTT_malloc(result->w, userdata);
    else
       scanline = scanline_data;
+   if (!scanline) return; /* bounded Type scratch exhaustion */
 
    y = off_y * vsubsample;
    e[n].y0 = (off_y + result->h) * (float) vsubsample + 1;
@@ -3331,6 +3415,7 @@ static void stbtt__rasterize_sorted_edges(stbtt__bitmap *result, stbtt__edge *e,
       scanline = (float *) STBTT_malloc((result->w*2+1) * sizeof(float), userdata);
    else
       scanline = scanline_data;
+   if (!scanline) return; /* bounded Type scratch exhaustion */
 
    scanline2 = scanline + result->w;
 
@@ -5015,30 +5100,95 @@ type_ttf_memory(void)
 	return sizeof (struct TypeTTF);
 }
 
+/* Directory preflight only. It never follows offsets outside the supplied
+ * blob, but does NOT validate cmap/loca/glyf recursion or instruction streams.
+ * The explicit trust gate below is mandatory even after this succeeds. */
+static uint16_t
+type_be16(const uint8_t *p)
+{
+	return (uint16_t)(((uint16_t)p[0] << 8) | p[1]);
+}
+
+static uint32_t
+type_be32(const uint8_t *p)
+{
+	return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
+	       ((uint32_t)p[2] << 8) | p[3];
+}
+
+static TypeError
+type_sfnt_preflight(const void *bytes, size_t len)
+{
+	const uint8_t *p = (const uint8_t *)bytes;
+	uint32_t n, i, seen = 0;
+	if (!p || len < 12 || len > 0x7FFFFFFFu)
+		return TYPE_ERR_INVALID_FONT;
+	if (type_be32(p) == 0x4F54544Fu || type_be32(p) == 0x74746366u)
+		return TYPE_ERR_UNSUPPORTED_TABLE; /* OTTO / ttcf */
+	if (type_be32(p) != 0x00010000u && type_be32(p) != 0x74727565u)
+		return TYPE_ERR_INVALID_FONT;
+	n = type_be16(p + 4);
+	if (!n || n > (len - 12) / 16)
+		return TYPE_ERR_INVALID_FONT;
+	for (i = 0; i < n; i++) {
+		const uint8_t *t = p + 12 + i * 16;
+		uint32_t tag = type_be32(t), off = type_be32(t + 8);
+		uint32_t size = type_be32(t + 12), bit = 0, min = 0;
+		if (off > len || size > len - off || off < 12 + n * 16)
+			return TYPE_ERR_INVALID_FONT;
+		switch (tag) {
+		case 0x43464620u: case 0x43464632u: /* CFF / CFF2 */
+			return TYPE_ERR_UNSUPPORTED_TABLE;
+		case 0x68656164u: bit = 1; min = 54; break; /* head */
+		case 0x68686561u: bit = 2; min = 36; break; /* hhea */
+		case 0x686D7478u: bit = 4; min = 4; break;  /* hmtx */
+		case 0x6D617870u: bit = 8; min = 6; break;  /* maxp */
+		case 0x636D6170u: bit = 16; min = 4; break; /* cmap */
+		case 0x6C6F6361u: bit = 32; min = 2; break; /* loca */
+		case 0x676C7966u: bit = 64; break;          /* glyf */
+		default: break;
+		}
+		if (bit && ((seen & bit) || size < min))
+			return TYPE_ERR_INVALID_FONT;
+		seen |= bit;
+	}
+	return seen == 127 ? TYPE_OK : TYPE_ERR_INVALID_FONT;
+}
+
 TypeTTF *
 type_ttf_place(void *buf, size_t bufsize, const void *bytes, size_t len)
 {
+	(void)bytes;
+	(void)len;
+	if (buf && bufsize >= sizeof (struct TypeTTF) && !((uintptr_t)buf & 15u)) {
+		memset(buf, 0, sizeof (struct TypeTTF));
+		((TypeTTF *)buf)->err = TYPE_ERR_UNTRUSTED_FONT;
+	}
+	return NULL;
+}
+
+TypeTTF *
+type_ttf_place_trusted(void *buf, size_t bufsize, const void *bytes, size_t len)
+{
 	struct TypeTTF *font;
 	int ascent, descent, gap;
-	int offset;
-
-	if (!buf || bufsize < sizeof (struct TypeTTF) || !bytes || len < 12)
+	if (!buf || ((uintptr_t)buf & 15u) || bufsize < sizeof (struct TypeTTF))
 		return NULL;
 	font = buf;
 	memset(font, 0, sizeof *font);
 	font->bytes = bytes;
 	font->len = len;
-	font->err = TYPE_ERR_INVALID_FONT;
-	offset = stbtt_GetFontOffsetForIndex(bytes, 0);
-	if (offset < 0)
+	font->err = type_sfnt_preflight(bytes, len);
+	if (font->err != TYPE_OK)
 		return NULL;
-	ttf_scratch_reset();
-	if (!stbtt_InitFont(&font->info, (const unsigned char *)bytes, offset))
+	font->err = TYPE_ERR_INVALID_FONT;
+	if (!stbtt_InitFont(&font->info, (const unsigned char *)bytes, 0))
 		return NULL;
 	if (!font->info.glyf)
 		return NULL;
 	font->units_per_em = ttf_upem(font);
-	if (font->units_per_em == 0)
+	if (font->units_per_em < 16 || font->units_per_em > 16384 ||
+	    font->info.numGlyphs <= 0 || font->info.numGlyphs > 65535)
 		return NULL;
 	stbtt_GetFontVMetrics(&font->info, &ascent, &descent, &gap);
 	font->ascent = ttf_clamp_i16(ascent);
@@ -5083,7 +5233,7 @@ type_font_from_ttf(void *buf, size_t bufsize, const TypeTTF *ttf, const TypeFace
 	struct TypeFont *font;
 	TypeFaceParams def;
 
-	if (!buf || bufsize < sizeof (struct TypeFont) || !ttf || ttf->err != TYPE_OK)
+	if (!buf || ((uintptr_t)buf & 15u) || bufsize < sizeof (struct TypeFont) || !ttf || ttf->err != TYPE_OK)
 		return NULL;
 	if (!face) {
 		type_face_params_default(&def);
@@ -5126,7 +5276,7 @@ type_font_metrics(const TypeFont *font, float size_px, TypeMetrics *out)
 {
 	float scale;
 
-	if (!font || !font->ttf || !out || !(size_px > 0.0f))
+	if (!font || !font->ttf || !out || !(size_px > 0.0f && size_px <= 65535.0f))
 		return TYPE_ERR_INVALID_FONT;
 	scale = size_px / (float)font->ttf->units_per_em;
 	out->ascender = (float)font->ttf->ascent * scale;
@@ -5146,7 +5296,7 @@ type_font_glyph_index(const TypeFont *font, uint32_t codepoint, uint16_t *out_gi
 	if (codepoint > 0x10FFFFu)
 		return TYPE_ERR_GLYPH_NOT_FOUND;
 	g = stbtt_FindGlyphIndex(&font->ttf->info, (int)codepoint);
-	if (g <= 0)
+	if (g <= 0 || g >= font->ttf->num_glyphs)
 		return TYPE_ERR_GLYPH_NOT_FOUND;
 	*out_gid = (uint16_t)g;
 	return TYPE_OK;
@@ -5192,7 +5342,7 @@ type_font_bitmap_info(const TypeFont *font, uint16_t glyph_id, float size_px, Ty
 	int w, h;
 	uint16_t fu;
 
-	if (!font || !font->ttf || !out || !(size_px > 0.0f))
+	if (!font || !font->ttf || !out || !(size_px > 0.0f && size_px <= 65535.0f))
 		return TYPE_ERR_INVALID_FONT;
 	if (glyph_id >= font->ttf->num_glyphs)
 		return TYPE_ERR_GLYPH_NOT_FOUND;
@@ -5202,7 +5352,7 @@ type_font_bitmap_info(const TypeFont *font, uint16_t glyph_id, float size_px, Ty
 	if (adv < 0)
 		adv = 0;
 	fu = (uint16_t)(adv > 65535 ? 65535 : adv);
-	out->advance = (uint16_t)(fu * scale + 0.5f);
+	out->advance = (uint16_t)(fu * scale >= 65535.0f ? 65535 : fu * scale + 0.5f);
 	stbtt_GetGlyphBitmapBox(&font->ttf->info, glyph_id, scale, scale, &x0, &y0, &x1, &y1);
 	w = x1 - x0;
 	h = y1 - y0;
@@ -5233,14 +5383,23 @@ type_bitmap_bytes(const TypeBitmap *info)
 TypeError
 type_font_render_bitmap(const TypeFont *font, uint16_t glyph_id, float size_px, TypeAntiAlias aa, void *pixels, size_t len, TypeBitmap *out)
 {
+	return type_font_render_bitmap_scratch(font, glyph_id, size_px, aa, pixels, len, NULL, out);
+}
+
+TypeError
+type_font_render_bitmap_scratch(const TypeFont *font, uint16_t glyph_id, float size_px, TypeAntiAlias aa, void *pixels, size_t len, TypeScratch *scratch, TypeBitmap *out)
+{
 	TypeBitmap info;
 	TypeError err;
+	stbtt_fontinfo raster_info;
 	float scale;
-	size_t need;
+	size_t need, mark;
 	size_t i;
 	uint8_t *dst;
 
 	if (aa == TYPE_AA_SDF)
+		return TYPE_ERR_UNIMPLEMENTED;
+	if (aa != TYPE_AA_NONE && aa != TYPE_AA_BOX)
 		return TYPE_ERR_UNIMPLEMENTED;
 	err = type_font_bitmap_info(font, glyph_id, size_px, &info);
 	if (err != TYPE_OK)
@@ -5253,10 +5412,21 @@ type_font_render_bitmap(const TypeFont *font, uint16_t glyph_id, float size_px, 
 	}
 	if (!pixels || len < need)
 		return TYPE_ERR_BUF_TOO_SMALL;
+	if (!scratch)
+		return TYPE_ERR_SCRATCH_REQUIRED;
+	mark = scratch->used;
+	scratch->failed = 0;
 	scale = stbtt_ScaleForMappingEmToPixels(&font->ttf->info, size_px);
-	ttf_scratch_reset();
+	raster_info = font->ttf->info;
+	raster_info.userdata = scratch;
 	dst = pixels;
-	stbtt_MakeGlyphBitmap(&font->ttf->info, dst, info.width, info.height, info.width, scale, scale, glyph_id);
+	memset(dst, 0, need);
+	stbtt_MakeGlyphBitmap(&raster_info, dst, info.width, info.height, info.width, scale, scale, glyph_id);
+	scratch->used = mark;
+	if (scratch->failed) {
+		memset(dst, 0, need); /* never publish partial coverage on OOM */
+		return TYPE_ERR_SCRATCH_FULL;
+	}
 	if (aa == TYPE_AA_NONE) {
 		for (i = 0; i < need; i++)
 			dst[i] = dst[i] > 127 ? 255 : 0;
@@ -5381,8 +5551,7 @@ struct TypeCtx {
 	uint32_t cache_n;
 	uint32_t stamp;
 	CacheSlot *cache;
-	uint8_t *scratch;
-	size_t scratch_n;
+	TypeScratch *scratch;
 	FaceRec *faces;
 	unsigned char *bytes;
 	size_t face_stride;
@@ -5394,8 +5563,6 @@ typedef struct TypeLayout {
 	size_t cov;
 	size_t rgba;
 	size_t cache;
-	size_t scratch;
-	size_t scratch_n;
 	size_t face_stride;
 	size_t face_bytes;
 } TypeLayout;
@@ -5419,32 +5586,43 @@ type_align(size_t v, size_t a)
 	return (v + a - 1u) & ~(a - 1u);
 }
 
+/* Add one aligned array without intermediate multiplication/add overflow. */
+static int
+type_layout_array(size_t *o, size_t count, size_t stride)
+{
+	size_t n;
+	if (stride && count > SIZE_MAX / stride)
+		return 0;
+	n = count * stride;
+	if (*o > SIZE_MAX - 15u || n > SIZE_MAX - 15u - *o)
+		return 0;
+	*o = type_align(*o + n, 16);
+	return 1;
+}
+
 static int
 type_layout(const TypeParams *params, TypeLayout *lay)
 {
-	size_t o;
-	if (!params || !lay)
-		return 0;
-	if (params->atlas_width == 0 || params->atlas_height == 0 || params->cache_capacity == 0)
-		return 0;
-	if (params->max_faces == 0)
+	size_t o, pixels;
+	if (!params || !lay || !params->atlas_width || !params->atlas_height ||
+	    params->atlas_width > 65535u || params->atlas_height > 65535u ||
+	    !params->cache_capacity || !params->max_faces ||
+	    params->antialias > TYPE_AA_SDF)
 		return 0;
 	memset(lay, 0, sizeof *lay);
 	lay->face_stride = type_align(type_ttf_memory(), 16) + type_align(type_font_memory(), 16);
 	o = type_align(sizeof (struct TypeCtx), 16);
 	lay->faces = o;
-	o = type_align(o + (size_t)params->max_faces * sizeof (FaceRec), 16);
+	if (!type_layout_array(&o, params->max_faces, sizeof (FaceRec))) return 0;
 	lay->face_bytes = o;
-	o = type_align(o + (size_t)params->max_faces * lay->face_stride, 16);
+	if (!type_layout_array(&o, params->max_faces, lay->face_stride)) return 0;
+	pixels = (size_t)params->atlas_width * params->atlas_height;
 	lay->cov = o;
-	o = type_align(o + (size_t)params->atlas_width * (size_t)params->atlas_height, 16);
+	if (!type_layout_array(&o, pixels, 1)) return 0;
 	lay->rgba = o;
-	o = type_align(o + (size_t)params->atlas_width * (size_t)params->atlas_height * 4u, 16);
+	if (!type_layout_array(&o, pixels, 4)) return 0;
 	lay->cache = o;
-	o = type_align(o + (size_t)params->cache_capacity * sizeof (CacheSlot), 16);
-	lay->scratch = o;
-	lay->scratch_n = 256u * 256u;
-	o += lay->scratch_n;
+	if (!type_layout_array(&o, params->cache_capacity, sizeof (CacheSlot))) return 0;
 	lay->total = o;
 	return 1;
 }
@@ -5490,7 +5668,7 @@ type_place(void *buf, size_t bufsize, const TypeParams *params)
 	TypeLayout lay;
 	unsigned char *base;
 
-	if (!buf || !type_layout(params, &lay) || bufsize < lay.total)
+	if (!buf || ((uintptr_t)buf & 15u) || !type_layout(params, &lay) || bufsize < lay.total)
 		return NULL;
 	memset(buf, 0, lay.total);
 	base = buf;
@@ -5512,9 +5690,15 @@ type_place(void *buf, size_t bufsize, const TypeParams *params)
 	ctx->rgba = (uint32_t *)(base + lay.rgba);
 	ctx->cache = (CacheSlot *)(base + lay.cache);
 	ctx->cache_n = params->cache_capacity;
-	ctx->scratch = base + lay.scratch;
-	ctx->scratch_n = lay.scratch_n;
+	ctx->scratch = NULL;
 	return ctx;
+}
+
+void
+type_set_scratch(TypeCtx *ctx, TypeScratch *scratch)
+{
+	if (ctx)
+		ctx->scratch = scratch;
 }
 
 static uint16_t
@@ -5522,7 +5706,7 @@ type_size_px(float size_px)
 {
 	uint32_t s;
 
-	if (!(size_px > 0.0f))
+	if (!(size_px > 0.0f && size_px <= 65535.0f))
 		return 0;
 	s = (uint32_t)(size_px + 0.5f);
 	if (s < 1)
@@ -5590,11 +5774,14 @@ type_face(const struct TypeCtx *ctx, uint32_t id)
 static uint64_t
 type_now_ns(void)
 {
-	struct timespec ts;
-
-	if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
+#ifdef TYPE_NOW_NS
+	return TYPE_NOW_NS(); /* optional platform monotonic timer */
+#else
+	clock_t ticks = clock(); /* C99 fallback: process CPU time */
+	if (ticks == (clock_t)-1)
 		return 0;
-	return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
+	return (uint64_t)((double)ticks * (1000000000.0 / (double)CLOCKS_PER_SEC));
+#endif
 }
 
 static void
@@ -5632,7 +5819,8 @@ type_raster(struct TypeCtx *ctx, FaceRec *face, uint16_t gid, uint16_t size_u, T
 	TypeRect rect;
 	uint16_t adv;
 	float scale;
-	size_t need;
+	size_t need, mark;
+	uint8_t *bitmap;
 	uint32_t row;
 	uint64_t t0, t1;
 	TypeAntiAlias aa;
@@ -5654,23 +5842,33 @@ type_raster(struct TypeCtx *ctx, FaceRec *face, uint16_t gid, uint16_t size_u, T
 	if (info.width == 0 || info.height == 0)
 		return TYPE_OK;
 	need = type_bitmap_bytes(&info);
-	if (need > ctx->scratch_n)
-		return TYPE_ERR_BUF_TOO_SMALL;
+	if (!ctx->scratch)
+		return TYPE_ERR_SCRATCH_REQUIRED;
+	mark = ctx->scratch->used;
+	ctx->scratch->failed = 0;
+	bitmap = (uint8_t *)ttf_scratch_alloc(need, ctx->scratch);
+	if (!bitmap)
+		return TYPE_ERR_SCRATCH_FULL;
 	t0 = type_now_ns();
-	err = type_font_render_bitmap(face->font, gid, (float)size_u, aa, ctx->scratch, ctx->scratch_n, &info);
+	err = type_font_render_bitmap_scratch(face->font, gid, (float)size_u, aa, bitmap, need, ctx->scratch, &info);
 	t1 = type_now_ns();
 	if (t1 > t0)
 		ctx->stats.raster_ns += t1 - t0;
-	if (err != TYPE_OK)
+	if (err != TYPE_OK) {
+		ctx->scratch->used = mark;
 		return err;
-	if (!type_pack(ctx, info.width, info.height, &rect))
+	}
+	if (!type_pack(ctx, info.width, info.height, &rect)) {
+		ctx->scratch->used = mark;
 		return TYPE_ERR_ATLAS_FULL;
+	}
 	t0 = type_now_ns();
 	for (row = 0; row < info.height; row++) {
 		memcpy(ctx->cov + ((size_t)(rect.y + row) * ctx->aw + rect.x),
-		       ctx->scratch + (size_t)row * info.width,
+		       bitmap + (size_t)row * info.width,
 		       info.width);
 	}
+	ctx->scratch->used = mark;
 	t1 = type_now_ns();
 	if (t1 > t0)
 		ctx->stats.atlas_ns += t1 - t0;
@@ -5785,6 +5983,13 @@ type_resolve(struct TypeCtx *ctx, uint32_t codepoint, TypeStyle style, FaceRec *
 TypeError
 type_add_font(TypeCtx *ctx, const void *bytes, size_t len, const TypeFaceParams *face, uint32_t *out_id)
 {
+	(void)ctx; (void)bytes; (void)len; (void)face; (void)out_id;
+	return TYPE_ERR_UNTRUSTED_FONT;
+}
+
+TypeError
+type_add_font_trusted(TypeCtx *ctx, const void *bytes, size_t len, const TypeFaceParams *face, uint32_t *out_id)
+{
 	TypeFaceParams def;
 	FaceRec *rec;
 	unsigned char *slot;
@@ -5807,8 +6012,10 @@ type_add_font(TypeCtx *ctx, const void *bytes, size_t len, const TypeFaceParams 
 		if (!type_layout(&ctx->params, &lay))
 			return TYPE_ERR_INVALID_FONT;
 		slot = ctx->bytes + lay.face_bytes + (size_t)id * lay.face_stride;
-		ttf = type_ttf_place(slot, type_ttf_memory(), bytes, len);
-		if (!ttf || !type_ttf_outline(ttf))
+		ttf = type_ttf_place_trusted(slot, type_ttf_memory(), bytes, len);
+		if (!ttf)
+			return type_ttf_error((TypeTTF *)slot);
+		if (!type_ttf_outline(ttf))
 			return TYPE_ERR_INVALID_FONT;
 		font = type_font_from_ttf(slot + type_align(type_ttf_memory(), 16), type_font_memory(), ttf, face);
 		if (!font)
@@ -5864,7 +6071,7 @@ type_set_fallbacks(TypeCtx *ctx, const uint32_t *ids, uint32_t count)
 {
 	uint32_t i;
 
-	if (!ctx)
+	if (!ctx || (!ids && count))
 		return TYPE_ERR_INVALID_FONT;
 	if (count > ctx->params.max_fallbacks)
 		return TYPE_ERR_BUF_TOO_SMALL;
@@ -5935,6 +6142,8 @@ type_glyph_styled_inner(struct TypeCtx *ctx, uint32_t codepoint, float size_px, 
 	if (!ctx || !out || !(size_px > 0.0f))
 		return TYPE_ERR_INVALID_FONT;
 	size_u = type_size_px(size_px);
+	if (!size_u)
+		return TYPE_ERR_INVALID_FONT;
 	styled = style.bold || style.italic;
 	if (!ctx->warming && size_u != ctx->ascii_size) {
 		ctx->warming = 1;
@@ -5993,6 +6202,120 @@ type_glyph_styled_inner(struct TypeCtx *ctx, uint32_t codepoint, float size_px, 
 		type_cache_put(ctx, &key, out);
 	}
 	return TYPE_OK;
+}
+
+TypeError
+type_glyph_id(TypeCtx *ctx, uint32_t font_id, uint32_t glyph_id, float size_px, TypeGlyph *out)
+{
+	FaceRec *face;
+	TypeGlyphKey key;
+	TypeError err;
+	uint16_t size_u = type_size_px(size_px);
+	if (!ctx || !out || !size_u)
+		return TYPE_ERR_INVALID_FONT;
+	face = type_face(ctx, font_id);
+	if (!face)
+		return TYPE_ERR_INVALID_FONT;
+	if (glyph_id >= (uint32_t)face->ttf->num_glyphs)
+		return TYPE_ERR_GLYPH_NOT_FOUND;
+	memset(&key, 0, sizeof key);
+	key.font_id = font_id;
+	key.glyph_id = glyph_id;
+	key.size_px = size_u;
+	if (type_cache_find(ctx, &key, out, 1)) {
+		ctx->stats.hits++;
+		return TYPE_OK;
+	}
+	err = type_raster(ctx, face, (uint16_t)glyph_id, size_u, out);
+	if (err == TYPE_OK)
+		type_cache_put(ctx, &key, out);
+	return err;
+}
+
+static TypeError
+type_layout_shaped_inner(TypeCtx *ctx, const TypeShapedGlyph *run, uint32_t count, float size_px, TypePositionedGlyph *out, uint32_t cap, uint32_t *written, TypeTextMetrics *metrics, int measure)
+{
+	TypeTextMetrics m;
+	TypeError err = TYPE_OK;
+	uint32_t i = 0;
+	memset(&m, 0, sizeof m);
+	if (written) *written = 0;
+	if (metrics) *metrics = m;
+	if (!ctx || (!run && count) || !type_size_px(size_px))
+		return TYPE_ERR_INVALID_FONT;
+	for (i = 0; i < count; i++) {
+		const TypeShapedGlyph *r = &run[i];
+		TypeGlyph g;
+		float x, y, next_x, next_y;
+		if (i >= cap) { err = TYPE_ERR_BUF_TOO_SMALL; break; }
+		if (!isfinite(r->x_advance) || !isfinite(r->y_advance) ||
+		    !isfinite(r->x_offset) || !isfinite(r->y_offset)) {
+			err = TYPE_ERR_INVALID_FONT; break;
+		}
+		x = m.advance_x + r->x_offset;
+		y = m.advance_y + r->y_offset;
+		next_x = m.advance_x + r->x_advance;
+		next_y = m.advance_y + r->y_advance;
+		/* Leave ample range for bitmap bearings and dimensions. */
+		if (!isfinite(x) || !isfinite(y) || !isfinite(next_x) || !isfinite(next_y) ||
+		    fabsf(x) > FLT_MAX / 2 || fabsf(y) > FLT_MAX / 2) {
+			err = TYPE_ERR_INVALID_FONT; break;
+		}
+		if (measure) {
+			FaceRec *face = type_face(ctx, r->font_id);
+			TypeBitmap b;
+			if (!face) { err = TYPE_ERR_INVALID_FONT; break; }
+			if (r->glyph_id >= (uint32_t)face->ttf->num_glyphs) {
+				err = TYPE_ERR_GLYPH_NOT_FOUND; break;
+			}
+			err = type_font_bitmap_info(face->font, (uint16_t)r->glyph_id,
+			                            (float)type_size_px(size_px), &b);
+			if (err != TYPE_OK) break;
+			memset(&g, 0, sizeof g);
+			g.bearing_x = b.bearing_x; g.bearing_y = b.bearing_y;
+			g.width = b.width; g.height = b.height;
+		} else {
+			err = type_glyph_id(ctx, r->font_id, r->glyph_id, size_px, &g);
+			if (err != TYPE_OK) break;
+		}
+		if (out) {
+			out[i].glyph = g;
+			out[i].cluster = r->cluster;
+			out[i].x = x;
+			out[i].y = y;
+		}
+		if (g.width && g.height) {
+			float left = x + g.bearing_x, top = y - g.bearing_y;
+			float right = left + g.width, bottom = top + g.height;
+			if (!m.has_ink) {
+				m.min_x = left; m.min_y = top;
+				m.max_x = right; m.max_y = bottom;
+			} else {
+				if (left < m.min_x) m.min_x = left;
+				if (top < m.min_y) m.min_y = top;
+				if (right > m.max_x) m.max_x = right;
+				if (bottom > m.max_y) m.max_y = bottom;
+			}
+			m.has_ink = 1;
+		}
+		m.advance_x = next_x;
+		m.advance_y = next_y;
+	}
+	if (written) *written = i;
+	if (metrics) *metrics = m;
+	return err;
+}
+
+TypeError
+type_layout_shaped(TypeCtx *ctx, const TypeShapedGlyph *run, uint32_t count, float size_px, TypePositionedGlyph *out, uint32_t cap, uint32_t *written, TypeTextMetrics *metrics)
+{
+	return type_layout_shaped_inner(ctx, run, count, size_px, out, cap, written, metrics, 0);
+}
+
+TypeError
+type_measure_shaped(const TypeCtx *ctx, const TypeShapedGlyph *run, uint32_t count, float size_px, uint32_t *written, TypeTextMetrics *metrics)
+{
+	return type_layout_shaped_inner((TypeCtx *)ctx, run, count, size_px, NULL, count, written, metrics, 1);
 }
 
 TypeError

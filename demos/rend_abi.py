@@ -31,23 +31,25 @@ def check_layout(host, reflection):
     if fields.keys() != host["fields"].keys():
         raise ValueError("host/shader fields mismatch")
     for name, layout in host["fields"].items():
-        field = fields[name]
-        binding = field["binding"]
-        if (binding["offset"], binding["size"]) != (layout["offset"], layout["size"]):
-            raise ValueError(f"host/shader field layout mismatch: {name}")
-        kind = field["type"]["kind"]
-        if kind == "pointer" and binding["size"] != host["pointer_size"]:
-            raise ValueError(f"pointer width mismatch: {name}")
-        if kind == "scalar" and field["type"]["scalarType"] != "uint32":
-            raise ValueError(f"scalar ABI mismatch: {name}")
-        if name == "vector" and (kind != "vector" or field["type"]["elementCount"] != 3
-                                 or field["type"]["elementType"]["scalarType"] != "float32"):
-            raise ValueError("vector ABI mismatch")
-        if name == "matrix" and (kind != "matrix" or field["type"]["rowCount"] != 3
-                                 or field["type"]["columnCount"] != 2
-                                 or field["type"]["elementType"]["scalarType"] != "float32"):
-            raise ValueError("matrix ABI mismatch")
+        check_field(name, layout, fields[name], host["pointer_size"])
 
+
+def check_field(name, layout, field, pointer_size):
+    binding = field["binding"]
+    if (binding["offset"], binding["size"]) != (layout["offset"], layout["size"]):
+        raise ValueError(f"host/shader field layout mismatch: {name}")
+    kind = field["type"]["kind"]
+    if kind == "pointer" and binding["size"] != pointer_size:
+        raise ValueError(f"pointer width mismatch: {name}")
+    if kind == "scalar" and field["type"]["scalarType"] != "uint32":
+        raise ValueError(f"scalar ABI mismatch: {name}")
+    if name == "vector" and (kind != "vector" or field["type"]["elementCount"] != 3
+                             or field["type"]["elementType"]["scalarType"] != "float32"):
+        raise ValueError("vector ABI mismatch")
+    if name == "matrix" and (kind != "matrix" or field["type"]["rowCount"] != 3
+                             or field["type"]["columnCount"] != 2
+                             or field["type"]["elementType"]["scalarType"] != "float32"):
+        raise ValueError("matrix ABI mismatch")
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)

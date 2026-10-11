@@ -9,11 +9,11 @@
  *
  * figlet font: maxiwi
  *
- * Platform layer. It just works, don't think about it too much.
- * At least, that's the goal.
- *
- * Peak is meant to be included directly via source code for a unity build.
- * It is a self-contained single header; no Peak source files are needed.
+ * Easy to use platform layer that just works.
+ * Will link operating system libraries for you.
+ * This feature, besides convenient, is especially useful
+ * on linux where you might be dealing with one of many
+ * compositors.
  *
  * USAGE (C99):
  * - Include "peak.h" for declarations in any translation unit.
@@ -406,6 +406,8 @@ PEAK int        peak_window_epoll(PeakWindow *win, PeakEvent *ev);
 PEAK int        peak_window_fd(PeakWindow *win); /* display connection fd, or -1 */
 PEAK int        peak_window_pending(PeakWindow *win); /* queued window events; 0 if none */
 PEAK uint32_t  *peak_window_backbuffer(PeakWindow *win, size_t *width, size_t *height);
+/* Browser canvas selector borrowed until window close; NULL on native targets. */
+PEAK const char *peak_window_canvas_selector(PeakWindow *win);
 PEAK void       peak_window_clear(PeakWindow *win, float r, float g, float b, float a);
 PEAK void       peak_window_present(PeakWindow *win);
 PEAK void       peak_window_set_title(PeakWindow *win, const char *name);
@@ -451,6 +453,114 @@ PEAK void     peak_sleep_ns(int64_t ns);
 PEAK int   peak_file_exists(const char *path);
 PEAK void *peak_file_alloc(const char *path, unsigned long *buf_size);
 PEAK int   peak_file_write(const char *path, const void *buf, size_t n); /* create/overwrite */
+
+/* Safe I/O (independent of peak_init): Linux openat2 only; other hosts and
+ * kernels lacking the required resolution flags return PEAK_IO_UNSUPPORTED.
+ * No fallback to ordinary path-based I/O. Native Windows/macOS qualification
+ * is pending. Legacy peak_file_* / peak_filesystem_* retain their semantics.
+ *
+ * Ownership: initialize caller storage with *_INIT before first use. Successful
+ * opens/begin fill an empty output; failures leave it empty. These are owning,
+ * non-copyable values, not borrowed descriptors. Do not edit their fields,
+ * close their native handles yourself, or use them concurrently with close.
+ * Close consumes a handle even on error; commit/abort consume both stage
+ * handles on every outcome for a live stage. Separate objects may be used
+ * concurrently; operations on a stage must be externally serialized.
+ *
+ * Paths: root_open takes an absolute path ("/" is allowed); all *_at/open/begin
+ * paths are nonempty normalized relative paths. No empty, dot, dot-dot, or
+ * symlink components, trailing slash, or absolute relative paths are allowed.
+ * Limits: 4095 path bytes, 255 bytes/component, 128 components, byte limits
+ * representable as a native nonnegative file offset. No heap allocations.
+ * Every relative lookup is kernel-resolved beneath its owning directory
+ * handle with RESOLVE_BENEATH | RESOLVE_NO_SYMLINKS | RESOLVE_NO_MAGICLINKS.
+ * Mount points/hard links are not rejected: these are not authorization,
+ * provenance, or immutable-snapshot primitives. Files are verified regular.
+ *
+ * Handles pin directory/file objects, not pathnames. Root or parent rename/
+ * replacement does not redirect an existing handle. A retained directory may
+ * be moved outside the original tree; later operations still target that
+ * object, not the current object at its former path. Reads are bounded but
+ * not snapshots: uncooperative in-place writers can change bytes/size during
+ * a read. size is only the initial observed file size; hash/validation policy
+ * and coordination with writers belong to the caller.
+ *
+ * Staging: destination's parent MUST be cooperatively/exclusively controlled
+ * against uncooperative directory writers (including same-user writers).
+ * A named stage is not safe against such writers swapping/unlinking its name
+ * between creation, rename, and cleanup. temporary_leaf is caller-selected,
+ * single-component and distinct from destination's leaf; O_EXCL never reuses
+ * an existing entry. Use an appropriately unpredictable/reserved name and
+ * authorize/serialize the destination yourself. The stage is visible by its
+ * temporary name (mode 0600), so callers must exclude stages from asset lookup.
+ * Commit atomically replaces a non-directory destination entry via renameat;
+ * it does not follow a destination symlink. No no-clobber/version checks,
+ * metadata preservation, backups, or multi-file/bundle transaction policy.
+ * Previous-file preservation on failure applies only within the cooperative
+ * contract; external races are not covered. All stages are same-parent.
+ *
+ * Bounded read is positional, reports partial progress on failure and EOF via
+ * read_bytes < bytes. It rejects a currently observed size above limit, but
+ * cannot detect every transient growth or mutation. Stage writes are sequential
+ * and bounded in aggregate; any invalid/failed write poisons publication.
+ * Successful commit without durability only establishes publication. With
+ * FILE_AND_DIRECTORY, fsync(stage) precedes rename and fsync(parent) follows;
+ * durable=1 means both succeeded, subject to filesystem/hardware guarantees;
+ * durable=0 means durability was not established, not that bytes were lost.
+ * This does not fsync ancestor directories or establish durability of newly
+ * created directory hierarchies. Byte bounds are not elapsed-time deadlines.
+ * A post-rename error NEVER means unpublished: inspect published separately.
+ * published is 0 (not attempted/not published), 1 (rename succeeded), or -1
+ * (rename failed ambiguously; e.g. a lost remote FS reply). Destination type/
+ * nonempty-directory errors are definite failures within the cooperative
+ * contract; other rename errors are conservatively reported as uncertain.
+ * Do not interpret -1 as false or true; recovery must inspect/coordinate the
+ * destination. On uncertain publication the temporary name is not removed.
+ * Cleanup reports unlink/close failures independently; a failed pre-publication
+ * cleanup may leave the temporary name for caller-managed recovery. No rollback
+ * after publication. Cleanup success does not establish crash-durable removal
+ * of a temporary name. Invalid finish arguments leave the stage untouched.
+ */
+typedef enum {
+    PEAK_IO_OK, PEAK_IO_INVALID, PEAK_IO_LIMIT,
+    PEAK_IO_NOT_REGULAR, PEAK_IO_UNSUPPORTED, PEAK_IO_SYSTEM
+} PeakIOCode;
+typedef struct { PeakIOCode code; int os_error; } PeakIOResult;
+typedef enum {
+    PEAK_IO_DURABILITY_NONE,
+    PEAK_IO_DURABILITY_FILE_AND_DIRECTORY
+} PeakIODurability;
+typedef struct {
+    PeakIOResult operation;
+    int published;
+    int durable;
+    PeakIOResult cleanup;
+} PeakIOPublishResult;
+typedef struct { PEAK_HANDLE handle; } PeakIORoot;
+typedef struct {
+    PEAK_HANDLE handle;
+    uint64_t size, limit;
+} PeakIOFile;
+typedef struct {
+    PEAK_HANDLE handle, parent;
+    uint64_t written, limit;
+    int failed;
+    char destination[256], temporary[256];
+} PeakIOStage;
+#define PEAK_IO_ROOT_INIT  { PEAK_HANDLE_INVALID }
+#define PEAK_IO_FILE_INIT  { PEAK_HANDLE_INVALID, 0, 0 }
+#define PEAK_IO_STAGE_INIT { PEAK_HANDLE_INVALID, PEAK_HANDLE_INVALID, 0, 0, 0, {0}, {0} }
+
+PEAK PeakIOResult peak_io_root_open(const char *absolute_path, PeakIORoot *out);
+PEAK PeakIOResult peak_io_root_open_at(const PeakIORoot *root, const char *relative_path, PeakIORoot *out);
+PEAK PeakIOResult peak_io_root_close(PeakIORoot *root);
+PEAK PeakIOResult peak_io_file_open(const PeakIORoot *root, const char *relative_path, uint64_t max_bytes, PeakIOFile *out);
+PEAK PeakIOResult peak_io_file_read(const PeakIOFile *file, uint64_t offset, void *buf, size_t bytes, size_t *read_bytes);
+PEAK PeakIOResult peak_io_file_close(PeakIOFile *file);
+PEAK PeakIOResult peak_io_stage_begin(const PeakIORoot *root, const char *destination, const char *temporary_leaf, uint64_t max_bytes, PeakIOStage *out);
+PEAK PeakIOResult peak_io_stage_write(PeakIOStage *stage, const void *buf, size_t bytes, size_t *written_bytes);
+PEAK PeakIOPublishResult peak_io_stage_commit(PeakIOStage *stage, PeakIODurability durability);
+PEAK PeakIOPublishResult peak_io_stage_abort(PeakIOStage *stage);
 
 /* Macros remain replaceable by backing-request instrumentation. The helper
  * preserves C99 support and accepts sizes that are not alignment multiples. */
@@ -12096,6 +12206,7 @@ EM_JS(void, peak_web_dom_open, (const char *id, int w, int h), {
 	c.width = w;
 	c.height = h;
 	c.tabIndex = 0;
+	c.onpointerdown = function() { c.focus(); };
 	c.focus();
 });
 
@@ -12114,9 +12225,10 @@ EM_JS(void, peak_web_dom_present, (const char *id, int w, int h, uintptr_t pixel
 
 struct peak_web_win {
 	char name[64];
+	char selector[66];
 	uint32_t width, height;
 	PeakQ q;
-	uint32_t buffer[];
+	uint32_t *buffer;
 };
 
 
@@ -12180,10 +12292,17 @@ peak_web_key(int type, const EmscriptenKeyboardEvent *e, void *ud)
 static EM_BOOL
 peak_web_mouse(int type, const EmscriptenMouseEvent *e, void *ud)
 {
+	struct peak_web_win *w = ud;
+	char sel[66]; double css_width, css_height;
 	PeakEvent ev = {0};
 	ev.type = PEAK_EVENT_POINTER;
 	ev.pointer.x = (float)e->targetX;
 	ev.pointer.y = (float)e->targetY;
+	peak_web_sel(w->name, sel, sizeof sel);
+	if (emscripten_get_element_css_size(sel, &css_width, &css_height) == EMSCRIPTEN_RESULT_SUCCESS && css_width > 0 && css_height > 0) {
+		ev.pointer.x *= (float)(w->width / css_width);
+		ev.pointer.y *= (float)(w->height / css_height);
+	}
 	if (type == EMSCRIPTEN_EVENT_MOUSEDOWN)
 		ev.pointer.state = PEAK_POINTER_PRESSED;
 	else if (type == EMSCRIPTEN_EVENT_MOUSEUP)
@@ -12233,10 +12352,15 @@ peak_platform_window_open(const char *name, uint32_t width, uint32_t height, uin
 
 	(void)flags;
 
-	w = calloc(1, sizeof *w + (size_t)width * height * sizeof *w->buffer);
+	if (!width || !height || (size_t)width > SIZE_MAX / height / sizeof *w->buffer)
+		return intern;
+	w = calloc(1, sizeof *w);
 	if (!w)
 		return intern;
+	w->buffer = calloc((size_t)width * height, sizeof *w->buffer);
+	if (!w->buffer) { free(w); return intern; }
 	strncpy(w->name, name, sizeof w->name - 1);
+	peak_web_sel(w->name, w->selector, sizeof w->selector);
 	w->width = width;
 	w->height = height;
 
@@ -12255,6 +12379,7 @@ peak_platform_window_close(PeakWindowInternal *intern)
 		return;
 	w = intern->w;
 	peak_web_listen(w, 0);
+	free(w->buffer);
 	free(w);
 	intern->w = NULL;
 }
@@ -12321,10 +12446,18 @@ peak_platform_clip_request(PeakWindowInternal *intern, PeakClip which)
 	return 1;
 }
 
+static int peak_web_resize(struct peak_web_win *w, uint32_t width, uint32_t height);
+
 static bool
 peak_platform_epoll(PeakWindowInternal *intern, PeakEvent *ev)
 {
 	struct peak_web_win *w = intern ? intern->w : NULL;
+	if (w) {
+		char sel[66]; int width, height;
+		peak_web_sel(w->name, sel, sizeof sel);
+		if (emscripten_get_canvas_element_size(sel, &width, &height) == EMSCRIPTEN_RESULT_SUCCESS && width > 0 && height > 0)
+			peak_web_resize(w, (uint32_t)width, (uint32_t)height);
+	}
 	return w ? peak_q_pop(&w->q, ev) : 0;
 }
 
@@ -12364,15 +12497,30 @@ peak_platform_window_set_title(PeakWindowInternal *intern, const char *name)
 		emscripten_set_window_title(name);
 }
 
+static int
+peak_web_resize(struct peak_web_win *w, uint32_t width, uint32_t height)
+{
+	uint32_t *buffer;
+	PeakEvent ev = {0};
+	if (!w || !width || !height || (size_t)width > SIZE_MAX / height / sizeof *buffer)
+		return 0;
+	if (width == w->width && height == w->height) return 1;
+	buffer = calloc((size_t)width * height, sizeof *buffer);
+	if (!buffer) return 0;
+	free(w->buffer); w->buffer = buffer;
+	w->width = width; w->height = height;
+	ev.type = PEAK_EVENT_WINDOW_RESIZE;
+	ev.resize.width = width; ev.resize.height = height;
+	peak_q_push(&w->q, ev);
+	return 1;
+}
+
 static void
 peak_platform_window_set_size(PeakWindowInternal *intern, uint32_t width, uint32_t height)
 {
 	struct peak_web_win *w = intern ? intern->w : NULL;
-	if (!w || !width || !height)
-		return;
-	w->width = width;
-	w->height = height;
-	peak_web_dom_open(w->name, (int)width, (int)height);
+	if (peak_web_resize(w, width, height))
+		peak_web_dom_open(w->name, (int)width, (int)height);
 }
 
 static void
@@ -13537,6 +13685,18 @@ peak_window_backbuffer(PeakWindow *win, size_t *width, size_t *height)
     return peak_window_sync(win, width, height);
 }
 
+const char *
+peak_window_canvas_selector(PeakWindow *win)
+{
+    if (!peak_window_valid(win)) return NULL;
+#if defined(PEAK_WEB)
+    struct peak_web_win *w = win->internal.w;
+    return w ? w->selector : NULL;
+#else
+    return NULL;
+#endif
+}
+
 void
 peak_window_clear(PeakWindow *win, float r, float g, float b, float a)
 {
@@ -13703,6 +13863,460 @@ peak_sleep_ns(int64_t ns)
 {
     peak_platform_sleep_ns(ns);
 }
+
+/* Safe I/O uses only caller storage and kernel handles, not Peak runtime state. */
+static PeakIOResult
+peak_io_result(PeakIOCode code, int os_error)
+{
+    PeakIOResult r;
+    r.code = code;
+    r.os_error = os_error;
+    return r;
+}
+
+#if defined(PEAK_LINUX)
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+
+static PeakIOResult
+peak_io_system_error(int error)
+{
+    return peak_io_result(PEAK_IO_SYSTEM, error);
+}
+
+/* Validate with bounded scans; never strlen an untrusted, unbounded path.
+ * Callers must still supply valid C strings/storage through the scan bound. */
+static PeakIOResult
+peak_io_path(const char *path, int leaf_only)
+{
+    size_t i, start = 0;
+    unsigned components = 0;
+    if (!path || !path[0] || path[0] == '/')
+        return peak_io_result(PEAK_IO_INVALID, 0);
+    for (i = 0; i <= 4095; ++i) {
+        if (path[i] == '/' || path[i] == '\0') {
+            size_t n = i - start;
+            if (!n || (n == 1 && path[start] == '.') ||
+                (n == 2 && path[start] == '.' && path[start + 1] == '.') ||
+                (leaf_only && path[i] == '/'))
+                return peak_io_result(PEAK_IO_INVALID, 0);
+            if (n > 255 || ++components > 128)
+                return peak_io_result(PEAK_IO_LIMIT, 0);
+            if (!path[i]) return peak_io_result(PEAK_IO_OK, 0);
+            start = i + 1;
+        }
+    }
+    return peak_io_result(PEAK_IO_LIMIT, 0);
+}
+
+static int
+peak_io_offset_fits(uint64_t n)
+{
+    /* Linux off_t is signed; require a lossless native offset conversion. */
+    off_t offset;
+    if (n > INT64_MAX) return 0;
+    offset = (off_t)n;
+    return offset >= 0 && (uint64_t)offset == n;
+}
+
+static PeakIOResult
+peak_io_open_beneath(int parent, const char *path, int flags, unsigned mode, int *out)
+{
+#if defined(SYS_openat2)
+    /* Linux open_how ABI, kept local to avoid requiring recent linux headers.
+     * RESOLVE_NO_MAGICLINKS=0x02, NO_SYMLINKS=0x04, BENEATH=0x08.
+     * Resolution, including EVERY intermediate component, is performed by the
+     * kernel against parent. EAGAIN from concurrent namespace changes fails
+     * closed; neither lexical checks nor a walk/open fallback replaces it. */
+    struct { uint64_t flags, mode, resolve; } how;
+    int fd, error;
+    memset(&how, 0, sizeof(how));
+    how.flags = (uint64_t)(unsigned)flags;
+    how.mode = mode;
+    how.resolve = 0x02u | 0x04u | 0x08u;
+    fd = (int)syscall(SYS_openat2, parent, path, &how, sizeof(how));
+    if (fd < 0) {
+        error = errno;
+        if (error == ENOSYS || error == EINVAL || error == E2BIG)
+            return peak_io_result(PEAK_IO_UNSUPPORTED, error);
+        return peak_io_system_error(error);
+    }
+    *out = fd;
+    return peak_io_result(PEAK_IO_OK, 0);
+#else
+    (void)parent; (void)path; (void)flags; (void)mode; (void)out;
+    return peak_io_result(PEAK_IO_UNSUPPORTED, 0);
+#endif
+}
+
+static PeakIOResult
+peak_io_close_handle(PEAK_HANDLE *handle)
+{
+    int fd = *handle;
+    *handle = PEAK_HANDLE_INVALID;
+    if (fd == PEAK_HANDLE_INVALID) return peak_io_result(PEAK_IO_OK, 0);
+    /* Linux releases fd even when close reports EINTR: NEVER retry. */
+    if (close(fd) < 0) return peak_io_system_error(errno);
+    return peak_io_result(PEAK_IO_OK, 0);
+}
+
+PeakIOResult
+peak_io_root_open_at(const PeakIORoot *root, const char *relative_path, PeakIORoot *out)
+{
+    PeakIOResult r;
+    int fd;
+    if (!root || root->handle == PEAK_HANDLE_INVALID || !out ||
+        out->handle != PEAK_HANDLE_INVALID)
+        return peak_io_result(PEAK_IO_INVALID, 0);
+    r = peak_io_path(relative_path, 0);
+    if (r.code != PEAK_IO_OK) return r;
+    r = peak_io_open_beneath(root->handle, relative_path,
+                            O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC, 0, &fd);
+    if (r.code == PEAK_IO_OK) out->handle = fd;
+    return r;
+}
+
+PeakIOResult
+peak_io_root_open(const char *absolute_path, PeakIORoot *out)
+{
+    PeakIORoot anchor = PEAK_IO_ROOT_INIT;
+    PeakIOResult r;
+    if (!absolute_path || absolute_path[0] != '/' || !out ||
+        out->handle != PEAK_HANDLE_INVALID)
+        return peak_io_result(PEAK_IO_INVALID, 0);
+    if (absolute_path[1]) {
+        r = peak_io_path(absolute_path + 1, 0);
+        if (r.code != PEAK_IO_OK) return r;
+        /* Include the initial slash in the public 4095-byte path bound. */
+        if (strlen(absolute_path + 1) == 4095)
+            return peak_io_result(PEAK_IO_LIMIT, 0);
+    }
+    anchor.handle = open("/", O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+    if (anchor.handle < 0) return peak_io_system_error(errno);
+    /* Even "/" checks openat2 support; the only string-opened object is the
+     * process filesystem root, never a caller-controlled component. */
+    r = peak_io_open_beneath(anchor.handle, absolute_path[1] ? absolute_path + 1 : ".",
+                            O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC, 0,
+                            &out->handle);
+    (void)peak_io_close_handle(&anchor.handle);
+    return r;
+}
+
+PeakIOResult
+peak_io_root_close(PeakIORoot *root)
+{
+    if (!root) return peak_io_result(PEAK_IO_INVALID, 0);
+    return peak_io_close_handle(&root->handle);
+}
+
+static PeakIOResult
+peak_io_regular_size(int fd, uint64_t limit, uint64_t *size)
+{
+    struct stat st;
+    if (fstat(fd, &st) < 0) return peak_io_system_error(errno);
+    if (!S_ISREG(st.st_mode)) return peak_io_result(PEAK_IO_NOT_REGULAR, 0);
+    if (st.st_size < 0 || (uint64_t)st.st_size > limit)
+        return peak_io_result(PEAK_IO_LIMIT, 0);
+    if (size) *size = (uint64_t)st.st_size;
+    return peak_io_result(PEAK_IO_OK, 0);
+}
+
+PeakIOResult
+peak_io_file_open(const PeakIORoot *root, const char *relative_path,
+                  uint64_t max_bytes, PeakIOFile *out)
+{
+    PeakIOResult r;
+    uint64_t size;
+    int fd;
+    if (!root || root->handle == PEAK_HANDLE_INVALID || !out ||
+        out->handle != PEAK_HANDLE_INVALID)
+        return peak_io_result(PEAK_IO_INVALID, 0);
+    if (!peak_io_offset_fits(max_bytes)) return peak_io_result(PEAK_IO_LIMIT, 0);
+    r = peak_io_path(relative_path, 0);
+    if (r.code != PEAK_IO_OK) return r;
+    /* O_NONBLOCK prevents blocking on a FIFO before regular-file verification.
+     * It does not make regular-file I/O asynchronous or deadline bounded. */
+    r = peak_io_open_beneath(root->handle, relative_path,
+                            O_RDONLY | O_NONBLOCK | O_NOFOLLOW | O_CLOEXEC, 0, &fd);
+    if (r.code != PEAK_IO_OK) return r;
+    r = peak_io_regular_size(fd, max_bytes, &size);
+    if (r.code != PEAK_IO_OK) {
+        (void)close(fd);
+        return r;
+    }
+    out->handle = fd;
+    out->size = size;
+    out->limit = max_bytes;
+    return r;
+}
+
+PeakIOResult
+peak_io_file_read(const PeakIOFile *file, uint64_t offset, void *buf,
+                  size_t bytes, size_t *read_bytes)
+{
+    PeakIOResult r;
+    size_t done = 0;
+    if (read_bytes) *read_bytes = 0;
+    if (!file || file->handle == PEAK_HANDLE_INVALID || !read_bytes || (bytes && !buf))
+        return peak_io_result(PEAK_IO_INVALID, 0);
+    if (offset > file->limit || (uint64_t)bytes > file->limit - offset ||
+        !peak_io_offset_fits(offset) || !peak_io_offset_fits(file->limit))
+        return peak_io_result(PEAK_IO_LIMIT, 0);
+    r = peak_io_regular_size(file->handle, file->limit, NULL);
+    if (r.code != PEAK_IO_OK) return r;
+    while (done < bytes) {
+        size_t chunk = bytes - done;
+        ssize_t n;
+        if (chunk > 1048576u) chunk = 1048576u;
+        n = pread(file->handle, (unsigned char *)buf + done, chunk, (off_t)(offset + done));
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            return peak_io_system_error(errno);
+        }
+        if (!n) break;
+        done += (size_t)n;
+        *read_bytes = done;
+    }
+    return peak_io_regular_size(file->handle, file->limit, NULL);
+}
+
+PeakIOResult
+peak_io_file_close(PeakIOFile *file)
+{
+    PeakIOResult r;
+    if (!file) return peak_io_result(PEAK_IO_INVALID, 0);
+    r = peak_io_close_handle(&file->handle);
+    file->size = file->limit = 0;
+    return r;
+}
+
+PeakIOResult
+peak_io_stage_begin(const PeakIORoot *root, const char *destination,
+                    const char *temporary_leaf, uint64_t max_bytes, PeakIOStage *out)
+{
+    PeakIOResult r;
+    char parent_path[4096];
+    const char *leaf, *slash;
+    int parent, fd;
+    if (!root || root->handle == PEAK_HANDLE_INVALID || !out ||
+        out->handle != PEAK_HANDLE_INVALID || out->parent != PEAK_HANDLE_INVALID)
+        return peak_io_result(PEAK_IO_INVALID, 0);
+    if (!peak_io_offset_fits(max_bytes)) return peak_io_result(PEAK_IO_LIMIT, 0);
+    r = peak_io_path(destination, 0);
+    if (r.code != PEAK_IO_OK) return r;
+    r = peak_io_path(temporary_leaf, 1);
+    if (r.code != PEAK_IO_OK) return r;
+    slash = strrchr(destination, '/');
+    leaf = slash ? slash + 1 : destination;
+    if (!strcmp(leaf, temporary_leaf)) return peak_io_result(PEAK_IO_INVALID, 0);
+    if (slash) {
+        size_t n = (size_t)(slash - destination);
+        memcpy(parent_path, destination, n);
+        parent_path[n] = '\0';
+    } else {
+        strcpy(parent_path, ".");
+    }
+    r = peak_io_open_beneath(root->handle, parent_path,
+                            O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC, 0, &parent);
+    if (r.code != PEAK_IO_OK) return r;
+    r = peak_io_open_beneath(parent, temporary_leaf,
+                            O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600, &fd);
+    if (r.code != PEAK_IO_OK) {
+        (void)close(parent);
+        return r;
+    }
+    /* O_EXCL|O_CREAT creates a fresh regular inode. No truncation/reuse. */
+    out->handle = fd;
+    out->parent = parent;
+    out->limit = max_bytes;
+    out->written = 0;
+    out->failed = 0;
+    strcpy(out->destination, leaf);
+    strcpy(out->temporary, temporary_leaf);
+    return peak_io_result(PEAK_IO_OK, 0);
+}
+
+PeakIOResult
+peak_io_stage_write(PeakIOStage *stage, const void *buf, size_t bytes, size_t *written_bytes)
+{
+    size_t done = 0;
+    if (written_bytes) *written_bytes = 0;
+    if (!stage || stage->handle == PEAK_HANDLE_INVALID || stage->parent == PEAK_HANDLE_INVALID)
+        return peak_io_result(PEAK_IO_INVALID, 0);
+    if (stage->failed || !written_bytes || (bytes && !buf)) {
+        stage->failed = 1;
+        return peak_io_result(PEAK_IO_INVALID, 0);
+    }
+    if (stage->written > stage->limit || (uint64_t)bytes > stage->limit - stage->written) {
+        stage->failed = 1;
+        return peak_io_result(PEAK_IO_LIMIT, 0);
+    }
+    while (done < bytes) {
+        size_t chunk = bytes - done;
+        ssize_t n;
+        if (chunk > 1048576u) chunk = 1048576u;
+        n = write(stage->handle, (const unsigned char *)buf + done, chunk);
+        if (n < 0 && errno == EINTR) continue;
+        if (n <= 0) {
+            int error = n < 0 ? errno : EIO;
+            stage->failed = 1;
+            return peak_io_system_error(error);
+        }
+        done += (size_t)n;
+        stage->written += (uint64_t)n;
+        *written_bytes = done;
+    }
+    return peak_io_result(PEAK_IO_OK, 0);
+}
+
+/* Finish always closes both owned handles. Record the first cleanup failure
+ * without overwriting the primary operation or publication/durability facts. */
+static void
+peak_io_stage_cleanup(PeakIOStage *stage, int remove_temporary, PeakIOPublishResult *result)
+{
+    PeakIOResult r;
+    if (remove_temporary && unlinkat(stage->parent, stage->temporary, 0) < 0)
+        result->cleanup = peak_io_system_error(errno);
+    r = peak_io_close_handle(&stage->handle);
+    if (result->cleanup.code == PEAK_IO_OK && r.code != PEAK_IO_OK) result->cleanup = r;
+    r = peak_io_close_handle(&stage->parent);
+    if (result->cleanup.code == PEAK_IO_OK && r.code != PEAK_IO_OK) result->cleanup = r;
+    stage->written = stage->limit = 0;
+    stage->failed = 0;
+    stage->destination[0] = stage->temporary[0] = '\0';
+}
+
+static PeakIOPublishResult
+peak_io_finish_result(void)
+{
+    PeakIOPublishResult result;
+    result.operation = result.cleanup = peak_io_result(PEAK_IO_OK, 0);
+    result.published = result.durable = 0;
+    return result;
+}
+
+PeakIOPublishResult
+peak_io_stage_commit(PeakIOStage *stage, PeakIODurability durability)
+{
+    PeakIOPublishResult result = peak_io_finish_result();
+    if (!stage || stage->handle == PEAK_HANDLE_INVALID || stage->parent == PEAK_HANDLE_INVALID ||
+        (durability != PEAK_IO_DURABILITY_NONE && durability != PEAK_IO_DURABILITY_FILE_AND_DIRECTORY)) {
+        result.operation = peak_io_result(PEAK_IO_INVALID, 0);
+        return result;
+    }
+    if (stage->failed) {
+        result.operation = peak_io_result(PEAK_IO_INVALID, 0);
+    } else if (durability == PEAK_IO_DURABILITY_FILE_AND_DIRECTORY && fsync(stage->handle) < 0) {
+        result.operation = peak_io_system_error(errno);
+    } else if (renameat(stage->parent, stage->temporary, stage->parent, stage->destination) < 0) {
+        int error = errno;
+        /* With stable/cooperative destination entries, type/nonempty-directory
+         * errors cannot have replaced the destination. Other errors may be
+         * lost/replayed remote FS responses: never pretend they rolled back. */
+        result.operation = peak_io_system_error(error);
+        if (error != EISDIR && error != ENOTDIR && error != ENOTEMPTY && error != EEXIST)
+            result.published = -1;
+    } else {
+        result.published = 1;
+        if (durability == PEAK_IO_DURABILITY_FILE_AND_DIRECTORY) {
+            if (fsync(stage->parent) < 0) result.operation = peak_io_system_error(errno);
+            else result.durable = 1;
+        }
+    }
+    peak_io_stage_cleanup(stage, result.published == 0, &result);
+    return result;
+}
+
+PeakIOPublishResult
+peak_io_stage_abort(PeakIOStage *stage)
+{
+    PeakIOPublishResult result = peak_io_finish_result();
+    if (!stage || stage->handle == PEAK_HANDLE_INVALID || stage->parent == PEAK_HANDLE_INVALID) {
+        result.operation = peak_io_result(PEAK_IO_INVALID, 0);
+        return result;
+    }
+    peak_io_stage_cleanup(stage, 1, &result);
+    return result;
+}
+
+#else /* No unsafe approximation on unqualified hosts. */
+
+PeakIOResult
+peak_io_root_open(const char *path, PeakIORoot *out)
+{
+    (void)path; (void)out;
+    return peak_io_result(PEAK_IO_UNSUPPORTED, 0);
+}
+PeakIOResult
+peak_io_root_open_at(const PeakIORoot *root, const char *path, PeakIORoot *out)
+{
+    (void)root; (void)path; (void)out;
+    return peak_io_result(PEAK_IO_UNSUPPORTED, 0);
+}
+PeakIOResult
+peak_io_root_close(PeakIORoot *root)
+{
+    (void)root;
+    return peak_io_result(PEAK_IO_UNSUPPORTED, 0);
+}
+PeakIOResult
+peak_io_file_open(const PeakIORoot *root, const char *path, uint64_t limit, PeakIOFile *out)
+{
+    (void)root; (void)path; (void)limit; (void)out;
+    return peak_io_result(PEAK_IO_UNSUPPORTED, 0);
+}
+PeakIOResult
+peak_io_file_read(const PeakIOFile *file, uint64_t offset, void *buf, size_t bytes, size_t *read_bytes)
+{
+    (void)file; (void)offset; (void)buf; (void)bytes;
+    if (read_bytes) *read_bytes = 0;
+    return peak_io_result(PEAK_IO_UNSUPPORTED, 0);
+}
+PeakIOResult
+peak_io_file_close(PeakIOFile *file)
+{
+    (void)file;
+    return peak_io_result(PEAK_IO_UNSUPPORTED, 0);
+}
+PeakIOResult
+peak_io_stage_begin(const PeakIORoot *root, const char *path, const char *temporary,
+                    uint64_t limit, PeakIOStage *out)
+{
+    (void)root; (void)path; (void)temporary; (void)limit; (void)out;
+    return peak_io_result(PEAK_IO_UNSUPPORTED, 0);
+}
+PeakIOResult
+peak_io_stage_write(PeakIOStage *stage, const void *buf, size_t bytes, size_t *written_bytes)
+{
+    (void)stage; (void)buf; (void)bytes;
+    if (written_bytes) *written_bytes = 0;
+    return peak_io_result(PEAK_IO_UNSUPPORTED, 0);
+}
+static PeakIOPublishResult
+peak_io_unsupported_finish(void)
+{
+    PeakIOPublishResult result;
+    result.operation = peak_io_result(PEAK_IO_UNSUPPORTED, 0);
+    result.cleanup = peak_io_result(PEAK_IO_OK, 0);
+    result.published = result.durable = 0;
+    return result;
+}
+PeakIOPublishResult
+peak_io_stage_commit(PeakIOStage *stage, PeakIODurability durability)
+{
+    (void)stage; (void)durability;
+    return peak_io_unsupported_finish();
+}
+PeakIOPublishResult
+peak_io_stage_abort(PeakIOStage *stage)
+{
+    (void)stage;
+    return peak_io_unsupported_finish();
+}
+#endif /* PEAK_LINUX safe I/O */
 
 int
 peak_file_exists(const char *path)

@@ -14,7 +14,8 @@ void computeMain(uint3 tid : SV_DispatchThreadID)
 	uint samplerSlot = NonUniformResourceIndex(root.sampler_first + (i & 1));
 	Texture2D<float4> texture = getDescriptorFromHandle(DescriptorHandle<Texture2D<float4>>(uint2(slot, 0)));
 	SamplerState sampler = getDescriptorFromHandle(DescriptorHandle<SamplerState>(uint2(samplerSlot, 0)));
-	WTexture2D<float4> storage = getDescriptorFromHandle(DescriptorHandle<WTexture2D<float4>>(uint2(root.storage_slot, 0)));
+	WTexture2D<float4> storage =
+	    getDescriptorFromHandle(DescriptorHandle<WTexture2D<float4>>(uint2(root.storage_slot, 0)));
 	float4 color = texture.SampleLevel(sampler, float2(0.5, 0.5), 0);
 	storage.Store(int2(i, 0), color);
 	root.output[i] = root.tag + root.node->bias + root.node->next->values[i] + uint(color.r * 255.0 + 0.5);

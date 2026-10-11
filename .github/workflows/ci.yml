@@ -8,6 +8,51 @@ permissions:
   contents: read
 
 jobs:
+  documentation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: test documentation generator
+        run: python3 -m unittest discover -s tools -p 'test_*.py'
+      - name: lint demo sources and function complexity
+        run: python3 tools/lint_demos.py
+      - name: check generated symbols vault
+        run: python3 tools/generate_docs.py --check
+      - name: check published WebAssembly demo artifacts
+        run: python3 tools/build_web_demos.py --check
+      - uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: '0.165.0'
+      - name: build static website
+        run: hugo --source site --destination "$RUNNER_TEMP/godstack-site" --cacheDir "$RUNNER_TEMP/hugo-cache" --noBuildLock
+      - name: verify public documentation resources and links
+        run: python3 tools/test_site.py "$RUNNER_TEMP/godstack-site"
+
+  snake-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: pinned Emscripten SDK
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          "$RUNNER_TEMP/emsdk/emsdk" install 6.0.9
+          "$RUNNER_TEMP/emsdk/emsdk" activate 6.0.9
+      - uses: browser-actions/setup-chrome@v1
+        id: chrome
+      - name: real Peak and Rend WebGL2 browser integration
+        env:
+          CHROMIUM: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          python3 tools/test_rend_web.py
+          python3 tools/test_snake_web.py
+
   linux-package:
     runs-on: ubuntu-latest
     steps:

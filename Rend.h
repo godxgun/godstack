@@ -6,20 +6,20 @@
  * DESCRIPTION:
  * - Send data to the GPU.
  * - Peak owns the window.
- * - Caller owns SPIR-V shader bytes.
+ * - Caller supplies SPIR-V for Vulkan and GLSL ES 300 for WebGL2.
  *
  * SURVIVOR:
- * - Self-contained legacy Rend header. Vulkan backend and RendVTable dispatch embedded.
- * - Define PEAK_VULKAN to enable rendering. AUTO selects Vulkan; no software fallback.
+ * - Self-contained legacy Rend header. Vulkan/WebGL2 backends and RendVTable dispatch embedded.
+ * - AUTO selects WebGL2 under Emscripten, Vulkan on native PEAK_VULKAN builds.
  * - No OS window APIs in the command path.
  *
  * BACKEND STATUS:
- * - Vulkan 1.4 supported
+ * - Vulkan 1.4 and Emscripten WebGL2 graphics supported.
  * - DirectX 12 and Metal 4 are unavailable stubs; explicit selection fails.
  *
  * MACRO FLAGS:
  * - REND_IMPLEMENTATION      Emit implementation in exactly one translation unit.
- * - PEAK_VULKAN              Vulkan 1.4. Peak.h sets WSI. Required to create renderers.
+ * - PEAK_VULKAN              Native Vulkan 1.4. Peak.h sets WSI. Omit for Emscripten.
  * - REND_DEBUG               Asserts and Peak debug log.
  * - REND_DEBUG_MEMORY        Explicit Peak driver-domain host backing diagnostics.
  *                            Without it, preserve consumer allocator macros.
@@ -29,7 +29,9 @@
  * - REND_VK_COMPOSITE_PREFER_ALPHA  Prefer PRE/INHERIT over OPAQUE (transparent windows).
  *
  * USAGE:
- *     #define PEAK_VULKAN   // optional; without it renderer creation fails
+ *     #ifndef __EMSCRIPTEN__
+ *     #define PEAK_VULKAN   // enable the native Vulkan backend
+ *     #endif
  *     #define PEAK_IMPLEMENTATION
  *     #define REND_IMPLEMENTATION
  *     #include "Rend.h"
@@ -49,8 +51,14 @@
  * - PEAK_VULKAN additionally requires Vulkan 1.4 SDK headers and loader linkage
  *   (e.g. -lvulkan on Linux). VK_NO_PROTOTYPES is not supported.
  * - Legacy backend timing retains timespec/clock_gettime(CLOCK_MONOTONIC);
- *   Vulkan hosts must provide those APIs as before. No backend redesign here.
- * - AUTO selects Vulkan only. DirectX 12 / Metal 4 remain unavailable stubs.
+ *   Vulkan hosts must provide those APIs. WebGL2 uses emscripten_get_now().
+ * - Emscripten needs -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2. No Vulkan linkage.
+ * - WebGL2 does not support SPIR-V, compute/mesh, storage/indirect buffers, or device
+ *   addresses. Use portable graphics pipelines with float32 vertex attributes.
+ * - WebGL2 GLSL std140 RendPushConstants uses reserved UBO binding 7; explicit UBO
+ *   blocks RendUniforms_N use bindings 0..6; sampler uniforms use rend_texture_N.
+ * - Upload/readback/blit coordinates are top-down. WebGL2 reports unsupported formats.
+ * - DirectX 12 / Metal 4 remain unavailable stubs.
  * - The active Rend/rend_internal.h, rend.c, rend_vk14.c and
  *   rend_vk_internal.c are embedded below. The five unreferenced historical
  *   files in Rend/unused code/ (buffer, command_queue, memory, pool, sbta) are
@@ -261,6 +269,11 @@ extern RendPipeline rend_pipeline_create_graphics_spirv(RendRenderer renderer, u
 extern RendPipeline rend_pipeline_create_graphics_bindless_spirv(RendRenderer renderer, uint8_t *vertex_bytes, size_t vertex_size, uint8_t *frag_bytes, size_t frag_size, const RendPushConstantInfo *push_constants, uint32_t push_constant_count,  RendPolygonMode polygon_mode, RendCullMode cull_mode, RendTopology topology, RendFormat color_format, bool depth_test_enable); // Create a pipeline for a renderer using a configuration handle.
 extern RendPipeline rend_pipeline_create_meshlet_spirv(RendRenderer renderer, uint8_t *meshlet_bytes, size_t meshlet_size, uint8_t *frag_bytes, size_t frag_size, const RendPushConstantInfo *push_constants, uint32_t push_constant_count, RendPolygonMode polygon_mode, RendCullMode cull_mode, bool depth_test_enable); // Creates a meshlet rendering pipeline.
 extern RendPipeline rend_pipeline_create_compute_spirv(RendRenderer renderer, const uint8_t *compute_bytes, size_t compute_size, const RendPushConstantInfo *push_constants, uint32_t push_constant_count); // Create a compute pipeline.
+/* Portable graphics: SPIR-V on Vulkan, GLSL ES 300 on WebGL2.
+ * Web GLSL uses std140 block RendPushConstants; UBO bindings 0..6 use
+ * RendUniforms_N blocks, textures use sampler uniforms rend_texture_N. */
+extern RendPipeline rend_pipeline_create_graphics_portable(RendRenderer renderer, const uint8_t *vertex_spirv, size_t vertex_size, const uint8_t *fragment_spirv, size_t fragment_size, const char *vertex_glsl, const char *fragment_glsl, const RendVertexBinding *vertex_bindings, uint32_t vertex_binding_count, const RendVertexAttributes *vertex_attributes, uint32_t vertex_attribute_count, const RendPushConstantInfo *push_constants, uint32_t push_constant_count, RendPolygonMode polygon_mode, RendCullMode cull_mode, RendTopology topology, RendFormat color_format, bool depth_test_enable);
+extern RendPipeline rend_pipeline_create_graphics_glsl(RendRenderer renderer, const char *vertex_glsl, const char *fragment_glsl, const RendVertexBinding *vertex_bindings, uint32_t vertex_binding_count, const RendVertexAttributes *vertex_attributes, uint32_t vertex_attribute_count, const RendPushConstantInfo *push_constants, uint32_t push_constant_count, RendPolygonMode polygon_mode, RendCullMode cull_mode, RendTopology topology, RendFormat color_format, bool depth_test_enable);
 extern void         rend_pipeline_set_blend(RendPipeline pipeline, bool blend);
 
 /* Commands */
@@ -288,6 +301,7 @@ enum RendBackendType_t {
     REND_BACKEND_VULKAN_14,
 	REND_BACKEND_DIRECTX_12, /* Unavailable stub; creation returns NULL. */
 	REND_BACKEND_METAL_4,    /* Unavailable stub; creation returns NULL. */
+    REND_BACKEND_WEBGL2, /* Emscripten WebGL 2 graphics backend. */
     REND_BACKEND_COUNT 
 };
 
@@ -4318,6 +4332,783 @@ rend_vk14_color_target(RendContextHandle handle)
 
 #endif
 
+/* WebGL2 backend: commands use the same Rend dispatch as Vulkan. */
+#ifdef __EMSCRIPTEN__
+#include <GLES3/gl3.h>
+#include <emscripten/html5.h>
+#include <limits.h>
+#include <stdio.h>
+#define REND_GL_MAX_PIPELINES 128
+#define REND_GL_PUSH_BINDING 7
+#define REND_GL_MAX_TEXTURE_SLOTS 32
+
+typedef struct RendGLBuffer {
+    struct RendGLBuffer *next;
+    GLuint name;
+    size_t size;
+    unsigned char *data;
+} RendGLBuffer;
+typedef struct RendGLTexture {
+    struct RendGLTexture *next;
+    GLuint name;
+} RendGLTexture;
+typedef struct RendGLPipeline {
+    GLuint program, vao, push_buffer;
+    GLenum topology, index_type;
+    size_t index_offset, push_size;
+    bool depth, blend;
+    RendCullMode cull;
+    RendVertexBinding bindings[REND_MAX_BINDINGS];
+    uint32_t binding_count;
+    RendVertexAttributes attrs[32];
+    uint32_t attr_count;
+} RendGLPipeline;
+typedef struct RendGLContext {
+    EMSCRIPTEN_WEBGL_CONTEXT_HANDLE gl;
+    char selector[128];
+    bool owned_canvas, offscreen;
+    GLuint framebuffer, read_framebuffer, depth;
+    uint32_t depth_width, depth_height;
+    RendTexture color;
+    RendGLBuffer *buffers;
+    RendGLTexture *textures;
+    RendGLPipeline pipelines[REND_GL_MAX_PIPELINES];
+    uint32_t pipeline_count;
+    RendBuffer ubos[REND_GL_PUSH_BINDING];
+    uint32_t ubo_offsets[REND_GL_PUSH_BINDING], ubo_sizes[REND_GL_PUSH_BINDING];
+    double last_time;
+} RendGLContext;
+EM_JS(void, rend_gl_canvas_create, (const char *selector, int width, int height), {
+    var c = document.createElement('canvas');
+    c.id = UTF8ToString(selector).slice(1);
+    c.width = width;
+    c.height = height;
+    c.style.display = 'none';
+    document.body.appendChild(c);
+});
+EM_JS(void, rend_gl_canvas_remove, (const char *selector), {
+    var c = document.querySelector(UTF8ToString(selector));
+    if (c)
+        c.remove();
+});
+static void rend_gl_current(RendGLContext *ctx) { emscripten_webgl_make_context_current(ctx->gl); }
+static bool rend_gl_format(RendFormat f, GLint *internal, GLenum *format, GLenum *type) {
+    switch (f) {
+    case REND_FORMAT_R8_UNORM:
+        *internal = GL_R8;
+        *format = GL_RED;
+        *type = GL_UNSIGNED_BYTE;
+        return true;
+    case REND_FORMAT_R8G8_UNORM:
+        *internal = GL_RG8;
+        *format = GL_RG;
+        *type = GL_UNSIGNED_BYTE;
+        return true;
+    case REND_FORMAT_R8G8B8A8_UNORM:
+        *internal = GL_RGBA8;
+        *format = GL_RGBA;
+        *type = GL_UNSIGNED_BYTE;
+        return true;
+    case REND_FORMAT_R8G8B8A8_SRGB:
+        *internal = GL_SRGB8_ALPHA8;
+        *format = GL_RGBA;
+        *type = GL_UNSIGNED_BYTE;
+        return true;
+    case REND_FORMAT_R32_SFLOAT:
+        *internal = GL_R32F;
+        *format = GL_RED;
+        *type = GL_FLOAT;
+        return true;
+    case REND_FORMAT_R32G32_SFLOAT:
+        *internal = GL_RG32F;
+        *format = GL_RG;
+        *type = GL_FLOAT;
+        return true;
+    case REND_FORMAT_R32G32B32A32_SFLOAT:
+        *internal = GL_RGBA32F;
+        *format = GL_RGBA;
+        *type = GL_FLOAT;
+        return true;
+    case REND_FORMAT_R16_SFLOAT:
+        *internal = GL_R16F;
+        *format = GL_RED;
+        *type = GL_HALF_FLOAT;
+        return true;
+    case REND_FORMAT_R16G16_SFLOAT:
+        *internal = GL_RG16F;
+        *format = GL_RG;
+        *type = GL_HALF_FLOAT;
+        return true;
+    case REND_FORMAT_R16G16B16A16_SFLOAT:
+        *internal = GL_RGBA16F;
+        *format = GL_RGBA;
+        *type = GL_HALF_FLOAT;
+        return true;
+    default:
+        REND__WARN("WebGL2 texture format unsupported: %u", f);
+        return false;
+    }
+}
+static RendTexture rend_gl_texture_create(RendContextHandle h, uint32_t w, uint32_t height, uint32_t d,
+                                          uint32_t m, uint32_t layers, RendFormat f) {
+    RendGLContext *ctx = h;
+    RendTexture t = {0};
+    GLint internal;
+    GLenum format, type;
+    if (!w || !height || d != 1 || layers != 1 || !m || !rend_gl_format(f, &internal, &format, &type))
+        return t;
+    rend_gl_current(ctx);
+    RendGLTexture *record = rmalloc(sizeof *record);
+    if (!record)
+        return t;
+    glGenTextures(1, &record->name);
+    glBindTexture(GL_TEXTURE_2D, record->name);
+    glTexStorage2D(GL_TEXTURE_2D, m, internal, w, height);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    if (glGetError() != GL_NO_ERROR) {
+        glDeleteTextures(1, &record->name);
+        rfree(record);
+        return t;
+    }
+    record->next = ctx->textures;
+    ctx->textures = record;
+    t.ctx = ctx;
+    t.handle = record->name;
+    t.view = t.handle;
+    t.id = t.handle;
+    t.width = w;
+    t.height = height;
+    t.depth = 1;
+    t.layers = 1;
+    t.mip_levels = m;
+    t.format = f;
+    t.backend = REND_BACKEND_WEBGL2;
+    return t;
+}
+static void rend_gl_texture_destroy(RendContextHandle h, RendTexture *t) {
+    RendGLContext *ctx = h;
+    if (!t || t->borrowed)
+        return;
+    rend_gl_current(ctx);
+    RendGLTexture **link = &ctx->textures;
+    while (*link && (*link)->name != t->handle)
+        link = &(*link)->next;
+    if (*link) {
+        RendGLTexture *record = *link;
+        *link = record->next;
+        glDeleteTextures(1, &record->name);
+        rfree(record);
+    }
+    memset(t, 0, sizeof *t);
+}
+static RendContextHandle rend_gl_create(PeakWindow *window, uint32_t w, uint32_t height, RendFormat f,
+                                        RendBindingInfo *bindings) {
+    if (bindings && (bindings->ssbo_binding_count)) {
+        REND__WARN("WebGL2 does not support storage buffers.");
+        return NULL;
+    }
+    if (bindings && (bindings->ubo_binding_count > REND_MAX_BINDINGS ||
+                     bindings->texture_binding_count > REND_MAX_BINDINGS))
+        return NULL;
+    if (bindings)
+        for (uint32_t i = 0; i < bindings->ubo_binding_count; i++)
+            if (bindings->ubo_bindings[i] >= REND_GL_PUSH_BINDING) {
+                REND__WARN("WebGL2 UBO binding 7 is reserved for push constants.");
+                return NULL;
+            }
+    if (bindings) {
+        for (uint32_t i = 0; i < bindings->ubo_binding_count; i++)
+            if (bindings->ubo_array_sizes[i] > 1) {
+                REND__WARN("WebGL2 descriptor arrays are unsupported.");
+                return NULL;
+            }
+        for (uint32_t i = 0; i < bindings->texture_binding_count; i++)
+            if (bindings->texture_array_sizes[i] > 1 ||
+                bindings->texture_bindings[i] >= REND_GL_MAX_TEXTURE_SLOTS) {
+                REND__WARN("WebGL2 texture descriptor arrays/bindings are unsupported.");
+                return NULL;
+            }
+    }
+    RendGLContext *ctx = rmalloc(sizeof *ctx);
+    if (!ctx)
+        return NULL;
+    memset(ctx, 0, sizeof *ctx);
+    ctx->offscreen = window == NULL;
+    if (window) {
+        const char *selector = peak_window_canvas_selector(window);
+        if (!selector) {
+            rfree(ctx);
+            return NULL;
+        }
+        snprintf(ctx->selector, sizeof ctx->selector, "%s", selector);
+        w = window->width;
+        height = window->height;
+    } else {
+        static unsigned serial;
+        snprintf(ctx->selector, sizeof ctx->selector, "#rend-offscreen-%u", ++serial);
+        rend_gl_canvas_create(ctx->selector, w, height);
+        ctx->owned_canvas = true;
+    }
+    EmscriptenWebGLContextAttributes a;
+    emscripten_webgl_init_context_attributes(&a);
+    a.majorVersion = 2;
+    a.minorVersion = 0;
+    a.alpha = true;
+    a.depth = true;
+    a.stencil = false;
+    a.antialias = false;
+    a.preserveDrawingBuffer = true;
+    a.enableExtensionsByDefault = true;
+    ctx->gl = emscripten_webgl_create_context(ctx->selector, &a);
+    if (ctx->gl <= 0) {
+        if (ctx->owned_canvas)
+            rend_gl_canvas_remove(ctx->selector);
+        rfree(ctx);
+        return NULL;
+    }
+    rend_gl_current(ctx);
+    emscripten_webgl_enable_extension(ctx->gl, "EXT_color_buffer_float");
+    glGenFramebuffers(1, &ctx->framebuffer);
+    glGenFramebuffers(1, &ctx->read_framebuffer);
+    glGenRenderbuffers(1, &ctx->depth);
+    if (ctx->offscreen) {
+        ctx->color = rend_gl_texture_create(ctx, w, height, 1, 1, 1, f);
+        if (!ctx->color.handle) {
+            glDeleteFramebuffers(1, &ctx->framebuffer);
+            glDeleteFramebuffers(1, &ctx->read_framebuffer);
+            glDeleteRenderbuffers(1, &ctx->depth);
+            emscripten_webgl_destroy_context(ctx->gl);
+            rend_gl_canvas_remove(ctx->selector);
+            rfree(ctx);
+            return NULL;
+        }
+    } else {
+        ctx->color.width = w;
+        ctx->color.height = height;
+        ctx->color.format = REND_FORMAT_R8G8B8A8_UNORM;
+        ctx->color.ctx = ctx;
+        ctx->color.backend = REND_BACKEND_WEBGL2;
+    }
+    ctx->color.borrowed = 1;
+    ctx->last_time = emscripten_get_now();
+    return ctx;
+}
+static RendContextHandle rend_gl_renderer_create(PeakWindow *w, RendBindingInfo *b, bool vsync) {
+    (void)vsync;
+    return rend_gl_create(w, 0, 0, REND_FORMAT_R8G8B8A8_UNORM, b);
+}
+static RendContextHandle rend_gl_renderer_create_offscreen(uint32_t w, uint32_t h, RendFormat f,
+                                                           RendBindingInfo *b) {
+    return rend_gl_create(NULL, w, h, f, b);
+}
+static void rend_gl_renderer_destroy(RendContextHandle h) {
+    RendGLContext *ctx = h;
+    rend_gl_current(ctx);
+    for (uint32_t i = 0; i < ctx->pipeline_count; i++) {
+        RendGLPipeline *p = &ctx->pipelines[i];
+        glDeleteProgram(p->program);
+        glDeleteVertexArrays(1, &p->vao);
+        glDeleteBuffers(1, &p->push_buffer);
+    }
+    while (ctx->buffers) {
+        RendGLBuffer *b = ctx->buffers;
+        ctx->buffers = b->next;
+        glDeleteBuffers(1, &b->name);
+        rfree(b->data);
+        rfree(b);
+    }
+    while (ctx->textures) {
+        RendGLTexture *t = ctx->textures;
+        ctx->textures = t->next;
+        glDeleteTextures(1, &t->name);
+        rfree(t);
+    }
+    glDeleteFramebuffers(1, &ctx->framebuffer);
+    glDeleteFramebuffers(1, &ctx->read_framebuffer);
+    glDeleteRenderbuffers(1, &ctx->depth);
+    emscripten_webgl_destroy_context(ctx->gl);
+    if (ctx->owned_canvas)
+        rend_gl_canvas_remove(ctx->selector);
+    rfree(ctx);
+}
+static bool rend_gl_frame_begin(RendContextHandle h) {
+    RendGLContext *ctx = h;
+    rend_gl_current(ctx);
+    if (emscripten_is_webgl_context_lost(ctx->gl))
+        return false;
+    if (!ctx->offscreen) {
+        int w, height;
+        if (emscripten_get_canvas_element_size(ctx->selector, &w, &height) != EMSCRIPTEN_RESULT_SUCCESS ||
+            w <= 0 || height <= 0)
+            return false;
+        ctx->color.width = w;
+        ctx->color.height = height;
+    }
+    return true;
+}
+static void rend_gl_frame_end(RendContextHandle h, float *delta) {
+    RendGLContext *ctx = h;
+    rend_gl_current(ctx);
+    glFlush();
+    double now = emscripten_get_now();
+    if (delta)
+        *delta = (float)((now - ctx->last_time) / 1000.0);
+    ctx->last_time = now;
+}
+static RendTexture *rend_gl_color_target(RendContextHandle h) { return &((RendGLContext *)h)->color; }
+static RendBuffer rend_gl_buffer_create(RendContextHandle h, size_t size, RendBufferType type, bool gpu) {
+    RendGLContext *ctx = h;
+    RendBuffer b = {0};
+    if (type == REND_BUFFER_STORAGE || type == REND_BUFFER_INDIRECT || type >= REND_BUFFER_COUNT) {
+        REND__WARN("WebGL2 storage/indirect buffers are unsupported.");
+        return b;
+    }
+    if (!size || size > UINT32_MAX)
+        return b;
+    RendGLBuffer *record = rmalloc(sizeof *record);
+    if (!record)
+        return b;
+    memset(record, 0, sizeof *record);
+    record->data = rmalloc(size);
+    if (!record->data) {
+        rfree(record);
+        return b;
+    }
+    memset(record->data, 0, size);
+    record->size = size;
+    rend_gl_current(ctx);
+    glGenBuffers(1, &record->name);
+    /* WebGL permanently distinguishes element buffers from other buffer data
+     * on the first bind. COPY_WRITE_BUFFER as first bind cannot later be used
+     * as an ELEMENT_ARRAY_BUFFER. */
+    GLenum target = type == REND_BUFFER_INDEX ? GL_ELEMENT_ARRAY_BUFFER : GL_COPY_WRITE_BUFFER;
+    glBindBuffer(target, record->name);
+    glBufferData(target, size, record->data, gpu ? GL_STATIC_DRAW : GL_DYNAMIC_DRAW);
+    record->next = ctx->buffers;
+    ctx->buffers = record;
+    b.handle = record->name;
+    b.allocator = record;
+    b.logical_device = ctx;
+    b.size = size;
+    b.usage = type;
+    b.backend = REND_BACKEND_WEBGL2;
+    b.memory.host_mapped_memory = record->data;
+    b.memory.size = size;
+    if (!gpu)
+        b.mapped_memory = record->data;
+    return b;
+}
+static void rend_gl_buffer_destroy(RendBuffer *b) {
+    if (!b || !b->handle)
+        return;
+    RendGLContext *ctx = b->logical_device;
+    rend_gl_current(ctx);
+    for (unsigned i = 0; i < REND_GL_PUSH_BINDING; i++)
+        if (ctx->ubos[i].handle == b->handle)
+            memset(&ctx->ubos[i], 0, sizeof ctx->ubos[i]);
+    RendGLBuffer **link = &ctx->buffers;
+    while (*link && *link != b->allocator)
+        link = &(*link)->next;
+    if (*link) {
+        RendGLBuffer *record = *link;
+        *link = record->next;
+        glDeleteBuffers(1, &record->name);
+        rfree(record->data);
+        rfree(record);
+    }
+    memset(b, 0, sizeof *b);
+}
+static void rend_gl_upload(RendBuffer b, GLenum target) {
+    RendGLBuffer *record = b.allocator;
+    glBindBuffer(target, b.handle);
+    if (record)
+        glBufferSubData(target, 0, record->size, record->data);
+}
+static void rend_gl_buffer_copy(RendContextHandle h, RendBuffer *dst, size_t doff, RendBuffer *src,
+                                size_t soff, size_t bytes) {
+    if (doff > dst->size || bytes > dst->size - doff || soff > src->size || bytes > src->size - soff)
+        return;
+    rend_gl_current(h);
+    RendGLBuffer *d = dst->allocator, *s = src->allocator;
+    memmove(d->data + doff, s->data + soff, bytes);
+    glBindBuffer(GL_COPY_WRITE_BUFFER, d->name);
+    glBufferSubData(GL_COPY_WRITE_BUFFER, doff, bytes, d->data + doff);
+}
+static void rend_gl_descriptor_buffer(RendContextHandle h, RendBuffer b, uint32_t binding, uint32_t slot,
+                                      uint32_t offset, uint32_t size, bool ubo) {
+    if (!ubo || slot || binding >= REND_GL_PUSH_BINDING) {
+        REND__WARN("Unsupported WebGL2 descriptor buffer (storage/array/reserved binding).");
+        return;
+    }
+    if (offset > b.size || size > b.size - offset)
+        return;
+    RendGLContext *ctx = h;
+    rend_gl_current(ctx);
+    ctx->ubos[binding] = b;
+    ctx->ubo_offsets[binding] = offset;
+    ctx->ubo_sizes[binding] = size;
+    rend_gl_upload(b, GL_UNIFORM_BUFFER);
+    glBindBufferRange(GL_UNIFORM_BUFFER, binding, b.handle, offset, size);
+}
+static void rend_gl_descriptor_texture(RendContextHandle h, RendTexture *t, uint32_t binding, uint32_t slot) {
+    if (slot || binding >= REND_GL_MAX_TEXTURE_SLOTS || !t || !t->handle) {
+        REND__WARN("Unsupported WebGL2 texture descriptor.");
+        return;
+    }
+    rend_gl_current(h);
+    glActiveTexture(GL_TEXTURE0 + binding + slot);
+    glBindTexture(GL_TEXTURE_2D, t->handle);
+}
+static GLuint rend_gl_target(RendGLContext *ctx, RendTexture *t, GLenum target, GLuint framebuffer) {
+    if (t == &ctx->color && !ctx->offscreen) {
+        glBindFramebuffer(target, 0);
+        return 0;
+    }
+    glBindFramebuffer(target, framebuffer);
+    /* A previous texture pass may have used depth at another size. Transfers
+     * only need color; render passes attach correctly sized depth afterwards. */
+    glFramebufferRenderbuffer(target, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, 0);
+    glFramebufferTexture2D(target, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, t->handle, 0);
+    return framebuffer;
+}
+static void rend_gl_pass(RendGLContext *ctx, RendTexture *t, bool clear, float r, float g, float b, float a) {
+    rend_gl_current(ctx);
+    GLuint fbo = rend_gl_target(ctx, t, GL_FRAMEBUFFER, ctx->framebuffer);
+    if (fbo) {
+        glBindRenderbuffer(GL_RENDERBUFFER, ctx->depth);
+        if (ctx->depth_width != t->width || ctx->depth_height != t->height) {
+            glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, t->width, t->height);
+            ctx->depth_width = t->width;
+            ctx->depth_height = t->height;
+        }
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, ctx->depth);
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            REND__WARN("Incomplete WebGL2 render target.");
+            return;
+        }
+    }
+    glViewport(0, 0, t->width, t->height);
+    glDisable(GL_SCISSOR_TEST);
+    glDepthMask(GL_TRUE);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glClearDepthf(1);
+    glClearColor(r, g, b, a);
+    glClear(GL_DEPTH_BUFFER_BIT | (clear ? GL_COLOR_BUFFER_BIT : 0));
+}
+static void rend_gl_pass_begin(RendContextHandle h, float r, float g, float b, float a) {
+    RendGLContext *ctx = h;
+    rend_gl_pass(ctx, &ctx->color, true, r, g, b, a);
+}
+static void rend_gl_pass_preserve(RendContextHandle h) {
+    RendGLContext *ctx = h;
+    rend_gl_pass(ctx, &ctx->color, false, 0, 0, 0, 0);
+}
+static void rend_gl_pass_texture(RendContextHandle h, RendTexture *t) {
+    rend_gl_pass(h, t, true, 0, 0, 0, 0);
+}
+static void rend_gl_pass_end(RendContextHandle h) { (void)h; }
+static void rend_gl_pass_end_texture(RendContextHandle h, RendTexture *t) {
+    (void)h;
+    (void)t;
+}
+static void rend_gl_texture_upload(RendContextHandle h, RendTexture *t, RendBuffer *b) {
+    GLint internal;
+    GLenum format, type;
+    if (!rend_gl_format(t->format, &internal, &format, &type) || !t->handle)
+        return;
+    size_t bytes = (size_t)t->width * t->height * rend_format_size[t->format];
+    if (bytes > b->size)
+        return;
+    rend_gl_current(h);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glBindTexture(GL_TEXTURE_2D, t->handle);
+    unsigned char *flip = rmalloc(bytes);
+    if (!flip)
+        return;
+    size_t row = bytes / t->height;
+    unsigned char *data = ((RendGLBuffer *)b->allocator)->data;
+    for (uint32_t y = 0; y < t->height; y++)
+        memcpy(flip + y * row, data + (t->height - 1 - y) * row, row);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, t->width, t->height, format, type, flip);
+    rfree(flip);
+}
+static void rend_gl_texture_read(RendContextHandle h, RendTexture *t, RendBuffer *b) {
+    RendGLContext *ctx = h;
+    GLint internal;
+    GLenum format, type;
+    if (!rend_gl_format(t->format, &internal, &format, &type))
+        return;
+    size_t row = (size_t)t->width * rend_format_size[t->format], bytes = row * t->height;
+    if (bytes > b->size)
+        return;
+    rend_gl_current(ctx);
+    rend_gl_target(ctx, t, GL_READ_FRAMEBUFFER, ctx->read_framebuffer);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    unsigned char *tmp = rmalloc(bytes);
+    if (!tmp)
+        return;
+    GLenum prior_error = glGetError();
+    if (prior_error != GL_NO_ERROR)
+        REND__WARN("WebGL2 error before readback: 0x%x", prior_error);
+    glReadPixels(0, 0, t->width, t->height, format, type, tmp);
+    if (glGetError() != GL_NO_ERROR) {
+        REND__WARN("WebGL2 readback format unsupported by this device.");
+        rfree(tmp);
+        return;
+    }
+    RendGLBuffer *record = b->allocator;
+    for (uint32_t y = 0; y < t->height; y++)
+        memcpy(record->data + y * row, tmp + (t->height - 1 - y) * row, row);
+    rfree(tmp);
+}
+static void rend_gl_blit(RendContextHandle h, RendTexture *src, RendTexture *dst, uint32_t sx, uint32_t sy,
+                         uint32_t sw, uint32_t sh, uint32_t dx, uint32_t dy, uint32_t dw, uint32_t dh) {
+    RendGLContext *ctx = h;
+    rend_gl_current(ctx);
+    rend_gl_target(ctx, src, GL_READ_FRAMEBUFFER, ctx->read_framebuffer);
+    rend_gl_target(ctx, dst, GL_DRAW_FRAMEBUFFER, ctx->framebuffer);
+    glDisable(GL_SCISSOR_TEST);
+    glBlitFramebuffer(sx, src->height - sy - sh, sx + sw, src->height - sy, dx, dst->height - dy - dh,
+                      dx + dw, dst->height - dy, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+}
+static GLuint rend_gl_compile(GLenum stage, const char *source, size_t size) {
+    if (size > INT_MAX)
+        return 0;
+    GLint length = (GLint)size;
+    GLuint shader = glCreateShader(stage);
+    glShaderSource(shader, 1, &source, &length);
+    glCompileShader(shader);
+    GLint ok;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &ok);
+    if (!ok) {
+        char log[2048];
+        glGetShaderInfoLog(shader, sizeof log, NULL, log);
+        REND__WARN("WebGL2 shader: %s", log);
+        glDeleteShader(shader);
+        return 0;
+    }
+    return shader;
+}
+static bool rend_gl_pipeline_create(RendContextHandle h, RendPipeline pipeline, Rend__PipelineConfig c,
+                                    uint8_t type, const uint8_t *v, size_t vs, const uint8_t *f, size_t fs,
+                                    const uint8_t *third, size_t ts) {
+    RendGLContext *ctx = h;
+    (void)third;
+    (void)ts;
+    if (type != REND__PIPELINE_GRAPHICS || !v || !f || vs < 8 || fs < 8 || memcmp(v, "#version", 8) ||
+        memcmp(f, "#version", 8)) {
+        REND__WARN(
+            "WebGL2 requires GLSL ES graphics shaders; SPIR-V, compute and mesh shaders are unsupported.");
+        return false;
+    }
+    if (c.polygon_mode != REND_POLYGON_MODE_FILL || c.vertex_binding_count > REND_MAX_BINDINGS ||
+        c.vertex_attribute_count > 32 || c.topology > REND_TOPOLOGY_POINT_LIST ||
+        (c.vertex_binding_count && !c.vertex_bindings) ||
+        (c.vertex_attribute_count && !c.vertex_attributes) || (c.push_constant_count && !c.push_constants) ||
+        ctx->pipeline_count >= REND_GL_MAX_PIPELINES) {
+        REND__WARN("Unsupported WebGL2 pipeline configuration.");
+        return false;
+    }
+    for (uint32_t i = 0; i < c.vertex_attribute_count; i++) {
+        RendFormat fmt = c.vertex_attributes[i].format;
+        if (fmt < REND_FORMAT_R32_SFLOAT || fmt > REND_FORMAT_R32G32B32A32_SFLOAT) {
+            REND__WARN("WebGL2 vertex format requires float32 attributes.");
+            return false;
+        }
+    }
+    rend_gl_current(ctx);
+    GLuint vert = rend_gl_compile(GL_VERTEX_SHADER, (const char *)v, vs);
+    if (!vert)
+        return false;
+    GLuint frag = rend_gl_compile(GL_FRAGMENT_SHADER, (const char *)f, fs);
+    if (!frag) {
+        glDeleteShader(vert);
+        return false;
+    }
+    GLuint program = glCreateProgram();
+    glAttachShader(program, vert);
+    glAttachShader(program, frag);
+    glLinkProgram(program);
+    glDeleteShader(vert);
+    glDeleteShader(frag);
+    GLint ok;
+    glGetProgramiv(program, GL_LINK_STATUS, &ok);
+    if (!ok) {
+        char log[2048];
+        glGetProgramInfoLog(program, sizeof log, NULL, log);
+        REND__WARN("WebGL2 program: %s", log);
+        glDeleteProgram(program);
+        return false;
+    }
+    RendGLPipeline *p = &ctx->pipelines[ctx->pipeline_count];
+    memset(p, 0, sizeof *p);
+    p->program = program;
+    p->depth = c.depth_test_enable;
+    p->cull = c.cull_mode;
+    GLenum modes[] = {GL_TRIANGLES, GL_TRIANGLE_STRIP, GL_LINES, GL_LINE_STRIP, GL_POINTS};
+    p->topology = c.topology <= REND_TOPOLOGY_POINT_LIST ? modes[c.topology] : GL_TRIANGLES;
+    p->binding_count = c.vertex_binding_count;
+    p->attr_count = c.vertex_attribute_count;
+    if (p->binding_count)
+        memcpy(p->bindings, c.vertex_bindings, p->binding_count * sizeof *p->bindings);
+    if (p->attr_count)
+        memcpy(p->attrs, c.vertex_attributes, p->attr_count * sizeof *p->attrs);
+    for (uint32_t i = 0; i < c.push_constant_count; i++) {
+        size_t end = (size_t)c.push_constants[i].offset + c.push_constants[i].size;
+        if (end > p->push_size)
+            p->push_size = end;
+    }
+    GLint max;
+    glGetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE, &max);
+    if (p->push_size > (size_t)max) {
+        glDeleteProgram(program);
+        memset(p, 0, sizeof *p);
+        return false;
+    }
+    GLuint push = glGetUniformBlockIndex(program, "RendPushConstants");
+    if (push != GL_INVALID_INDEX) {
+        GLint block_size;
+        glGetActiveUniformBlockiv(program, push, GL_UNIFORM_BLOCK_DATA_SIZE, &block_size);
+        if ((size_t)block_size > p->push_size) {
+            REND__WARN("Push constants must cover the std140 block.");
+            glDeleteProgram(program);
+            memset(p, 0, sizeof *p);
+            return false;
+        }
+        glUniformBlockBinding(program, push, REND_GL_PUSH_BINDING);
+        glGenBuffers(1, &p->push_buffer);
+        glBindBuffer(GL_UNIFORM_BUFFER, p->push_buffer);
+        glBufferData(GL_UNIFORM_BUFFER, p->push_size, NULL, GL_DYNAMIC_DRAW);
+    }
+    glUseProgram(program);
+    for (unsigned i = 0; i < REND_GL_PUSH_BINDING; i++) {
+        char name[64];
+        snprintf(name, sizeof name, "RendUniforms_%u", i);
+        GLuint block = glGetUniformBlockIndex(program, name);
+        if (block != GL_INVALID_INDEX)
+            glUniformBlockBinding(program, block, i);
+    }
+    for (unsigned i = 0; i < REND_GL_MAX_TEXTURE_SLOTS; i++) {
+        char name[64];
+        snprintf(name, sizeof name, "rend_texture_%u", i);
+        GLint loc = glGetUniformLocation(program, name);
+        if (loc >= 0)
+            glUniform1i(loc, i);
+    }
+    glGenVertexArrays(1, &p->vao);
+    pipeline->idx = ctx->pipeline_count++;
+    pipeline->backend_ctx = ctx;
+    return true;
+}
+static RendGLPipeline *rend_gl_pipeline(RendPipeline pipeline) {
+    RendGLContext *ctx = pipeline->backend_ctx;
+    rend_gl_current(ctx);
+    return &ctx->pipelines[pipeline->idx];
+}
+static void rend_gl_pipeline_bind(RendPipeline pipeline) {
+    RendGLPipeline *p = rend_gl_pipeline(pipeline);
+    glUseProgram(p->program);
+    glBindVertexArray(p->vao);
+    RendGLContext *ctx = pipeline->backend_ctx;
+    for (unsigned i = 0; i < REND_GL_PUSH_BINDING; i++)
+        if (ctx->ubos[i].handle) {
+            rend_gl_upload(ctx->ubos[i], GL_UNIFORM_BUFFER);
+            glBindBufferRange(GL_UNIFORM_BUFFER, i, ctx->ubos[i].handle, ctx->ubo_offsets[i],
+                              ctx->ubo_sizes[i]);
+        }
+    if (p->push_buffer)
+        glBindBufferBase(GL_UNIFORM_BUFFER, REND_GL_PUSH_BINDING, p->push_buffer);
+    if (p->depth)
+        glEnable(GL_DEPTH_TEST);
+    else
+        glDisable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+    if (p->cull == REND_CULL_MODE_NONE)
+        glDisable(GL_CULL_FACE);
+    else {
+        glEnable(GL_CULL_FACE);
+        glCullFace(p->cull == REND_CULL_MODE_BACK    ? GL_BACK
+                   : p->cull == REND_CULL_MODE_FRONT ? GL_FRONT
+                                                     : GL_FRONT_AND_BACK);
+    }
+    if (p->blend) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    } else
+        glDisable(GL_BLEND);
+}
+static void rend_gl_push(RendPipeline pipeline, void *data, size_t size) {
+    RendGLPipeline *p = rend_gl_pipeline(pipeline);
+    if (size > p->push_size || !p->push_buffer) {
+        REND__WARN("Invalid WebGL2 push constant write.");
+        return;
+    }
+    glBindBuffer(GL_UNIFORM_BUFFER, p->push_buffer);
+    glBufferSubData(GL_UNIFORM_BUFFER, 0, size, data);
+    glBindBufferBase(GL_UNIFORM_BUFFER, REND_GL_PUSH_BINDING, p->push_buffer);
+}
+static void rend_gl_vertex(RendPipeline pipeline, uint32_t binding, RendBuffer b, size_t offset) {
+    RendGLPipeline *p = rend_gl_pipeline(pipeline);
+    glBindVertexArray(p->vao);
+    rend_gl_upload(b, GL_ARRAY_BUFFER);
+    for (uint32_t j = 0; j < p->binding_count; j++)
+        if (p->bindings[j].binding == binding) {
+            RendVertexBinding *vb = &p->bindings[j];
+            for (uint32_t i = 0; i < p->attr_count; i++)
+                if (p->attrs[i].binding == binding) {
+                    RendVertexAttributes *a = &p->attrs[i];
+                    glEnableVertexAttribArray(a->location);
+                    glVertexAttribPointer(a->location, (GLint)(a->format - REND_FORMAT_R32_SFLOAT + 1),
+                                          GL_FLOAT, GL_FALSE, vb->stride,
+                                          (void *)(uintptr_t)(offset + a->offset));
+                    glVertexAttribDivisor(a->location, vb->input_rate == REND_INPUT_RATE_INSTANCE ? 1 : 0);
+                }
+        }
+}
+static void rend_gl_index(RendPipeline pipeline, RendBuffer b, size_t offset, RendIndexType type) {
+    RendGLPipeline *p = rend_gl_pipeline(pipeline);
+    glBindVertexArray(p->vao);
+    rend_gl_upload(b, GL_ELEMENT_ARRAY_BUFFER);
+    p->index_offset = offset;
+    p->index_type = type == REND_INDEX_UINT16 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
+}
+static void rend_gl_dispatch(RendPipeline p, uint32_t x, uint32_t y, uint32_t z) {
+    (void)p;
+    (void)x;
+    (void)y;
+    (void)z;
+    REND__WARN("WebGL2 does not support compute dispatch.");
+}
+static void rend_gl_draw(RendPipeline pipeline, size_t count, uint32_t instances) {
+    RendGLPipeline *p = rend_gl_pipeline(pipeline);
+    glDrawArraysInstanced(p->topology, 0, count, instances);
+}
+static void rend_gl_draw_indexed(RendPipeline pipeline, uint32_t count, uint32_t first, int32_t base,
+                                 uint32_t instances) {
+    RendGLPipeline *p = rend_gl_pipeline(pipeline);
+    if (base) {
+        REND__WARN("WebGL2 does not support indexed vertex offsets.");
+        return;
+    }
+    glDrawElementsInstanced(
+        p->topology, count, p->index_type,
+        (void *)(uintptr_t)(p->index_offset + first * (p->index_type == GL_UNSIGNED_SHORT ? 2 : 4)),
+        instances);
+    GLenum error = glGetError();
+    if (error != GL_NO_ERROR)
+        REND__WARN("WebGL2 indexed draw failed: 0x%x", error);
+}
+static void rend_gl_blend(RendPipeline pipeline, bool blend) {
+    RendGLPipeline *p = rend_gl_pipeline(pipeline);
+    p->blend = blend;
+}
+#endif /* __EMSCRIPTEN__ */
+
 static void rend__pipeline_free_list(RendPipeline pipeline);
 static bool rend__renderer_init(RendRenderer renderer, RendBackendType backend);
 static RendRenderer rend__renderer_alloc(RendBackendType backend);
@@ -4336,6 +5127,41 @@ bool rend_backend_vk_initialized = false;
 
 RendVTable rend_vtables[REND_BACKEND_COUNT] = {
     [REND_BACKEND_AUTO] = {0},
+#ifdef __EMSCRIPTEN__
+    [REND_BACKEND_WEBGL2] = {
+        .renderer_create = rend_gl_renderer_create,
+        .renderer_create_offscreen = rend_gl_renderer_create_offscreen,
+        .renderer_destroy = rend_gl_renderer_destroy,
+        .renderer_frame_begin = rend_gl_frame_begin,
+        .renderer_frame_end = rend_gl_frame_end,
+        .color_target = rend_gl_color_target,
+        .buffer_create = rend_gl_buffer_create,
+        .buffer_destroy = rend_gl_buffer_destroy,
+        .buffer_copy = rend_gl_buffer_copy,
+        .texture_create = rend_gl_texture_create,
+        .texture_destroy = rend_gl_texture_destroy,
+        .texture_copy_buffer = rend_gl_texture_upload,
+        .texture_copy_to_buffer = rend_gl_texture_read,
+        .texture_blit = rend_gl_blit,
+        .pipeline_create = rend_gl_pipeline_create,
+        .pipeline_bind = rend_gl_pipeline_bind,
+        .pipeline_push_constants = rend_gl_push,
+        .pipeline_bind_vertex_buffer = rend_gl_vertex,
+        .pipeline_bind_index_buffer = rend_gl_index,
+        .pipeline_dispatch = rend_gl_dispatch,
+        .pipeline_draw = rend_gl_draw,
+        .pipeline_draw_indexed = rend_gl_draw_indexed,
+        .pipeline_set_blend = rend_gl_blend,
+        .renderer_render_pass_begin = rend_gl_pass_begin,
+        .renderer_render_pass_begin_preserve = rend_gl_pass_preserve,
+        .renderer_render_pass_begin_texture = rend_gl_pass_texture,
+        .renderer_render_pass_end = rend_gl_pass_end,
+        .renderer_render_pass_end_texture = rend_gl_pass_end_texture,
+        .descriptor_write_buffer = rend_gl_descriptor_buffer,
+        .descriptor_write_texture = rend_gl_descriptor_texture,
+    },
+#endif
+
 	/* Deferred backends publish no callable entry points or contexts. */
 	[REND_BACKEND_DIRECTX_12] = {0},
 	[REND_BACKEND_METAL_4] = {0},
@@ -4782,6 +5608,27 @@ rend_pipeline_create_graphics_spirv(RendRenderer renderer, uint8_t *vertex_bytes
 }
 
 extern RendPipeline
+rend_pipeline_create_graphics_portable(RendRenderer renderer, const uint8_t *vertex_spirv, size_t vertex_size, const uint8_t *fragment_spirv, size_t fragment_size, const char *vertex_glsl, const char *fragment_glsl, const RendVertexBinding *vertex_bindings, uint32_t vertex_binding_count, const RendVertexAttributes *vertex_attributes, uint32_t vertex_attribute_count, const RendPushConstantInfo *push_constants, uint32_t push_constant_count, RendPolygonMode polygon_mode, RendCullMode cull_mode, RendTopology topology, RendFormat color_format, bool depth_test_enable)
+{
+#ifdef __EMSCRIPTEN__
+    if (renderer && renderer->backend == REND_BACKEND_WEBGL2)
+        return rend_pipeline_create_graphics_glsl(renderer, vertex_glsl, fragment_glsl, vertex_bindings, vertex_binding_count, vertex_attributes, vertex_attribute_count, push_constants, push_constant_count, polygon_mode, cull_mode, topology, color_format, depth_test_enable);
+#else
+    (void)vertex_glsl; (void)fragment_glsl;
+#endif
+    return rend_pipeline_create_graphics_spirv(renderer, (uint8_t *)vertex_spirv, vertex_size, (uint8_t *)fragment_spirv, fragment_size, vertex_bindings, vertex_binding_count, vertex_attributes, vertex_attribute_count, push_constants, push_constant_count, polygon_mode, cull_mode, topology, color_format, depth_test_enable);
+}
+extern RendPipeline
+rend_pipeline_create_graphics_glsl(RendRenderer renderer, const char *vertex_glsl, const char *fragment_glsl, const RendVertexBinding *vertex_bindings, uint32_t vertex_binding_count, const RendVertexAttributes *vertex_attributes, uint32_t vertex_attribute_count, const RendPushConstantInfo *push_constants, uint32_t push_constant_count, RendPolygonMode polygon_mode, RendCullMode cull_mode, RendTopology topology, RendFormat color_format, bool depth_test_enable)
+{
+    if (!renderer || renderer->backend != REND_BACKEND_WEBGL2 || !vertex_glsl || !fragment_glsl) {
+        REND__WARN("GLSL ES pipelines require a WebGL2 renderer.");
+        return NULL;
+    }
+    return rend_pipeline_create_graphics_spirv(renderer, (uint8_t *)vertex_glsl, strlen(vertex_glsl), (uint8_t *)fragment_glsl, strlen(fragment_glsl), vertex_bindings, vertex_binding_count, vertex_attributes, vertex_attribute_count, push_constants, push_constant_count, polygon_mode, cull_mode, topology, color_format, depth_test_enable);
+}
+
+extern RendPipeline
 rend_pipeline_create_graphics_bindless_spirv(RendRenderer renderer, uint8_t *vertex_bytes, size_t vertex_size, uint8_t *frag_bytes, size_t frag_size, const RendPushConstantInfo *push_constants, uint32_t push_constant_count, RendPolygonMode polygon_mode, RendCullMode cull_mode, RendTopology topology, RendFormat color_format, bool depth_test_enable)
 {
     return rend_pipeline_create_graphics_spirv(renderer, vertex_bytes, vertex_size, frag_bytes, frag_size,
@@ -4953,6 +5800,17 @@ rend_cmd_blit(RendRenderer renderer, RendTexture *src, RendTexture *dst, uint32_
 static bool
 rend__renderer_init(RendRenderer renderer, RendBackendType backend)
 {
+#ifdef __EMSCRIPTEN__
+    if (backend == REND_BACKEND_AUTO || backend == REND_BACKEND_WEBGL2) {
+        renderer->backend = REND_BACKEND_WEBGL2;
+        return true;
+    }
+#else
+    if (backend == REND_BACKEND_WEBGL2) {
+        REND__WARN("WebGL2 backend requires Emscripten.");
+        return false;
+    }
+#endif
 	switch (backend) {
 	case REND_BACKEND_AUTO:
 	case REND_BACKEND_VULKAN_14:
