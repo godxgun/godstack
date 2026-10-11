@@ -204,8 +204,15 @@ def compile_source(path, compiler):
         compiler, "-std=c99", "-fsyntax-only", "-I", str(ROOT), "-Wall", "-Wextra",
         "-Wno-deprecated-declarations", *extra, str(path),
     ], capture_output=True, text=True)
-    diagnostics = [line for line in result.stderr.splitlines()
-                   if line.startswith(str(path) + ":") and "warning:" in line]
+    diagnostics = []
+    for line in result.stderr.splitlines():
+        match = re.match(r"(.+?):\d+:\d+: warning:", line)
+        if match:
+            owner = Path(match.group(1)).resolve()
+            if owner.is_relative_to(ROOT / "demos"):
+                relative = owner.relative_to(ROOT / "demos").as_posix()
+                if relative not in EXCLUSIONS:
+                    diagnostics.append(line)
     diagnostics.extend(line for line in result.stderr.splitlines() if "error:" in line)
     if result.returncode and not diagnostics:
         diagnostics.append(result.stderr.strip() or f"compiler exited {result.returncode}")

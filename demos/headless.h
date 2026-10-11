@@ -33,7 +33,7 @@ static int headless_parse(int argc, char **argv, int *frames, const char **ppm)
 /* Open the optional Peak window and its renderer as one ownership unit. */
 static inline RendRenderer demo_renderer_open(PeakWindow *window, PeakCtx **ctx, int headless,
                                               uint32_t width, uint32_t height, const char *title,
-                                              bool vsync, const RendBindingInfo *bindings)
+                                              bool vsync, RendBindingInfo *bindings)
 {
 	RendRenderer renderer;
 	if (!headless) {
