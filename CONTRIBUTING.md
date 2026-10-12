@@ -12,5 +12,5 @@ New source files may use a language-appropriate notice:
 
 > MIT License; see LICENSE. Third-party portions retain their own licenses.
 
-See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for existing notices and
+See [THIRD-PARTY-NOTICES.md](docs/THIRD-PARTY-NOTICES.md) for existing notices and
 unresolved provenance issues.

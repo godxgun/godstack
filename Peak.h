@@ -906,7 +906,6 @@ static int peak_initialized;
 static uint64_t peak_generation;
 static int peak_window_valid(PeakWindow *win);
 
-static size_t peak_host_window_size(void);
 #if defined(PEAK_LINUX)
 static void *peak_host_window_alloc(size_t size);
 static void peak_host_window_free(void *p);

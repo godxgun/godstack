@@ -75,7 +75,7 @@ def source_path(name):
 
 def input_hash(name):
     inputs = [source_path(name), ROOT / DEMOS[name], ROOT / "Peak.h", Path(__file__)]
-    inputs += [ROOT / notice for notice in ("LICENSE", "THIRD-PARTY-NOTICES.md")]
+    inputs += [ROOT / notice for notice in ("LICENSE", "docs/THIRD-PARTY-NOTICES.md")]
     inputs += ([ROOT / "Grit.h"] if name == "snake" else [ROOT / f"demos/{name}/visual.h"])
     return digest(json.dumps(demo_flags(name)).encode() + b"".join(path.read_bytes() for path in inputs))
 
@@ -138,7 +138,7 @@ def main():
                 shell = shell.replace("__ARGUMENTS__", "[]" if name == "snake" else "(matchMedia('(prefers-reduced-motion: reduce)').matches?['--paused']:[])")
                 (directory / "run.html").write_text(shell)
                 shutil.copyfile(ROOT / "LICENSE", directory / "LICENSE.txt")
-                shutil.copyfile(ROOT / "THIRD-PARTY-NOTICES.md",
+                shutil.copyfile(ROOT / "docs/THIRD-PARTY-NOTICES.md",
                                 directory / "THIRD-PARTY-NOTICES.md")
                 runtime_license = Path(compiler).resolve().parent / "LICENSE"
                 if runtime_license.is_file():

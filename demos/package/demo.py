@@ -76,7 +76,7 @@ def main():
         (package / "bin").mkdir()
         for name in (*LIBRARIES, "Poof"):
             shutil.copy2(ROOT / f"{name}.h", package / "include")
-        for notice in ("LICENSE", "THIRD-PARTY-NOTICES.md"):
+        for notice in ("LICENSE", "docs/THIRD-PARTY-NOTICES.md"):
             shutil.copy2(ROOT / notice, package)
         compile_objects(package, compiler)
         relocated = Path(tmp) / "relocated"

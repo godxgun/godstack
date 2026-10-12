@@ -35,7 +35,7 @@ class LicensingTests(unittest.TestCase):
         self.assertIn("Copyright (c) 2017 Sean Barrett", stb)
         self.assertIn("ALTERNATIVE A - MIT License", stb)
         self.assertIn("ALTERNATIVE B - Public Domain", stb)
-        audit = (ROOT / "THIRD-PARTY-NOTICES.md").read_text()
+        audit = (ROOT / "docs/THIRD-PARTY-NOTICES.md").read_text()
         for asset in ("Blue Screen Personal Use.ttf", "teapot.h", "wal.jpg"):
             self.assertIn(asset, audit)
 

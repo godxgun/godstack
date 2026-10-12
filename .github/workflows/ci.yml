@@ -104,7 +104,7 @@ jobs:
       - name: build driver
         run: gcc -o build build.c
       - name: public API demos
-        run: env -u DISPLAY -u WAYLAND_DISPLAY ./build cpu run
+        run: ./build demo peak && env -u DISPLAY -u WAYLAND_DISPLAY ./demos/peak/demo
 
   macos:
     runs-on: macos-latest
@@ -119,7 +119,7 @@ jobs:
       - name: build driver
         run: cc -o build build.c
       - name: public API demos
-        run: ./build cpu run
+        run: ./build demo peak && ./demos/peak/demo
       - name: package consumer demo
         run: python3 demos/package/demo.py
 
@@ -144,7 +144,7 @@ jobs:
       - name: build driver
         run: gcc -o build build.c
       - name: public API demos
-        run: ./build cpu run
+        run: ./build demo peak && ./demos/peak/demo
       - name: package consumer demo
         env:
           CC: gcc
