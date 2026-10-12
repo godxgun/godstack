@@ -87,6 +87,13 @@
 #endif
 #endif
 
+/* Apple SDK headers hide BSD types (u_int, CMSG_SPACE) under strict -std=c99. */
+#if defined(__APPLE__) || defined(__MACH__)
+#ifndef _DARWIN_C_SOURCE
+#define _DARWIN_C_SOURCE
+#endif
+#endif
+
 #define PEAK_MAJOR "1"
 #define PEAK_MINOR "0"
 #define PEAK_PATCH "0"
