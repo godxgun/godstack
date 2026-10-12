@@ -37,6 +37,11 @@ int main(void)
 '''
 
 
+# AppKit is Objective-C; -x is positional, so it must precede the source only.
+OBJC = ["-x", "objective-c"] if sys.platform == "darwin" else []
+RESET = ["-x", "none"] if sys.platform == "darwin" else []
+
+
 def host_libraries():
     if sys.platform == "win32":
         return ["-lvulkan-1", "-luser32", "-lgdi32", "-lshell32", "-lole32",
@@ -58,7 +63,7 @@ def compile_objects(package, compiler):
         source = package / f"{name}.c"
         source.write_text(f'#define {name.upper()}_IMPLEMENTATION\n#include "{name}.h"\n')
         obj = package / "bin" / f"{name}.o"
-        subprocess.run([*compiler, "-c", str(source), "-I", str(package / "include"),
+        subprocess.run([*compiler, *OBJC, "-c", str(source), "-I", str(package / "include"),
                         "-o", str(obj)], cwd=package, check=True)
         objects.append(obj)
     return objects
@@ -85,7 +90,7 @@ def main():
         source.write_text(CONSUMER)
         executable = relocated / "bin" / ("consumer.exe" if sys.platform == "win32" else "consumer")
         objects = [relocated / "bin" / f"{name}.o" for name in LIBRARIES]
-        subprocess.run([*compiler, str(source), "-I", str(relocated / "include"),
+        subprocess.run([*compiler, *OBJC, str(source), *RESET, "-I", str(relocated / "include"),
                         *map(str, objects), *libraries, "-o", str(executable)],
                        cwd=relocated, check=True)
         for obj in objects:
