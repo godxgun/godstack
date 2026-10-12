@@ -39,7 +39,7 @@ typedef struct Docs {
 
 static const char *const docs_default[] = {
     "Cast.h", "Cool.h", "Fuse.h",  "Grit.h", "Peak.h",
-    "Poof.h", "Rend.h", "Rend2.h", "Type.h", "Wire.h",
+    "Poof.h", "Rend.h", "Type.h", "Wire.h",
 };
 
 static int parse_header_line(const char *line, char *func_name, char *func_decl,

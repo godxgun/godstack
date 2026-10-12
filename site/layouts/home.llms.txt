@@ -1,0 +1,26 @@
+# {{ site.Title }}
+
+> {{ site.Params.description }}
+
+Godstack is an MIT-licensed collection of single-header C libraries. Headers and their opening design notes are the API source of truth; this site supplies public guides and API references. Read the relevant library's limitations before adoption. Platform and graphics libraries may require native SDKs; the CPU-only getting-started example does not.
+
+## Start here
+
+- [Getting started]({{ "guides/getting-started/" | absURL }}): compile a minimal program.
+- [Libraries]({{ "docs/" | absURL }}): choose a library.
+- [AI instructions]({{ "ai/" | absURL }}): prompts for Codex, Claude, and Cursor.
+- [Compact setup]({{ "llms-small.txt" | absURL }}).
+- [Complete public documentation]({{ "llms-full.txt" | absURL }}).
+- [Catalog]({{ "catalog.json" | absURL }}): IDs, descriptions, tags, HTML and Markdown URLs.
+- [Project skill]({{ "agent/SKILL.md" | absURL }}).
+- [AGENTS.md snippet]({{ "agent/AGENTS.md" | absURL }}).
+- [Source]({{ site.Params.github }}).
+- [License]({{ "license/" | absURL }}).
+
+## Public documentation
+{{ range partial "public-pages.html" . }}
+- [{{ .Title }}]({{ .Permalink }}): {{ .Description }}{{ with .OutputFormats.Get "Markdown" }} ([Markdown]({{ .Permalink }})){{ end }}
+{{ end }}
+## Integration boundary
+
+These are static, public documentation resources. There is no hosted MCP server or agent execution backend. A future MCP adapter could expose catalog lookup and document retrieval from these public files; it would need its own implementation and deployment.

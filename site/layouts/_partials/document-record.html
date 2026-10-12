@@ -1,0 +1,6 @@
+{{- $markdown := "" -}}
+{{- with .OutputFormats.Get "Markdown" -}}{{- $markdown = .RelPermalink -}}{{- end -}}
+{{- $id := .Params.id | default (printf "%s/%s" .Section .File.ContentBaseName) -}}
+{{- $category := .Params.category | default .Section -}}
+{{- $description := .Description | default (.Summary | plainify | truncate 180) -}}
+{{- return (dict "id" $id "title" .Title "description" $description "categories" (slice $category) "category" $category "product" (.Params.product | default "Godstack") "tags" (.Params.tags | default (slice)) "url" .RelPermalink "markdown_url" $markdown "access" (.Params.access | default "free")) -}}

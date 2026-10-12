@@ -1,0 +1,6 @@
+{{- $allowed := in (slice "docs" "guides" "symbols" "demos") .Section -}}
+{{- /* Top-level content files have an empty Section, not their filename. */ -}}
+{{- if and (eq .Section "") (in (slice "ai" "license") .File.ContentBaseName) -}}
+  {{- $allowed = true -}}
+{{- end -}}
+{{- return (and $allowed (not .Draft) (not .Params.private) (ne .Params.access "private")) -}}

@@ -1,0 +1,1513 @@
+<!doctype html>
+<html lang="en" class="no-js">
+    <head>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+        <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark">
+        <script>document.documentElement.classList.replace('no-js','js');</script>
+        <title>Peak symbols · Godstack</title><meta name="description" content="Types, macros, and functions declared by Peak.h."><link rel="canonical" href="https://example.org/symbols/peak/">
+        
+        <link rel="stylesheet" href="/css/main.a87a5ada49af1cc103390b31f69448f8f98137dea361366aade0bedb9598ba04.css" integrity="sha256-qHpa2kmvHMEDOQsx9pRI&#43;PmBN96jYTZqreC&#43;25WYugQ=">
+    </head>
+    <body>
+        
+        <div class="heaven-scenery" aria-hidden="true"><img src="/images/ocean-sky_hu_f78afa269ada3c1a.webp" alt="" fetchpriority="high"><canvas hidden></canvas></div>
+        <a class="skip-link" href="#main">Skip to content</a>
+        <header class="topbar">
+            <a class="brand heaven-button" href="/">Godstack</a>
+            
+            <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="sidebar">Menu</button>
+            
+            <nav class="topnav" aria-label="Main navigation">
+                
+                    <a href="/docs/">Docs</a>
+                    
+
+                
+                    <a href="/demos/">Demos</a>
+                    
+
+                
+                    <a href="/symbols/">Symbols</a>
+                    
+
+                <a href="/ai/">AI</a><a href="https://github.com/godxgun/godstack">GitHub</a></nav><div class="top-actions"><button type="button" class="search-open" aria-haspopup="dialog" aria-controls="site-search">Search <kbd>⌘ K</kbd></button><noscript><a class="noscript-search" href="/docs/">Browse docs</a></noscript></div></header>
+        
+        <div class="site-layout">
+            
+<nav class="sidebar" id="sidebar" aria-label="Documentation and guides">
+
+
+    
+    
+    <h2 class="nav-label">Guides</h2>
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/guides/getting-started/">Getting Started</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/guides/getting-started/#peak---platform-layer">Peak - Platform Layer</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/guides/getting-started/#poof---a-build-system">Poof - A Build System</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+
+    
+    
+    
+    
+    <h2 class="nav-label">Build</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/poof/">Poof</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/poof/#running-a-command">Running a Command</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#compiling-a-program">Compiling a Program</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#platform-flags-and-cross-targets">Platform Flags and Cross Targets</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#building-in-parallel">Building in Parallel</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#skipping-up-to-date-work">Skipping Up-to-Date Work</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#rebuilding-the-build-script">Rebuilding the Build Script</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#printing-status">Printing Status</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">Core Libraries</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/peak/">Peak</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/peak/#opening-a-window">Opening a Window</a>
+    <ul>
+
+  
+  <li>
+    <a href="/docs/peak/#a-basic-event-loop">A Basic Event Loop</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#with-the-callback-api">With The Callback API</a>
+    
+  </li>
+  
+
+</ul>
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#using-the-filesystem">Using the Filesystem</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#spawning-a-tty">Spawning a TTY</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#memory-mapped-circular-ring-buffer">Memory Mapped Circular Ring Buffer</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#streaming-audio">Streaming Audio</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/rend/">Rend</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/rend/#creating-a-renderer">Creating a Renderer</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/rend/#creating-your-first-pipeline">Creating your first Pipeline</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/rend/#drawing-a-triangle">Drawing a triangle</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/rend/#drawing-a-mesh">Drawing a Mesh</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/fuse/">Fuse</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/fuse/#building-a-frame">Building a Frame</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#drawing-the-commands">Drawing the Commands</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#laying-out-with-classes">Laying Out with Classes</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#identifying-widgets">Identifying Widgets</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#sliders-scrolling-and-text-input">Sliders, Scrolling and Text Input</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#docking-windows">Docking Windows</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#handling-errors">Handling Errors</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/grit/">Grit</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/grit/#allocating-from-an-arena">Allocating from an Arena</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#stack-allocation">Stack Allocation</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#pools-of-equal-sized-objects">Pools of Equal-Sized Objects</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#dynamic-arrays-and-hash-maps">Dynamic Arrays and Hash Maps</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#random-numbers">Random Numbers</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#vectors-and-matrices">Vectors and Matrices</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#drawing-pixels">Drawing Pixels</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/type/">Type</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/type/#creating-a-context">Creating a Context</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#rendering-text">Rendering Text</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#scratch-memory">Scratch Memory</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#uploading-the-atlas">Uploading the Atlas</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#faces-styles-and-fallbacks">Faces, Styles and Fallbacks</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#shaped-text">Shaped Text</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#lower-level-building-blocks">Lower-Level Building Blocks</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">Utilities</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/cast/">Cast</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/cast/#tokenizing-source">Tokenizing Source</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#reading-tokens">Reading Tokens</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#parsing-declarations">Parsing Declarations</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#handling-unparsable-input">Handling Unparsable Input</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#sizing-and-reusing-memory">Sizing and Reusing Memory</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">Web</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/cool/">Cool</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/cool/#writing-text">Writing Text</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#writing-markup">Writing Markup</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#choosing-the-output-stream">Choosing the Output Stream</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#rendering-markdown">Rendering Markdown</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#compiling-templates">Compiling Templates</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/wire/">Wire</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/wire/#serving-a-response">Serving a Response</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#routing-requests">Routing Requests</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#serving-static-files">Serving Static Files</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#partial-responses-for-htmx">Partial Responses for htmx</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#running-your-own-loop">Running Your Own Loop</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#limits">Limits</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">API references</h2>
+
+    <ul class="sidebar-list">
+        <li><a href="/symbols/">Symbols</a></li>
+    </ul>
+
+    <div class="sidebar-footer">
+        <a href="/docs/">All libraries</a>
+        <a href="/ai/">Coding agent guide</a>
+    </div>
+</nav>
+
+            <main id="main" tabindex="-1">
+                
+
+  
+  <div class="reading-layout"><article class="article symbol-reference"><div class="article-meta"><a href="/symbols/">Symbols</a><span> / Symbols</span><a class="source-link" href="/symbols/peak.md">View Markdown</a></div>
+  
+  
+  <aside class="notice symbol-guide-hint"><strong>Symbols</strong> — per-function reference. For usage and setup, see the <a href="/docs/peak/">Peak library guide</a>.</aside>
+  <div class="prose"><h1 id="peak-symbols">Peak symbols<a class="heading-anchor" href="#peak-symbols" aria-label="Link to Peak symbols">#</a></h1>
+<p>For setup and API workflows, read the <a href="/docs/peak/">Peak guide</a>
+. This vault lists individual declarations; it is not a tutorial.</p>
+<h2 id="api-reference">API reference<a class="heading-anchor" href="#api-reference" aria-label="Link to API reference">#</a></h2>
+<p>Generated from <code>Peak.h</code> by <code>tools/generate_docs.py</code>. Edit the header comments, not this section.</p>
+<p>Declarations from all platform branches are listed; this is not a preprocessed API.</p>
+<h3 id="types">Types<a class="heading-anchor" href="#types" aria-label="Link to Types">#</a></h3>
+<section class="symbol-card"><h4 id="peak_handle">PEAK_HANDLE<a class="heading-anchor" href="#peak_handle" aria-label="Link to PEAK_HANDLE">#</a></h4>
+<p>Source: <code>Peak.h:208</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="kt">void</span> <span class="o">*</span><span class="n">PEAK_HANDLE</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_handle-1">PEAK_HANDLE<a class="heading-anchor" href="#peak_handle-1" aria-label="Link to PEAK_HANDLE">#</a></h4>
+<p>Source: <code>Peak.h:210</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="kt">int</span> <span class="n">PEAK_HANDLE</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peakctx">PeakCtx<a class="heading-anchor" href="#peakctx" aria-label="Link to PeakCtx">#</a></h4>
+<p>Source: <code>Peak.h:222</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">PeakCtx</span> <span class="n">PeakCtx</span><span class="p">;</span>
+</span></span></code></pre></div><p>█     █
+█
+█ ███ █ ███
+█ █ █ █  █
+█ █ █ █  █
+█ █ █ █  ██</p>
+</section><section class="symbol-card"><h4 id="peakkeymod">PeakKeyMod<a class="heading-anchor" href="#peakkeymod" aria-label="Link to PeakKeyMod">#</a></h4>
+<p>Source: <code>Peak.h:235</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">enum</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEYMOD_NONE</span>  <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEYMOD_SHIFT</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">0</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEYMOD_CTRL</span>  <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEYMOD_ALT</span>   <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">2</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEYMOD_CAPS</span>  <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">3</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEYMOD_SUPER</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">4</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">PeakKeyMod</span><span class="p">;</span>
+</span></span></code></pre></div><p>█
+███ █ █ ███ ███ ███
+███ █ █ ███ █ █  █
+█   █ █ █   █ █  █
+███  █  ███ █ █  ██</p>
+</section><section class="symbol-card"><h4 id="peakkeycode">PeakKeyCode<a class="heading-anchor" href="#peakkeycode" aria-label="Link to PeakKeyCode">#</a></h4>
+<p>Source: <code>Peak.h:244</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">enum</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_UNKNOWN</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_UP</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_DOWN</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_LEFT</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_RIGHT</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_SPACE</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_ESCAPE</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_ENTER</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_BACKSPACE</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_TAB</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_DELETE</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_INSERT</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_HOME</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_END</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_PAGEUP</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_PAGEDOWN</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="cm">/* F Keys */</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_F1</span><span class="p">,</span> <span class="n">PEAK_KEY_F2</span><span class="p">,</span> <span class="n">PEAK_KEY_F3</span><span class="p">,</span> <span class="n">PEAK_KEY_F4</span><span class="p">,</span> <span class="n">PEAK_KEY_F5</span><span class="p">,</span> <span class="n">PEAK_KEY_F6</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_F7</span><span class="p">,</span> <span class="n">PEAK_KEY_F8</span><span class="p">,</span> <span class="n">PEAK_KEY_F9</span><span class="p">,</span> <span class="n">PEAK_KEY_F10</span><span class="p">,</span> <span class="n">PEAK_KEY_F11</span><span class="p">,</span> <span class="n">PEAK_KEY_F12</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="cm">/* Numbers */</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_0</span> <span class="o">=</span> <span class="sc">&#39;0&#39;</span><span class="p">,</span> <span class="c1">// 48
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_1</span> <span class="o">=</span> <span class="sc">&#39;1&#39;</span><span class="p">,</span> <span class="c1">// 49
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_2</span> <span class="o">=</span> <span class="sc">&#39;2&#39;</span><span class="p">,</span> <span class="c1">// 50
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_3</span> <span class="o">=</span> <span class="sc">&#39;3&#39;</span><span class="p">,</span> <span class="c1">// 51
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_4</span> <span class="o">=</span> <span class="sc">&#39;4&#39;</span><span class="p">,</span> <span class="c1">// 52
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_5</span> <span class="o">=</span> <span class="sc">&#39;5&#39;</span><span class="p">,</span> <span class="c1">// 53
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_6</span> <span class="o">=</span> <span class="sc">&#39;6&#39;</span><span class="p">,</span> <span class="c1">// 54
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_7</span> <span class="o">=</span> <span class="sc">&#39;7&#39;</span><span class="p">,</span> <span class="c1">// 55
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_8</span> <span class="o">=</span> <span class="sc">&#39;8&#39;</span><span class="p">,</span> <span class="c1">// 56
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_9</span> <span class="o">=</span> <span class="sc">&#39;9&#39;</span><span class="p">,</span> <span class="c1">// 57
+</span></span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="cm">/* [58;64] */</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="cm">/* Letters */</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_A</span> <span class="o">=</span> <span class="sc">&#39;A&#39;</span><span class="p">,</span> <span class="c1">// 65
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_B</span> <span class="o">=</span> <span class="sc">&#39;B&#39;</span><span class="p">,</span> <span class="c1">// 66
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_C</span> <span class="o">=</span> <span class="sc">&#39;C&#39;</span><span class="p">,</span> <span class="c1">// 67
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_D</span> <span class="o">=</span> <span class="sc">&#39;D&#39;</span><span class="p">,</span> <span class="c1">// 68
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_E</span> <span class="o">=</span> <span class="sc">&#39;E&#39;</span><span class="p">,</span> <span class="c1">// 69
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_F</span> <span class="o">=</span> <span class="sc">&#39;F&#39;</span><span class="p">,</span> <span class="c1">// 70
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_G</span> <span class="o">=</span> <span class="sc">&#39;G&#39;</span><span class="p">,</span> <span class="c1">// 71
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_H</span> <span class="o">=</span> <span class="sc">&#39;H&#39;</span><span class="p">,</span> <span class="c1">// 72
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_I</span> <span class="o">=</span> <span class="sc">&#39;I&#39;</span><span class="p">,</span> <span class="c1">// 73
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_J</span> <span class="o">=</span> <span class="sc">&#39;J&#39;</span><span class="p">,</span> <span class="c1">// 74
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_K</span> <span class="o">=</span> <span class="sc">&#39;K&#39;</span><span class="p">,</span> <span class="c1">// 75
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_L</span> <span class="o">=</span> <span class="sc">&#39;L&#39;</span><span class="p">,</span> <span class="c1">// 76
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_M</span> <span class="o">=</span> <span class="sc">&#39;M&#39;</span><span class="p">,</span> <span class="c1">// 77
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_N</span> <span class="o">=</span> <span class="sc">&#39;N&#39;</span><span class="p">,</span> <span class="c1">// 78
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_O</span> <span class="o">=</span> <span class="sc">&#39;O&#39;</span><span class="p">,</span> <span class="c1">// 79
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_P</span> <span class="o">=</span> <span class="sc">&#39;P&#39;</span><span class="p">,</span> <span class="c1">// 80
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_Q</span> <span class="o">=</span> <span class="sc">&#39;Q&#39;</span><span class="p">,</span> <span class="c1">// 81
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_R</span> <span class="o">=</span> <span class="sc">&#39;R&#39;</span><span class="p">,</span> <span class="c1">// 82
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_S</span> <span class="o">=</span> <span class="sc">&#39;S&#39;</span><span class="p">,</span> <span class="c1">// 83
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_T</span> <span class="o">=</span> <span class="sc">&#39;T&#39;</span><span class="p">,</span> <span class="c1">// 84
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_U</span> <span class="o">=</span> <span class="sc">&#39;U&#39;</span><span class="p">,</span> <span class="c1">// 85
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_V</span> <span class="o">=</span> <span class="sc">&#39;V&#39;</span><span class="p">,</span> <span class="c1">// 86
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_W</span> <span class="o">=</span> <span class="sc">&#39;W&#39;</span><span class="p">,</span> <span class="c1">// 87
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_X</span> <span class="o">=</span> <span class="sc">&#39;X&#39;</span><span class="p">,</span> <span class="c1">// 88
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_Y</span> <span class="o">=</span> <span class="sc">&#39;Y&#39;</span><span class="p">,</span> <span class="c1">// 89
+</span></span></span><span class="line"><span class="cl">    <span class="n">PEAK_KEY_Z</span> <span class="o">=</span> <span class="sc">&#39;Z&#39;</span><span class="p">,</span> <span class="c1">// 90
+</span></span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">PeakKeyCode</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peakclip">PeakClip<a class="heading-anchor" href="#peakclip" aria-label="Link to PeakClip">#</a></h4>
+<p>Source: <code>Peak.h:309</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">enum</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_CLIP_CLIPBOARD</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="cm">/* Ctrl-C/V, OSC 52 */</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_CLIP_PRIMARY</span><span class="p">,</span>       <span class="cm">/* mouse select, middle paste */</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">PeakClip</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peakeventtype">PeakEventType<a class="heading-anchor" href="#peakeventtype" aria-label="Link to PeakEventType">#</a></h4>
+<p>Source: <code>Peak.h:314</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">enum</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_EVENT_NONE</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_EVENT_KEY_DOWN</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_EVENT_KEY_UP</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_EVENT_WINDOW_CLOSE</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_EVENT_WINDOW_RESIZE</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_EVENT_POINTER</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_EVENT_POINTER_CONNECTED</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_EVENT_POINTER_DISCONNECTED</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_EVENT_CLIP</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_EVENT_TEXT</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_EVENT_DROP</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_EVENT_FOCUS</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_EVENT_EXPOSE</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_EVENT_LAST</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">PeakEventType</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peakpointerstate">PeakPointerState<a class="heading-anchor" href="#peakpointerstate" aria-label="Link to PeakPointerState">#</a></h4>
+<p>Source: <code>Peak.h:331</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">enum</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_POINTER_MOVED</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_POINTER_PRESSED</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_POINTER_RELEASED</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">PeakPointerState</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peakpointertype">PeakPointerType<a class="heading-anchor" href="#peakpointertype" aria-label="Link to PeakPointerType">#</a></h4>
+<p>Source: <code>Peak.h:337</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">enum</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_POINTER_LEFT</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_POINTER_RIGHT</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_POINTER_MIDDLE</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_POINTER_TOUCH</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_POINTER_WHEEL_UP</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_POINTER_WHEEL_DOWN</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">PeakPointerType</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peakevent">PeakEvent<a class="heading-anchor" href="#peakevent" aria-label="Link to PeakEvent">#</a></h4>
+<p>Source: <code>Peak.h:346</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PeakEventType</span> <span class="n">type</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">union</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">struct</span> <span class="p">{</span> <span class="n">PeakKeyCode</span> <span class="n">key</span><span class="p">;</span> <span class="n">PeakKeyMod</span> <span class="n">mod</span><span class="p">;</span> <span class="kt">uint32_t</span> <span class="n">code</span><span class="p">;</span> <span class="p">}</span> <span class="n">key</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="k">struct</span> <span class="p">{</span> <span class="kt">uint32_t</span> <span class="n">width</span><span class="p">,</span> <span class="n">height</span><span class="p">;</span> <span class="p">}</span> <span class="n">resize</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="k">struct</span> <span class="p">{</span> <span class="n">PeakPointerState</span> <span class="n">state</span><span class="p">;</span> <span class="n">PeakPointerType</span> <span class="n">type</span><span class="p">;</span> <span class="kt">float</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">;</span> <span class="n">PeakKeyMod</span> <span class="n">mod</span><span class="p">;</span> <span class="p">}</span> <span class="n">pointer</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="k">struct</span> <span class="p">{</span> <span class="n">PeakClip</span> <span class="n">which</span><span class="p">;</span> <span class="kt">size_t</span> <span class="n">n</span><span class="p">;</span> <span class="p">}</span> <span class="n">clip</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="k">struct</span> <span class="p">{</span> <span class="kt">size_t</span> <span class="n">n</span><span class="p">;</span> <span class="p">}</span> <span class="n">text</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="k">struct</span> <span class="p">{</span> <span class="kt">size_t</span> <span class="n">n</span><span class="p">;</span> <span class="p">}</span> <span class="n">drop</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="k">struct</span> <span class="p">{</span> <span class="kt">int</span> <span class="n">on</span><span class="p">;</span> <span class="p">}</span> <span class="n">focus</span><span class="p">;</span> <span class="cm">/* 1 gained, 0 lost */</span>
+</span></span><span class="line"><span class="cl">    <span class="p">};</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">PeakEvent</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peakwindowflags">PeakWindowFlags<a class="heading-anchor" href="#peakwindowflags" aria-label="Link to PeakWindowFlags">#</a></h4>
+<p>Source: <code>Peak.h:366</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">enum</span> <span class="n">PeakWindowFlags</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_WINDOW_TRANSPARENT</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">0</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_WINDOW_FULLSCREEN</span>  <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>█       █
+█
+█ █ █ █ ███ ███ ███ █ █ █
+█ █ █ █ █ █ █ █ █ █ █ █ █
+█ █ █ █ █ █ █ █ █ █ █ █ █
+█ █  █ █ █ ███ ███  █ █</p>
+</section><section class="symbol-card"><h4 id="peakwindowinternal">PeakWindowInternal<a class="heading-anchor" href="#peakwindowinternal" aria-label="Link to PeakWindowInternal">#</a></h4>
+<p>Source: <code>Peak.h:371</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="kt">peak_window_internal_t</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">void</span> <span class="o">*</span><span class="n">w</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">PeakWindowInternal</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="tick">tick<a class="heading-anchor" href="#tick" aria-label="Link to tick">#</a></h4>
+<p>Source: <code>Peak.h:375</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">PeakWindow</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PeakCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">uint64_t</span> <span class="n">generation</span><span class="p">;</span> <span class="cm">/* private lifetime token; do not modify */</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PeakWindowInternal</span> <span class="n">internal</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="p">(</span><span class="o">*</span><span class="n">tick</span><span class="p">)(</span><span class="k">struct</span> <span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">userdata</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">void</span> <span class="o">*</span><span class="n">userdata</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">uint32_t</span> <span class="o">*</span><span class="n">buffer</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">uint32_t</span> <span class="n">width</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">uint32_t</span> <span class="n">height</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">uint32_t</span> <span class="n">bufsize</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">uint16_t</span> <span class="o">*</span><span class="n">audio</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">running</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">PeakWindow</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peakiocode">PeakIOCode<a class="heading-anchor" href="#peakiocode" aria-label="Link to PeakIOCode">#</a></h4>
+<p>Source: <code>Peak.h:511</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">enum</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_IO_OK</span><span class="p">,</span> <span class="n">PEAK_IO_INVALID</span><span class="p">,</span> <span class="n">PEAK_IO_LIMIT</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_IO_NOT_REGULAR</span><span class="p">,</span> <span class="n">PEAK_IO_UNSUPPORTED</span><span class="p">,</span> <span class="n">PEAK_IO_SYSTEM</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">PeakIOCode</span><span class="p">;</span>
+</span></span></code></pre></div><p>Safe I/O (independent of peak_init): Linux openat2 only; other hosts and
+kernels lacking the required resolution flags return PEAK_IO_UNSUPPORTED.
+No fallback to ordinary path-based I/O. Native Windows/macOS qualification
+is pending. Legacy peak_file_* / peak_filesystem_* retain their semantics.</p>
+<p>Ownership: initialize caller storage with *_INIT before first use. Successful
+opens/begin fill an empty output; failures leave it empty. These are owning,
+non-copyable values, not borrowed descriptors. Do not edit their fields,
+close their native handles yourself, or use them concurrently with close.
+Close consumes a handle even on error; commit/abort consume both stage
+handles on every outcome for a live stage. Separate objects may be used
+concurrently; operations on a stage must be externally serialized.</p>
+<p>Paths: root_open takes an absolute path (&quot;/&quot; is allowed); all *_at/open/begin
+paths are nonempty normalized relative paths. No empty, dot, dot-dot, or
+symlink components, trailing slash, or absolute relative paths are allowed.
+Limits: 4095 path bytes, 255 bytes/component, 128 components, byte limits
+representable as a native nonnegative file offset. No heap allocations.
+Every relative lookup is kernel-resolved beneath its owning directory
+handle with RESOLVE_BENEATH | RESOLVE_NO_SYMLINKS | RESOLVE_NO_MAGICLINKS.
+Mount points/hard links are not rejected: these are not authorization,
+provenance, or immutable-snapshot primitives. Files are verified regular.</p>
+<p>Handles pin directory/file objects, not pathnames. Root or parent rename/
+replacement does not redirect an existing handle. A retained directory may
+be moved outside the original tree; later operations still target that
+object, not the current object at its former path. Reads are bounded but
+not snapshots: uncooperative in-place writers can change bytes/size during
+a read. size is only the initial observed file size; hash/validation policy
+and coordination with writers belong to the caller.</p>
+<p>Staging: destination&rsquo;s parent MUST be cooperatively/exclusively controlled
+against uncooperative directory writers (including same-user writers).
+A named stage is not safe against such writers swapping/unlinking its name
+between creation, rename, and cleanup. temporary_leaf is caller-selected,
+single-component and distinct from destination&rsquo;s leaf; O_EXCL never reuses
+an existing entry. Use an appropriately unpredictable/reserved name and
+authorize/serialize the destination yourself. The stage is visible by its
+temporary name (mode 0600), so callers must exclude stages from asset lookup.
+Commit atomically replaces a non-directory destination entry via renameat;
+it does not follow a destination symlink. No no-clobber/version checks,
+metadata preservation, backups, or multi-file/bundle transaction policy.
+Previous-file preservation on failure applies only within the cooperative
+contract; external races are not covered. All stages are same-parent.</p>
+<p>Bounded read is positional, reports partial progress on failure and EOF via
+read_bytes &lt; bytes. It rejects a currently observed size above limit, but
+cannot detect every transient growth or mutation. Stage writes are sequential
+and bounded in aggregate; any invalid/failed write poisons publication.
+Successful commit without durability only establishes publication. With
+FILE_AND_DIRECTORY, fsync(stage) precedes rename and fsync(parent) follows;
+durable=1 means both succeeded, subject to filesystem/hardware guarantees;
+durable=0 means durability was not established, not that bytes were lost.
+This does not fsync ancestor directories or establish durability of newly
+created directory hierarchies. Byte bounds are not elapsed-time deadlines.
+A post-rename error NEVER means unpublished: inspect published separately.
+published is 0 (not attempted/not published), 1 (rename succeeded), or -1
+(rename failed ambiguously; e.g. a lost remote FS reply). Destination type/
+nonempty-directory errors are definite failures within the cooperative
+contract; other rename errors are conservatively reported as uncertain.
+Do not interpret -1 as false or true; recovery must inspect/coordinate the
+destination. On uncertain publication the temporary name is not removed.
+Cleanup reports unlink/close failures independently; a failed pre-publication
+cleanup may leave the temporary name for caller-managed recovery. No rollback
+after publication. Cleanup success does not establish crash-durable removal
+of a temporary name. Invalid finish arguments leave the stage untouched.</p>
+</section><section class="symbol-card"><h4 id="peakioresult">PeakIOResult<a class="heading-anchor" href="#peakioresult" aria-label="Link to PeakIOResult">#</a></h4>
+<p>Source: <code>Peak.h:515</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="p">{</span> <span class="n">PeakIOCode</span> <span class="n">code</span><span class="p">;</span> <span class="kt">int</span> <span class="n">os_error</span><span class="p">;</span> <span class="p">}</span> <span class="n">PeakIOResult</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peakiodurability">PeakIODurability<a class="heading-anchor" href="#peakiodurability" aria-label="Link to PeakIODurability">#</a></h4>
+<p>Source: <code>Peak.h:516</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">enum</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_IO_DURABILITY_NONE</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_IO_DURABILITY_FILE_AND_DIRECTORY</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">PeakIODurability</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peakiopublishresult">PeakIOPublishResult<a class="heading-anchor" href="#peakiopublishresult" aria-label="Link to PeakIOPublishResult">#</a></h4>
+<p>Source: <code>Peak.h:520</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PeakIOResult</span> <span class="n">operation</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">published</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">durable</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PeakIOResult</span> <span class="n">cleanup</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">PeakIOPublishResult</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peakioroot">PeakIORoot<a class="heading-anchor" href="#peakioroot" aria-label="Link to PeakIORoot">#</a></h4>
+<p>Source: <code>Peak.h:526</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="p">{</span> <span class="n">PEAK_HANDLE</span> <span class="n">handle</span><span class="p">;</span> <span class="p">}</span> <span class="n">PeakIORoot</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peakiofile">PeakIOFile<a class="heading-anchor" href="#peakiofile" aria-label="Link to PeakIOFile">#</a></h4>
+<p>Source: <code>Peak.h:527</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_HANDLE</span> <span class="n">handle</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">uint64_t</span> <span class="n">size</span><span class="p">,</span> <span class="n">limit</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">PeakIOFile</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peakiostage">PeakIOStage<a class="heading-anchor" href="#peakiostage" aria-label="Link to PeakIOStage">#</a></h4>
+<p>Source: <code>Peak.h:531</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_HANDLE</span> <span class="n">handle</span><span class="p">,</span> <span class="n">parent</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">uint64_t</span> <span class="n">written</span><span class="p">,</span> <span class="n">limit</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">failed</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">char</span> <span class="n">destination</span><span class="p">[</span><span class="mi">256</span><span class="p">],</span> <span class="n">temporary</span><span class="p">[</span><span class="mi">256</span><span class="p">];</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">PeakIOStage</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peakproc">PeakProc<a class="heading-anchor" href="#peakproc" aria-label="Link to PeakProc">#</a></h4>
+<p>Source: <code>Peak.h:583</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">PeakProc</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PEAK_HANDLE</span> <span class="n">fd</span><span class="p">;</span> <span class="cm">/* PEAK_HANDLE_INVALID if closed / failed */</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">pid</span><span class="p">;</span>        <span class="cm">/* 0 if none */</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">PeakProc</span><span class="p">;</span>
+</span></span></code></pre></div><p>███ ███ ███ ███
+█ █ █   █ █ █
+█ █ █   █ █ █
+███ █   ███ ███
+█
+█</p>
+</section><section class="symbol-card"><h4 id="peakloglevel">PeakLogLevel<a class="heading-anchor" href="#peakloglevel" aria-label="Link to PeakLogLevel">#</a></h4>
+<p>Source: <code>Peak.h:703</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">enum</span> <span class="n">PeakLogLevel</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">P_LOG_LEVEL_FATAL</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">P_LOG_LEVEL_ERROR</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">P_LOG_LEVEL_WARN</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">P_LOG_LEVEL_INFO</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">P_LOG_LEVEL_DEBUG</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">P_LOG_LEVEL_TRACE</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">P_COUNT_LOG_LEVEL</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">PeakLogLevel</span><span class="p">;</span>
+</span></span></code></pre></div><p>█     █
+█     █
+███ ███ ███ █ █ ███
+█ █ ███ █ █ █ █ █ █
+█ █ █   █ █ █ █ █ █
+███ ███ ███ ███ ███
+█
+███</p>
+</section><section class="symbol-card"><h4 id="peakmemorydomain">PeakMemoryDomain<a class="heading-anchor" href="#peakmemorydomain" aria-label="Link to PeakMemoryDomain">#</a></h4>
+<p>Source: <code>Peak.h:766</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">enum</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="n">PEAK_MEMORY_NON_DRIVER</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="n">PEAK_MEMORY_DRIVER</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="n">PEAK_MEMORY_DOMAIN_COUNT</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">PeakMemoryDomain</span><span class="p">;</span>
+</span></span></code></pre></div><p>Direct instrumented backing calls only, not libc/DSO or Vulkan internals.
+Single-threaded diagnostics; counters persist for the process lifetime.
+Each domain has independent fixed live-pointer capacity (512 by default).
+Exhaustion leaves request counters valid, but live/release evidence incomplete;
+live_blocks/live_bytes/peak_bytes are not exact when tracking is incomplete.
+Unknown-pointer operations invalidate BOTH domains&rsquo; accounting: original
+ownership is unknowable. Request counts remain useful but uncertified.
+Overflow saturates counters and clears accounting_complete. No reset API.
+PEAK_DEBUG_MEMORY_TRACE (default 0) enables per-request output.</p>
+</section><section class="symbol-card"><h4 id="peakmemorystats">PeakMemoryStats<a class="heading-anchor" href="#peakmemorystats" aria-label="Link to PeakMemoryStats">#</a></h4>
+<p>Source: <code>Peak.h:772</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint64_t</span> <span class="n">allocation_requests</span><span class="p">;</span> <span class="cm">/* successful malloc/calloc/nonzero realloc */</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint64_t</span> <span class="n">failed_requests</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint64_t</span> <span class="n">realloc_requests</span><span class="p">;</span> <span class="cm">/* includes NULL, failure and zero-size release */</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint64_t</span> <span class="n">released_blocks</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint64_t</span> <span class="n">live_blocks</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint64_t</span> <span class="n">live_bytes</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint64_t</span> <span class="n">peak_bytes</span><span class="p">;</span> <span class="cm">/* requested live bytes, not allocator resident bytes */</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint64_t</span> <span class="n">domain_errors</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint64_t</span> <span class="n">unknown_operations</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">int</span> <span class="n">tracking_complete</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">int</span> <span class="n">accounting_complete</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">PeakMemoryStats</span><span class="p">;</span>
+</span></span></code></pre></div></section><h3 id="macros">Macros<a class="heading-anchor" href="#macros" aria-label="Link to Macros">#</a></h3>
+<section class="symbol-card"><h4 id="peak_aligned_alloc">peak_aligned_alloc<a class="heading-anchor" href="#peak_aligned_alloc" aria-label="Link to peak_aligned_alloc">#</a></h4>
+<p>Source: <code>Peak.h:555</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define peak_aligned_alloc(size, alignment) peak_aligned_alloc_impl((size), (alignment))
+</span></span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_aligned_free">peak_aligned_free<a class="heading-anchor" href="#peak_aligned_free" aria-label="Link to peak_aligned_free">#</a></h4>
+<p>Source: <code>Peak.h:558</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#   define peak_aligned_free(p) do { if (p) _aligned_free(p); } while (0)
+</span></span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_aligned_free-1">peak_aligned_free<a class="heading-anchor" href="#peak_aligned_free-1" aria-label="Link to peak_aligned_free">#</a></h4>
+<p>Source: <code>Peak.h:560</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#   define peak_aligned_free(p) do { if (p) free(p); } while (0)
+</span></span></span></code></pre></div></section><h3 id="functions">Functions<a class="heading-anchor" href="#functions" aria-label="Link to Functions">#</a></h3>
+<section class="symbol-card"><h4 id="peak_init">peak_init<a class="heading-anchor" href="#peak_init" aria-label="Link to peak_init">#</a></h4>
+<p>Source: <code>Peak.h:226</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="n">PeakCtx</span>   <span class="o">*</span><span class="nf">peak_init</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+</span></span></code></pre></div><p>One active runtime. Initialization is lazy with respect to the display.
+Quit(NULL), repeated/stale quit are harmless. A context expires at quit.</p>
+</section><section class="symbol-card"><h4 id="peak_quit">peak_quit<a class="heading-anchor" href="#peak_quit" aria-label="Link to peak_quit">#</a></h4>
+<p>Source: <code>Peak.h:227</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span>       <span class="nf">peak_quit</span><span class="p">(</span><span class="n">PeakCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_window_open">peak_window_open<a class="heading-anchor" href="#peak_window_open" aria-label="Link to peak_window_open">#</a></h4>
+<p>Source: <code>Peak.h:389</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="n">PeakWindow</span> <span class="nf">peak_window_open</span><span class="p">(</span><span class="n">PeakCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">name</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">width</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">height</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">flags</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_window_close">peak_window_close<a class="heading-anchor" href="#peak_window_close" aria-label="Link to peak_window_close">#</a></h4>
+<p>Source: <code>Peak.h:390</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span>       <span class="nf">peak_window_close</span><span class="p">(</span><span class="n">PeakWindow</span> <span class="o">*</span><span class="n">window</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_window_run">peak_window_run<a class="heading-anchor" href="#peak_window_run" aria-label="Link to peak_window_run">#</a></h4>
+<p>Source: <code>Peak.h:391</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span>       <span class="nf">peak_window_run</span><span class="p">(</span><span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">,</span> <span class="kt">int</span> <span class="p">(</span><span class="o">*</span><span class="n">peak_tick</span><span class="p">)(</span><span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">userdata</span><span class="p">),</span> <span class="kt">void</span> <span class="o">*</span><span class="n">userdata</span><span class="p">);</span>
+</span></span></code></pre></div><p>hijack main loop (web)</p>
+</section><section class="symbol-card"><h4 id="peak_window_epoll">peak_window_epoll<a class="heading-anchor" href="#peak_window_epoll" aria-label="Link to peak_window_epoll">#</a></h4>
+<p>Source: <code>Peak.h:392</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span>        <span class="nf">peak_window_epoll</span><span class="p">(</span><span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">,</span> <span class="n">PeakEvent</span> <span class="o">*</span><span class="n">ev</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_window_fd">peak_window_fd<a class="heading-anchor" href="#peak_window_fd" aria-label="Link to peak_window_fd">#</a></h4>
+<p>Source: <code>Peak.h:393</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span>        <span class="nf">peak_window_fd</span><span class="p">(</span><span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">);</span>
+</span></span></code></pre></div><p>display connection fd, or -1</p>
+</section><section class="symbol-card"><h4 id="peak_window_pending">peak_window_pending<a class="heading-anchor" href="#peak_window_pending" aria-label="Link to peak_window_pending">#</a></h4>
+<p>Source: <code>Peak.h:394</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span>        <span class="nf">peak_window_pending</span><span class="p">(</span><span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">);</span>
+</span></span></code></pre></div><p>queued window events; 0 if none</p>
+</section><section class="symbol-card"><h4 id="peak_window_backbuffer">peak_window_backbuffer<a class="heading-anchor" href="#peak_window_backbuffer" aria-label="Link to peak_window_backbuffer">#</a></h4>
+<p>Source: <code>Peak.h:395</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">uint32_t</span>  <span class="o">*</span><span class="nf">peak_window_backbuffer</span><span class="p">(</span><span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">,</span> <span class="kt">size_t</span> <span class="o">*</span><span class="n">width</span><span class="p">,</span> <span class="kt">size_t</span> <span class="o">*</span><span class="n">height</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_window_canvas_selector">peak_window_canvas_selector<a class="heading-anchor" href="#peak_window_canvas_selector" aria-label="Link to peak_window_canvas_selector">#</a></h4>
+<p>Source: <code>Peak.h:397</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="nf">peak_window_canvas_selector</span><span class="p">(</span><span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">);</span>
+</span></span></code></pre></div><p>Browser canvas selector borrowed until window close; NULL on native targets.</p>
+</section><section class="symbol-card"><h4 id="peak_window_clear">peak_window_clear<a class="heading-anchor" href="#peak_window_clear" aria-label="Link to peak_window_clear">#</a></h4>
+<p>Source: <code>Peak.h:398</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span>       <span class="nf">peak_window_clear</span><span class="p">(</span><span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">,</span> <span class="kt">float</span> <span class="n">r</span><span class="p">,</span> <span class="kt">float</span> <span class="n">g</span><span class="p">,</span> <span class="kt">float</span> <span class="n">b</span><span class="p">,</span> <span class="kt">float</span> <span class="n">a</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_window_present">peak_window_present<a class="heading-anchor" href="#peak_window_present" aria-label="Link to peak_window_present">#</a></h4>
+<p>Source: <code>Peak.h:399</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span>       <span class="nf">peak_window_present</span><span class="p">(</span><span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_window_set_title">peak_window_set_title<a class="heading-anchor" href="#peak_window_set_title" aria-label="Link to peak_window_set_title">#</a></h4>
+<p>Source: <code>Peak.h:400</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span>       <span class="nf">peak_window_set_title</span><span class="p">(</span><span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">name</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_window_set_class">peak_window_set_class<a class="heading-anchor" href="#peak_window_set_class" aria-label="Link to peak_window_set_class">#</a></h4>
+<p>Source: <code>Peak.h:401</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span>       <span class="nf">peak_window_set_class</span><span class="p">(</span><span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">name</span><span class="p">);</span>
+</span></span></code></pre></div><p>WM_CLASS / app_id</p>
+</section><section class="symbol-card"><h4 id="peak_window_set_opacity">peak_window_set_opacity<a class="heading-anchor" href="#peak_window_set_opacity" aria-label="Link to peak_window_set_opacity">#</a></h4>
+<p>Source: <code>Peak.h:402</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span>       <span class="nf">peak_window_set_opacity</span><span class="p">(</span><span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">,</span> <span class="kt">uint8_t</span> <span class="n">alpha</span><span class="p">);</span>
+</span></span></code></pre></div><p>0..255; no-op if the OS has none</p>
+</section><section class="symbol-card"><h4 id="peak_window_set_size">peak_window_set_size<a class="heading-anchor" href="#peak_window_set_size" aria-label="Link to peak_window_set_size">#</a></h4>
+<p>Source: <code>Peak.h:403</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span>       <span class="nf">peak_window_set_size</span><span class="p">(</span><span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">width</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">height</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_window_fullscreen">peak_window_fullscreen<a class="heading-anchor" href="#peak_window_fullscreen" aria-label="Link to peak_window_fullscreen">#</a></h4>
+<p>Source: <code>Peak.h:404</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span>       <span class="nf">peak_window_fullscreen</span><span class="p">(</span><span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">,</span> <span class="kt">int</span> <span class="n">on</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_window_cursor">peak_window_cursor<a class="heading-anchor" href="#peak_window_cursor" aria-label="Link to peak_window_cursor">#</a></h4>
+<p>Source: <code>Peak.h:405</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span>       <span class="nf">peak_window_cursor</span><span class="p">(</span><span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">,</span> <span class="kt">int</span> <span class="n">on</span><span class="p">);</span>
+</span></span></code></pre></div><p>1 show, 0 hide</p>
+</section><section class="symbol-card"><h4 id="peak_window_cursor_shape">peak_window_cursor_shape<a class="heading-anchor" href="#peak_window_cursor_shape" aria-label="Link to peak_window_cursor_shape">#</a></h4>
+<p>Source: <code>Peak.h:407</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span>       <span class="nf">peak_window_cursor_shape</span><span class="p">(</span><span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">,</span> <span class="kt">int</span> <span class="n">shape</span><span class="p">);</span>
+</span></span></code></pre></div><p>0 default, 1 text, 2 hand, 3 wait, 4 crosshair, 5 not-allowed, 6 help</p>
+</section><section class="symbol-card"><h4 id="peak_window_pointer_relative">peak_window_pointer_relative<a class="heading-anchor" href="#peak_window_pointer_relative" aria-label="Link to peak_window_pointer_relative">#</a></h4>
+<p>Source: <code>Peak.h:408</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span>       <span class="nf">peak_window_pointer_relative</span><span class="p">(</span><span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">,</span> <span class="kt">int</span> <span class="n">on</span><span class="p">);</span>
+</span></span></code></pre></div><p>1 deltas, 0 absolute</p>
+</section><section class="symbol-card"><h4 id="peak_window_scale">peak_window_scale<a class="heading-anchor" href="#peak_window_scale" aria-label="Link to peak_window_scale">#</a></h4>
+<p>Source: <code>Peak.h:409</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">float</span>      <span class="nf">peak_window_scale</span><span class="p">(</span><span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">);</span>
+</span></span></code></pre></div><p>framebuffer / window; 1.0 if unknown</p>
+</section><section class="symbol-card"><h4 id="peak_audio_start">peak_audio_start<a class="heading-anchor" href="#peak_audio_start" aria-label="Link to peak_audio_start">#</a></h4>
+<p>Source: <code>Peak.h:418</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span>  <span class="nf">peak_audio_start</span><span class="p">(</span><span class="kt">uint32_t</span> <span class="n">channels</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">rate</span><span class="p">,</span> <span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">fill</span><span class="p">)(</span><span class="kt">int16_t</span> <span class="o">*</span><span class="n">out</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">frames</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">userdata</span><span class="p">),</span> <span class="kt">void</span> <span class="o">*</span><span class="n">userdata</span><span class="p">);</span>
+</span></span></code></pre></div><p>█ █
+█
+███ █ █ ███ █ ███
+█ █ █ █ █ █ █ █
+███ █ █ █ █ █ █ █
+███ ███ ███ █ ███
+device pulls interleaved s16le</p>
+</section><section class="symbol-card"><h4 id="peak_audio_stop">peak_audio_stop<a class="heading-anchor" href="#peak_audio_stop" aria-label="Link to peak_audio_stop">#</a></h4>
+<p>Source: <code>Peak.h:419</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span> <span class="nf">peak_audio_stop</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_get_time">peak_get_time<a class="heading-anchor" href="#peak_get_time" aria-label="Link to peak_get_time">#</a></h4>
+<p>Source: <code>Peak.h:430</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">uint64_t</span> <span class="nf">peak_get_time</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+</span></span></code></pre></div><p>nanoseconds</p>
+</section><section class="symbol-card"><h4 id="peak_sleep_ns">peak_sleep_ns<a class="heading-anchor" href="#peak_sleep_ns" aria-label="Link to peak_sleep_ns">#</a></h4>
+<p>Source: <code>Peak.h:431</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span>     <span class="nf">peak_sleep_ns</span><span class="p">(</span><span class="kt">int64_t</span> <span class="n">ns</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_file_exists">peak_file_exists<a class="heading-anchor" href="#peak_file_exists" aria-label="Link to peak_file_exists">#</a></h4>
+<p>Source: <code>Peak.h:440</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span>   <span class="nf">peak_file_exists</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">path</span><span class="p">);</span>
+</span></span></code></pre></div><p>██ █ █
+█    █
+███ █ █  ███
+█  █ █  ███
+█  █ █  █
+█  █ ██ ███</p>
+</section><section class="symbol-card"><h4 id="peak_file_alloc">peak_file_alloc<a class="heading-anchor" href="#peak_file_alloc" aria-label="Link to peak_file_alloc">#</a></h4>
+<p>Source: <code>Peak.h:441</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span> <span class="o">*</span><span class="nf">peak_file_alloc</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="kt">unsigned</span> <span class="kt">long</span> <span class="o">*</span><span class="n">buf_size</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_file_write">peak_file_write<a class="heading-anchor" href="#peak_file_write" aria-label="Link to peak_file_write">#</a></h4>
+<p>Source: <code>Peak.h:442</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span>   <span class="nf">peak_file_write</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">buf</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">n</span><span class="p">);</span>
+</span></span></code></pre></div><p>create/overwrite</p>
+</section><section class="symbol-card"><h4 id="peak_io_root_open">peak_io_root_open<a class="heading-anchor" href="#peak_io_root_open" aria-label="Link to peak_io_root_open">#</a></h4>
+<p>Source: <code>Peak.h:541</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="n">PeakIOResult</span> <span class="nf">peak_io_root_open</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">absolute_path</span><span class="p">,</span> <span class="n">PeakIORoot</span> <span class="o">*</span><span class="n">out</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_io_root_open_at">peak_io_root_open_at<a class="heading-anchor" href="#peak_io_root_open_at" aria-label="Link to peak_io_root_open_at">#</a></h4>
+<p>Source: <code>Peak.h:542</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="n">PeakIOResult</span> <span class="nf">peak_io_root_open_at</span><span class="p">(</span><span class="k">const</span> <span class="n">PeakIORoot</span> <span class="o">*</span><span class="n">root</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">relative_path</span><span class="p">,</span> <span class="n">PeakIORoot</span> <span class="o">*</span><span class="n">out</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_io_root_close">peak_io_root_close<a class="heading-anchor" href="#peak_io_root_close" aria-label="Link to peak_io_root_close">#</a></h4>
+<p>Source: <code>Peak.h:543</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="n">PeakIOResult</span> <span class="nf">peak_io_root_close</span><span class="p">(</span><span class="n">PeakIORoot</span> <span class="o">*</span><span class="n">root</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_io_file_open">peak_io_file_open<a class="heading-anchor" href="#peak_io_file_open" aria-label="Link to peak_io_file_open">#</a></h4>
+<p>Source: <code>Peak.h:544</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="n">PeakIOResult</span> <span class="nf">peak_io_file_open</span><span class="p">(</span><span class="k">const</span> <span class="n">PeakIORoot</span> <span class="o">*</span><span class="n">root</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">relative_path</span><span class="p">,</span> <span class="kt">uint64_t</span> <span class="n">max_bytes</span><span class="p">,</span> <span class="n">PeakIOFile</span> <span class="o">*</span><span class="n">out</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_io_file_read">peak_io_file_read<a class="heading-anchor" href="#peak_io_file_read" aria-label="Link to peak_io_file_read">#</a></h4>
+<p>Source: <code>Peak.h:545</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="n">PeakIOResult</span> <span class="nf">peak_io_file_read</span><span class="p">(</span><span class="k">const</span> <span class="n">PeakIOFile</span> <span class="o">*</span><span class="n">file</span><span class="p">,</span> <span class="kt">uint64_t</span> <span class="n">offset</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">buf</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">bytes</span><span class="p">,</span> <span class="kt">size_t</span> <span class="o">*</span><span class="n">read_bytes</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_io_file_close">peak_io_file_close<a class="heading-anchor" href="#peak_io_file_close" aria-label="Link to peak_io_file_close">#</a></h4>
+<p>Source: <code>Peak.h:546</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="n">PeakIOResult</span> <span class="nf">peak_io_file_close</span><span class="p">(</span><span class="n">PeakIOFile</span> <span class="o">*</span><span class="n">file</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_io_stage_begin">peak_io_stage_begin<a class="heading-anchor" href="#peak_io_stage_begin" aria-label="Link to peak_io_stage_begin">#</a></h4>
+<p>Source: <code>Peak.h:547</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="n">PeakIOResult</span> <span class="nf">peak_io_stage_begin</span><span class="p">(</span><span class="k">const</span> <span class="n">PeakIORoot</span> <span class="o">*</span><span class="n">root</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">destination</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">temporary_leaf</span><span class="p">,</span> <span class="kt">uint64_t</span> <span class="n">max_bytes</span><span class="p">,</span> <span class="n">PeakIOStage</span> <span class="o">*</span><span class="n">out</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_io_stage_write">peak_io_stage_write<a class="heading-anchor" href="#peak_io_stage_write" aria-label="Link to peak_io_stage_write">#</a></h4>
+<p>Source: <code>Peak.h:548</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="n">PeakIOResult</span> <span class="nf">peak_io_stage_write</span><span class="p">(</span><span class="n">PeakIOStage</span> <span class="o">*</span><span class="n">stage</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">buf</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">bytes</span><span class="p">,</span> <span class="kt">size_t</span> <span class="o">*</span><span class="n">written_bytes</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_io_stage_commit">peak_io_stage_commit<a class="heading-anchor" href="#peak_io_stage_commit" aria-label="Link to peak_io_stage_commit">#</a></h4>
+<p>Source: <code>Peak.h:549</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="n">PeakIOPublishResult</span> <span class="nf">peak_io_stage_commit</span><span class="p">(</span><span class="n">PeakIOStage</span> <span class="o">*</span><span class="n">stage</span><span class="p">,</span> <span class="n">PeakIODurability</span> <span class="n">durability</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_io_stage_abort">peak_io_stage_abort<a class="heading-anchor" href="#peak_io_stage_abort" aria-label="Link to peak_io_stage_abort">#</a></h4>
+<p>Source: <code>Peak.h:550</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="n">PeakIOPublishResult</span> <span class="nf">peak_io_stage_abort</span><span class="p">(</span><span class="n">PeakIOStage</span> <span class="o">*</span><span class="n">stage</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_aligned_alloc_impl">peak_aligned_alloc_impl<a class="heading-anchor" href="#peak_aligned_alloc_impl" aria-label="Link to peak_aligned_alloc_impl">#</a></h4>
+<p>Source: <code>Peak.h:554</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span> <span class="o">*</span><span class="nf">peak_aligned_alloc_impl</span><span class="p">(</span><span class="kt">size_t</span> <span class="n">size</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">alignment</span><span class="p">);</span>
+</span></span></code></pre></div><p>Macros remain replaceable by backing-request instrumentation. The helper
+preserves C99 support and accepts sizes that are not alignment multiples.</p>
+</section><section class="symbol-card"><h4 id="peak_pid">peak_pid<a class="heading-anchor" href="#peak_pid" aria-label="Link to peak_pid">#</a></h4>
+<p>Source: <code>Peak.h:563</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span> <span class="nf">peak_pid</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_env_set">peak_env_set<a class="heading-anchor" href="#peak_env_set" aria-label="Link to peak_env_set">#</a></h4>
+<p>Source: <code>Peak.h:564</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span> <span class="nf">peak_env_set</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">name</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">value</span><span class="p">);</span>
+</span></span></code></pre></div><p>NULL unsets</p>
+</section><section class="symbol-card"><h4 id="peak_env_get">peak_env_get<a class="heading-anchor" href="#peak_env_get" aria-label="Link to peak_env_get">#</a></h4>
+<p>Source: <code>Peak.h:565</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span> <span class="nf">peak_env_get</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">name</span><span class="p">,</span> <span class="kt">char</span> <span class="o">*</span><span class="n">buf</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">cap</span><span class="p">);</span>
+</span></span></code></pre></div><p>1 if set and fits</p>
+</section><section class="symbol-card"><h4 id="peak_filesystem_mkdir">peak_filesystem_mkdir<a class="heading-anchor" href="#peak_filesystem_mkdir" aria-label="Link to peak_filesystem_mkdir">#</a></h4>
+<p>Source: <code>Peak.h:567</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span> <span class="nf">peak_filesystem_mkdir</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">path</span><span class="p">);</span>
+</span></span></code></pre></div><p>one level</p>
+</section><section class="symbol-card"><h4 id="peak_filesystem_rm">peak_filesystem_rm<a class="heading-anchor" href="#peak_filesystem_rm" aria-label="Link to peak_filesystem_rm">#</a></h4>
+<p>Source: <code>Peak.h:568</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span> <span class="nf">peak_filesystem_rm</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">path</span><span class="p">);</span>
+</span></span></code></pre></div><p>unlink, or rmdir if empty</p>
+</section><section class="symbol-card"><h4 id="peak_filesystem_cwd">peak_filesystem_cwd<a class="heading-anchor" href="#peak_filesystem_cwd" aria-label="Link to peak_filesystem_cwd">#</a></h4>
+<p>Source: <code>Peak.h:569</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span> <span class="nf">peak_filesystem_cwd</span><span class="p">(</span><span class="kt">char</span> <span class="o">*</span><span class="n">buf</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">cap</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_filesystem_chdir">peak_filesystem_chdir<a class="heading-anchor" href="#peak_filesystem_chdir" aria-label="Link to peak_filesystem_chdir">#</a></h4>
+<p>Source: <code>Peak.h:570</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span> <span class="nf">peak_filesystem_chdir</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">path</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_filesystem_rename">peak_filesystem_rename<a class="heading-anchor" href="#peak_filesystem_rename" aria-label="Link to peak_filesystem_rename">#</a></h4>
+<p>Source: <code>Peak.h:571</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span> <span class="nf">peak_filesystem_rename</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">from</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">to</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_filesystem_list">peak_filesystem_list<a class="heading-anchor" href="#peak_filesystem_list" aria-label="Link to peak_filesystem_list">#</a></h4>
+<p>Source: <code>Peak.h:572</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span> <span class="nf">peak_filesystem_list</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="kt">int</span> <span class="p">(</span><span class="o">*</span><span class="n">fn</span><span class="p">)(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">name</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">ud</span><span class="p">),</span> <span class="kt">void</span> <span class="o">*</span><span class="n">ud</span><span class="p">);</span>
+</span></span></code></pre></div><p>fn 0 stops; 1 if opened</p>
+</section><section class="symbol-card"><h4 id="peak_filesystem_symlink">peak_filesystem_symlink<a class="heading-anchor" href="#peak_filesystem_symlink" aria-label="Link to peak_filesystem_symlink">#</a></h4>
+<p>Source: <code>Peak.h:573</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span> <span class="nf">peak_filesystem_symlink</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">target</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">path</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_filesystem_readlink">peak_filesystem_readlink<a class="heading-anchor" href="#peak_filesystem_readlink" aria-label="Link to peak_filesystem_readlink">#</a></h4>
+<p>Source: <code>Peak.h:574</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span> <span class="nf">peak_filesystem_readlink</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="kt">char</span> <span class="o">*</span><span class="n">dst</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">cap</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_pty_spawn">peak_pty_spawn<a class="heading-anchor" href="#peak_pty_spawn" aria-label="Link to peak_pty_spawn">#</a></h4>
+<p>Source: <code>Peak.h:589</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="n">PeakProc</span> <span class="nf">peak_pty_spawn</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">file</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">**</span><span class="n">argv</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">cols</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">rows</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">xpixel</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">ypixel</span><span class="p">);</span>
+</span></span></code></pre></div><p>Child + PTY. File descriptor is nonblocking. Fails as PEAK_HANDLE_INVALID.</p>
+</section><section class="symbol-card"><h4 id="peak_pty_resize">peak_pty_resize<a class="heading-anchor" href="#peak_pty_resize" aria-label="Link to peak_pty_resize">#</a></h4>
+<p>Source: <code>Peak.h:590</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span>     <span class="nf">peak_pty_resize</span><span class="p">(</span><span class="n">PeakProc</span> <span class="o">*</span><span class="n">pty</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">cols</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">rows</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">xpixel</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">ypixel</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_pty_reap">peak_pty_reap<a class="heading-anchor" href="#peak_pty_reap" aria-label="Link to peak_pty_reap">#</a></h4>
+<p>Source: <code>Peak.h:591</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span>      <span class="nf">peak_pty_reap</span><span class="p">(</span><span class="n">PeakProc</span> <span class="o">*</span><span class="n">pty</span><span class="p">);</span>
+</span></span></code></pre></div><p>1 if dead</p>
+</section><section class="symbol-card"><h4 id="peak_pty_close">peak_pty_close<a class="heading-anchor" href="#peak_pty_close" aria-label="Link to peak_pty_close">#</a></h4>
+<p>Source: <code>Peak.h:592</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span>     <span class="nf">peak_pty_close</span><span class="p">(</span><span class="n">PeakProc</span> <span class="o">*</span><span class="n">pty</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_job_run">peak_job_run<a class="heading-anchor" href="#peak_job_run" aria-label="Link to peak_job_run">#</a></h4>
+<p>Source: <code>Peak.h:595</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="n">PeakProc</span> <span class="nf">peak_job_run</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">cmd</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">cwd</span><span class="p">);</span>
+</span></span></code></pre></div><p>Off-grid shell.</p>
+</section><section class="symbol-card"><h4 id="peak_job_reap">peak_job_reap<a class="heading-anchor" href="#peak_job_reap" aria-label="Link to peak_job_reap">#</a></h4>
+<p>Source: <code>Peak.h:596</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span>      <span class="nf">peak_job_reap</span><span class="p">(</span><span class="n">PeakProc</span> <span class="o">*</span><span class="n">job</span><span class="p">,</span> <span class="kt">int</span> <span class="o">*</span><span class="n">code</span><span class="p">);</span>
+</span></span></code></pre></div><p>1 if exited</p>
+</section><section class="symbol-card"><h4 id="peak_job_kill">peak_job_kill<a class="heading-anchor" href="#peak_job_kill" aria-label="Link to peak_job_kill">#</a></h4>
+<p>Source: <code>Peak.h:597</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span>     <span class="nf">peak_job_kill</span><span class="p">(</span><span class="n">PeakProc</span> <span class="o">*</span><span class="n">job</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_pid_cwd">peak_pid_cwd<a class="heading-anchor" href="#peak_pid_cwd" aria-label="Link to peak_pid_cwd">#</a></h4>
+<p>Source: <code>Peak.h:598</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span>      <span class="nf">peak_pid_cwd</span><span class="p">(</span><span class="kt">int</span> <span class="n">pid</span><span class="p">,</span> <span class="kt">char</span> <span class="o">*</span><span class="n">buf</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">cap</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_child_arm">peak_child_arm<a class="heading-anchor" href="#peak_child_arm" aria-label="Link to peak_child_arm">#</a></h4>
+<p>Source: <code>Peak.h:601</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span>         <span class="nf">peak_child_arm</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+</span></span></code></pre></div><p>Dead-child wakeup. fd pollable or INVALID. Missing OS: arm 1, fd INVALID, reap 0.</p>
+</section><section class="symbol-card"><h4 id="peak_child_disarm">peak_child_disarm<a class="heading-anchor" href="#peak_child_disarm" aria-label="Link to peak_child_disarm">#</a></h4>
+<p>Source: <code>Peak.h:602</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span>        <span class="nf">peak_child_disarm</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_child_fd">peak_child_fd<a class="heading-anchor" href="#peak_child_fd" aria-label="Link to peak_child_fd">#</a></h4>
+<p>Source: <code>Peak.h:603</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="n">PEAK_HANDLE</span> <span class="nf">peak_child_fd</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_child_ack">peak_child_ack<a class="heading-anchor" href="#peak_child_ack" aria-label="Link to peak_child_ack">#</a></h4>
+<p>Source: <code>Peak.h:604</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span>        <span class="nf">peak_child_ack</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_child_reap">peak_child_reap<a class="heading-anchor" href="#peak_child_reap" aria-label="Link to peak_child_reap">#</a></h4>
+<p>Source: <code>Peak.h:605</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span>         <span class="nf">peak_child_reap</span><span class="p">(</span><span class="kt">int</span> <span class="o">*</span><span class="n">pid</span><span class="p">,</span> <span class="kt">int</span> <span class="o">*</span><span class="n">code</span><span class="p">);</span>
+</span></span></code></pre></div><p>1 if one</p>
+</section><section class="symbol-card"><h4 id="peak_usr1_arm">peak_usr1_arm<a class="heading-anchor" href="#peak_usr1_arm" aria-label="Link to peak_usr1_arm">#</a></h4>
+<p>Source: <code>Peak.h:608</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span>         <span class="nf">peak_usr1_arm</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+</span></span></code></pre></div><p>SIGUSR1 wakeup. fd pollable or INVALID. Missing OS: arm 1, fd INVALID, ack 0.</p>
+</section><section class="symbol-card"><h4 id="peak_usr1_disarm">peak_usr1_disarm<a class="heading-anchor" href="#peak_usr1_disarm" aria-label="Link to peak_usr1_disarm">#</a></h4>
+<p>Source: <code>Peak.h:609</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span>        <span class="nf">peak_usr1_disarm</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_usr1_fd">peak_usr1_fd<a class="heading-anchor" href="#peak_usr1_fd" aria-label="Link to peak_usr1_fd">#</a></h4>
+<p>Source: <code>Peak.h:610</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="n">PEAK_HANDLE</span> <span class="nf">peak_usr1_fd</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_usr1_ack">peak_usr1_ack<a class="heading-anchor" href="#peak_usr1_ack" aria-label="Link to peak_usr1_ack">#</a></h4>
+<p>Source: <code>Peak.h:611</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span>         <span class="nf">peak_usr1_ack</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+</span></span></code></pre></div><p>1 if fired</p>
+</section><section class="symbol-card"><h4 id="peak_stdout_silence">peak_stdout_silence<a class="heading-anchor" href="#peak_stdout_silence" aria-label="Link to peak_stdout_silence">#</a></h4>
+<p>Source: <code>Peak.h:613</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span> <span class="nf">peak_stdout_silence</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+</span></span></code></pre></div><p>stdout -&gt; platform null</p>
+</section><section class="symbol-card"><h4 id="peak_stdout_restore">peak_stdout_restore<a class="heading-anchor" href="#peak_stdout_restore" aria-label="Link to peak_stdout_restore">#</a></h4>
+<p>Source: <code>Peak.h:614</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span> <span class="nf">peak_stdout_restore</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_wait">peak_wait<a class="heading-anchor" href="#peak_wait" aria-label="Link to peak_wait">#</a></h4>
+<p>Source: <code>Peak.h:624</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span> <span class="nf">peak_wait</span><span class="p">(</span><span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">,</span> <span class="k">const</span> <span class="n">PEAK_HANDLE</span> <span class="o">*</span><span class="n">fds</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">n</span><span class="p">,</span> <span class="kt">int</span> <span class="n">timeout_ms</span><span class="p">);</span>
+</span></span></code></pre></div><p>█</p>
+<p>█ ███
+█ █ █
+█ █ █
+█ ███
+Sleep until window (nullable) or any fd is ready. timeout_ms: -1 block, 0 poll. 1 if ready.</p>
+</section><section class="symbol-card"><h4 id="peak_runtime_dir">peak_runtime_dir<a class="heading-anchor" href="#peak_runtime_dir" aria-label="Link to peak_runtime_dir">#</a></h4>
+<p>Source: <code>Peak.h:627</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span>         <span class="nf">peak_runtime_dir</span><span class="p">(</span><span class="kt">char</span> <span class="o">*</span><span class="n">buf</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">cap</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">app</span><span class="p">);</span>
+</span></span></code></pre></div><p>Local stream (unix socket / named pipe). listen/accept fds are nonblocking.</p>
+</section><section class="symbol-card"><h4 id="peak_sock_listen">peak_sock_listen<a class="heading-anchor" href="#peak_sock_listen" aria-label="Link to peak_sock_listen">#</a></h4>
+<p>Source: <code>Peak.h:628</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="n">PEAK_HANDLE</span> <span class="nf">peak_sock_listen</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">path</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_sock_accept">peak_sock_accept<a class="heading-anchor" href="#peak_sock_accept" aria-label="Link to peak_sock_accept">#</a></h4>
+<p>Source: <code>Peak.h:629</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="n">PEAK_HANDLE</span> <span class="nf">peak_sock_accept</span><span class="p">(</span><span class="n">PEAK_HANDLE</span> <span class="n">listen_fd</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_sock_connect">peak_sock_connect<a class="heading-anchor" href="#peak_sock_connect" aria-label="Link to peak_sock_connect">#</a></h4>
+<p>Source: <code>Peak.h:630</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="n">PEAK_HANDLE</span> <span class="nf">peak_sock_connect</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">path</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_sock_send">peak_sock_send<a class="heading-anchor" href="#peak_sock_send" aria-label="Link to peak_sock_send">#</a></h4>
+<p>Source: <code>Peak.h:631</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span>         <span class="nf">peak_sock_send</span><span class="p">(</span><span class="n">PEAK_HANDLE</span> <span class="n">sock</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">buf</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">n</span><span class="p">,</span> <span class="n">PEAK_HANDLE</span> <span class="n">pass</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_sock_recv">peak_sock_recv<a class="heading-anchor" href="#peak_sock_recv" aria-label="Link to peak_sock_recv">#</a></h4>
+<p>Source: <code>Peak.h:632</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span>         <span class="nf">peak_sock_recv</span><span class="p">(</span><span class="n">PEAK_HANDLE</span> <span class="n">sock</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">buf</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">n</span><span class="p">,</span> <span class="n">PEAK_HANDLE</span> <span class="o">*</span><span class="n">pass</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_pointer_pid">peak_pointer_pid<a class="heading-anchor" href="#peak_pointer_pid" aria-label="Link to peak_pointer_pid">#</a></h4>
+<p>Source: <code>Peak.h:633</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span>         <span class="nf">peak_pointer_pid</span><span class="p">(</span><span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">);</span>
+</span></span></code></pre></div><p>_NET_WM_PID under pointer; 0 if none</p>
+</section><section class="symbol-card"><h4 id="peak_pointer_local">peak_pointer_local<a class="heading-anchor" href="#peak_pointer_local" aria-label="Link to peak_pointer_local">#</a></h4>
+<p>Source: <code>Peak.h:634</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span>         <span class="nf">peak_pointer_local</span><span class="p">(</span><span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">,</span> <span class="kt">int</span> <span class="o">*</span><span class="n">x</span><span class="p">,</span> <span class="kt">int</span> <span class="o">*</span><span class="n">y</span><span class="p">);</span>
+</span></span></code></pre></div><p>1 if pointer is in this window</p>
+</section><section class="symbol-card"><h4 id="peak_fd_read">peak_fd_read<a class="heading-anchor" href="#peak_fd_read" aria-label="Link to peak_fd_read">#</a></h4>
+<p>Source: <code>Peak.h:637</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span>  <span class="nf">peak_fd_read</span><span class="p">(</span><span class="n">PEAK_HANDLE</span> <span class="n">fd</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">buf</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">n</span><span class="p">);</span>
+</span></span></code></pre></div><p>Byte IO on Peak fds (pty, sock, job). -1 would-block, 0 EOF, &gt;0 count.</p>
+</section><section class="symbol-card"><h4 id="peak_fd_write">peak_fd_write<a class="heading-anchor" href="#peak_fd_write" aria-label="Link to peak_fd_write">#</a></h4>
+<p>Source: <code>Peak.h:638</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span>  <span class="nf">peak_fd_write</span><span class="p">(</span><span class="n">PEAK_HANDLE</span> <span class="n">fd</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">buf</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">n</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_fd_close">peak_fd_close<a class="heading-anchor" href="#peak_fd_close" aria-label="Link to peak_fd_close">#</a></h4>
+<p>Source: <code>Peak.h:639</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span> <span class="nf">peak_fd_close</span><span class="p">(</span><span class="n">PEAK_HANDLE</span> <span class="n">fd</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_pipe_capacity">peak_pipe_capacity<a class="heading-anchor" href="#peak_pipe_capacity" aria-label="Link to peak_pipe_capacity">#</a></h4>
+<p>Source: <code>Peak.h:641</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">size_t</span> <span class="nf">peak_pipe_capacity</span><span class="p">(</span><span class="n">PEAK_HANDLE</span> <span class="n">fd</span><span class="p">);</span>
+</span></span></code></pre></div><p>Kernel pipe buffer. 0 if not a pipe. set returns the size in force.</p>
+</section><section class="symbol-card"><h4 id="peak_pipe_set_capacity">peak_pipe_set_capacity<a class="heading-anchor" href="#peak_pipe_set_capacity" aria-label="Link to peak_pipe_set_capacity">#</a></h4>
+<p>Source: <code>Peak.h:642</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">size_t</span> <span class="nf">peak_pipe_set_capacity</span><span class="p">(</span><span class="n">PEAK_HANDLE</span> <span class="n">fd</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">n</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_page_size">peak_page_size<a class="heading-anchor" href="#peak_page_size" aria-label="Link to peak_page_size">#</a></h4>
+<p>Source: <code>Peak.h:654</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">size_t</span> <span class="nf">peak_page_size</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+</span></span></code></pre></div><p>█</p>
+<p>███ █ ███ ███
+█   █ █ █ █ █
+█   █ █ █ █ █
+█   █ █ █ ███
+█
+███
+Page-mirrored ring: size must be page-aligned. pointer valid for size*2.</p>
+</section><section class="symbol-card"><h4 id="peak_mirror_map">peak_mirror_map<a class="heading-anchor" href="#peak_mirror_map" aria-label="Link to peak_mirror_map">#</a></h4>
+<p>Source: <code>Peak.h:655</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span>  <span class="o">*</span><span class="nf">peak_mirror_map</span><span class="p">(</span><span class="kt">size_t</span> <span class="n">size</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_mirror_unmap">peak_mirror_unmap<a class="heading-anchor" href="#peak_mirror_unmap" aria-label="Link to peak_mirror_unmap">#</a></h4>
+<p>Source: <code>Peak.h:656</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span>   <span class="nf">peak_mirror_unmap</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="n">p</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">size</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_vulkan_get_extensions">peak_vulkan_get_extensions<a class="heading-anchor" href="#peak_vulkan_get_extensions" aria-label="Link to peak_vulkan_get_extensions">#</a></h4>
+<p>Source: <code>Peak.h:667</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">**</span><span class="nf">peak_vulkan_get_extensions</span><span class="p">(</span><span class="kt">uint32_t</span> <span class="o">*</span><span class="n">count</span><span class="p">);</span>
+</span></span></code></pre></div><p>██
+█
+███ ███ █ █
+█ █  █   █
+█ █  █   █
+███  █  █ █
+█
+███</p>
+</section><section class="symbol-card"><h4 id="peak_vulkan_create_surface">peak_vulkan_create_surface<a class="heading-anchor" href="#peak_vulkan_create_surface" aria-label="Link to peak_vulkan_create_surface">#</a></h4>
+<p>Source: <code>Peak.h:668</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span>          <span class="nf">peak_vulkan_create_surface</span><span class="p">(</span><span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">instance</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">allocator</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">out_surface</span><span class="p">);</span>
+</span></span></code></pre></div><p>needs PEAK_VULKAN</p>
+</section><section class="symbol-card"><h4 id="peak_clip_set">peak_clip_set<a class="heading-anchor" href="#peak_clip_set" aria-label="Link to peak_clip_set">#</a></h4>
+<p>Source: <code>Peak.h:685</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span> <span class="nf">peak_clip_set</span><span class="p">(</span><span class="n">PeakCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">,</span> <span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">,</span> <span class="n">PeakClip</span> <span class="n">which</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">utf8</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">n</span><span class="p">);</span>
+</span></span></code></pre></div><p>█  █
+█
+███ █  █ ███
+█   █  █ █ █
+█   █  █ █ █
+███ ██ █ ███
+█
+█
+Window-only methods validate their owned context. Linux additionally validates
+native allocation/slot lifetimes, rejecting copied handles after close/reuse.
+Other legacy hosts require exclusive window-handle ownership: do not retain
+copies after close or quit; stale-copy validation is not provided there.
+UTF-8 clipboard. Configured clipboard cap. win NULL: context-local slot. PRIMARY aliases
+CLIPBOARD on Win32/macOS/web. request completes as PEAK_EVENT_CLIP; take copies.</p>
+</section><section class="symbol-card"><h4 id="peak_clip_request">peak_clip_request<a class="heading-anchor" href="#peak_clip_request" aria-label="Link to peak_clip_request">#</a></h4>
+<p>Source: <code>Peak.h:686</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span> <span class="nf">peak_clip_request</span><span class="p">(</span><span class="n">PeakCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">,</span> <span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">,</span> <span class="n">PeakClip</span> <span class="n">which</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_clip_take">peak_clip_take<a class="heading-anchor" href="#peak_clip_take" aria-label="Link to peak_clip_take">#</a></h4>
+<p>Source: <code>Peak.h:687</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span> <span class="nf">peak_clip_take</span><span class="p">(</span><span class="n">PeakCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">,</span> <span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">,</span> <span class="kt">char</span> <span class="o">*</span><span class="n">dst</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">cap</span><span class="p">,</span> <span class="kt">size_t</span> <span class="o">*</span><span class="n">n</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_text_take">peak_text_take<a class="heading-anchor" href="#peak_text_take" aria-label="Link to peak_text_take">#</a></h4>
+<p>Source: <code>Peak.h:690</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span> <span class="nf">peak_text_take</span><span class="p">(</span><span class="n">PeakCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">,</span> <span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">,</span> <span class="kt">char</span> <span class="o">*</span><span class="n">dst</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">cap</span><span class="p">,</span> <span class="kt">size_t</span> <span class="o">*</span><span class="n">n</span><span class="p">);</span>
+</span></span></code></pre></div><p>UTF-8 text / drop path. Configured transfer cap. Completes as PEAK_EVENT_TEXT / DROP; take copies.</p>
+</section><section class="symbol-card"><h4 id="peak_drop_take">peak_drop_take<a class="heading-anchor" href="#peak_drop_take" aria-label="Link to peak_drop_take">#</a></h4>
+<p>Source: <code>Peak.h:691</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span> <span class="nf">peak_drop_take</span><span class="p">(</span><span class="n">PeakCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">,</span> <span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">,</span> <span class="kt">char</span> <span class="o">*</span><span class="n">dst</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">cap</span><span class="p">,</span> <span class="kt">size_t</span> <span class="o">*</span><span class="n">n</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_drop_drag">peak_drop_drag<a class="heading-anchor" href="#peak_drop_drag" aria-label="Link to peak_drop_drag">#</a></h4>
+<p>Source: <code>Peak.h:692</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">int</span> <span class="nf">peak_drop_drag</span><span class="p">(</span><span class="n">PeakCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">,</span> <span class="n">PeakWindow</span> <span class="o">*</span><span class="n">win</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">utf8</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">n</span><span class="p">);</span>
+</span></span></code></pre></div><p>start OS drag; 0 if none</p>
+</section><section class="symbol-card"><h4 id="peak_log_printf">peak_log_printf<a class="heading-anchor" href="#peak_log_printf" aria-label="Link to peak_log_printf">#</a></h4>
+<p>Source: <code>Peak.h:751</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span>  <span class="nf">peak_log_printf</span><span class="p">(</span><span class="n">PeakLogLevel</span> <span class="n">level</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">src</span><span class="p">,</span> <span class="p">...);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_debug_malloc_impl">peak_debug_malloc_impl<a class="heading-anchor" href="#peak_debug_malloc_impl" aria-label="Link to peak_debug_malloc_impl">#</a></h4>
+<p>Source: <code>Peak.h:752</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span> <span class="o">*</span><span class="nf">peak_debug_malloc_impl</span><span class="p">(</span><span class="kt">size_t</span> <span class="n">size</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">file</span><span class="p">,</span> <span class="kt">int</span> <span class="n">line</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">func</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_debug_calloc_impl">peak_debug_calloc_impl<a class="heading-anchor" href="#peak_debug_calloc_impl" aria-label="Link to peak_debug_calloc_impl">#</a></h4>
+<p>Source: <code>Peak.h:753</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span> <span class="o">*</span><span class="nf">peak_debug_calloc_impl</span><span class="p">(</span><span class="kt">size_t</span> <span class="n">count</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">size</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">file</span><span class="p">,</span> <span class="kt">int</span> <span class="n">line</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">func</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_debug_free_impl">peak_debug_free_impl<a class="heading-anchor" href="#peak_debug_free_impl" aria-label="Link to peak_debug_free_impl">#</a></h4>
+<p>Source: <code>Peak.h:754</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span>  <span class="nf">peak_debug_free_impl</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="n">ptr</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">file</span><span class="p">,</span> <span class="kt">int</span> <span class="n">line</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">func</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_debug_realloc_impl">peak_debug_realloc_impl<a class="heading-anchor" href="#peak_debug_realloc_impl" aria-label="Link to peak_debug_realloc_impl">#</a></h4>
+<p>Source: <code>Peak.h:755</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span> <span class="o">*</span><span class="nf">peak_debug_realloc_impl</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="n">ptr</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">size</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">file</span><span class="p">,</span> <span class="kt">int</span> <span class="n">line</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">func</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_debug_malloc_domain_impl">peak_debug_malloc_domain_impl<a class="heading-anchor" href="#peak_debug_malloc_domain_impl" aria-label="Link to peak_debug_malloc_domain_impl">#</a></h4>
+<p>Source: <code>Peak.h:786</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span> <span class="o">*</span><span class="nf">peak_debug_malloc_domain_impl</span><span class="p">(</span><span class="kt">size_t</span> <span class="n">size</span><span class="p">,</span> <span class="n">PeakMemoryDomain</span> <span class="n">domain</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">file</span><span class="p">,</span> <span class="kt">int</span> <span class="n">line</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">func</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_debug_calloc_domain_impl">peak_debug_calloc_domain_impl<a class="heading-anchor" href="#peak_debug_calloc_domain_impl" aria-label="Link to peak_debug_calloc_domain_impl">#</a></h4>
+<p>Source: <code>Peak.h:787</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span> <span class="o">*</span><span class="nf">peak_debug_calloc_domain_impl</span><span class="p">(</span><span class="kt">size_t</span> <span class="n">count</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">size</span><span class="p">,</span> <span class="n">PeakMemoryDomain</span> <span class="n">domain</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">file</span><span class="p">,</span> <span class="kt">int</span> <span class="n">line</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">func</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_debug_realloc_domain_impl">peak_debug_realloc_domain_impl<a class="heading-anchor" href="#peak_debug_realloc_domain_impl" aria-label="Link to peak_debug_realloc_domain_impl">#</a></h4>
+<p>Source: <code>Peak.h:788</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span> <span class="o">*</span><span class="nf">peak_debug_realloc_domain_impl</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="n">ptr</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">size</span><span class="p">,</span> <span class="n">PeakMemoryDomain</span> <span class="n">domain</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">file</span><span class="p">,</span> <span class="kt">int</span> <span class="n">line</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">func</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_debug_free_domain_impl">peak_debug_free_domain_impl<a class="heading-anchor" href="#peak_debug_free_domain_impl" aria-label="Link to peak_debug_free_domain_impl">#</a></h4>
+<p>Source: <code>Peak.h:789</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">void</span>  <span class="nf">peak_debug_free_domain_impl</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="n">ptr</span><span class="p">,</span> <span class="n">PeakMemoryDomain</span> <span class="n">domain</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">file</span><span class="p">,</span> <span class="kt">int</span> <span class="n">line</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">func</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_debug_memory_stats">peak_debug_memory_stats<a class="heading-anchor" href="#peak_debug_memory_stats" aria-label="Link to peak_debug_memory_stats">#</a></h4>
+<p>Source: <code>Peak.h:790</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="n">PeakMemoryStats</span> <span class="nf">peak_debug_memory_stats</span><span class="p">(</span><span class="n">PeakMemoryDomain</span> <span class="n">domain</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="peak_debug_memory_report">peak_debug_memory_report<a class="heading-anchor" href="#peak_debug_memory_report" aria-label="Link to peak_debug_memory_report">#</a></h4>
+<p>Source: <code>Peak.h:797</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">PEAK</span> <span class="kt">uint64_t</span> <span class="nf">peak_debug_memory_report</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+</span></span></code></pre></div><p>Prints both domains and leaks; returns successful NON_DRIVER requests.
+realloc(NULL,0) returns NULL without a backing request or release; every
+realloc wrapper call increments realloc_requests, including zero-size calls.
+Original tracked domain is authoritative on free/realloc despite mismatch.
+Unknown-pointer operations clear completeness; no release is invented.</p>
+</section></div><nav class="prev-next" aria-label="Page navigation"><a href="/symbols/grit/"><small>Previous</small><strong>← Grit symbols</strong></a><a href="/symbols/poof/"><small>Next</small><strong>Poof symbols →</strong></a></nav></article><aside class="right-toc" aria-label="On this page"><h2>On this page</h2><nav id="TableOfContents">
+  <ul>
+    <li><a href="#api-reference">API reference</a>
+      <ul>
+        <li><a href="#types">Types</a></li>
+        <li><a href="#macros">Macros</a></li>
+        <li><a href="#functions">Functions</a></li>
+      </ul>
+    </li>
+  </ul>
+</nav></aside></div>
+
+</main>
+            </div>
+            
+                <footer class="site-footer"><span>Godstack · MIT License.</span><nav aria-label="Footer"><a href="/docs/">Documentation</a><a href="/demos/">Demos</a><a href="/ai/">AI guide</a><a href="/symbols/">Symbols</a><a href="/llms.txt">llms.txt</a><a href="/catalog.json">Documentation index</a><a href="/agent/SKILL.md">Agent skill</a><a href="https://github.com/godxgun/godstack">GitHub</a><a href="/license/">License</a></nav></footer>
+            <dialog class="search-dialog" id="site-search" aria-labelledby="search-title"><h2 id="search-title">Search</h2><form method="dialog"><label for="search-input">Search documentation</label><input id="search-input" type="search" placeholder="Search libraries, guides, and symbols…" autocomplete="off"><button value="close" aria-label="Close search">×</button></form><p class="search-status" role="status">Search libraries, guides, and symbols.<noscript> Browse the <a href="/docs/">documentation index</a>.</noscript></p><div class="search-results" aria-live="polite"></div></dialog>
+            
+            <script src="/js/site.91617de8440f7e0decb452fb29d31188802484fb967ace6f8d6e2237b3be3ce0.js" integrity="sha256-kWF96EQPfg3stFL7KdMRiIAkhPuWes5vjW4iN7O&#43;POA=" defer></script>
+            <script src="/js/ocean.9e84093c8df56dc7d9d5f8ce9fb81b2abb236ba42cd5ba5af0088399081c1a9b.js" integrity="sha256-noQJPI31bcfZ1fjOn7gbKrsja6Qs1bpa8AiDmQgcGps=" defer></script>
+            <script src="/js/scrollbars.5cd0b9c314b3371d0db03eabe2c5870b013108197b4258c7cda71bd685b60b11.js" integrity="sha256-XNC5wxSzNx0NsD6r4sWHCwExCBl7QljHzacb1oW2CxE=" defer></script>
+    </body></html>

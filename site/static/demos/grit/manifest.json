@@ -1,0 +1,29 @@
+{
+  "id": "grit",
+  "source": "demos/grit/demo.c",
+  "header": "Grit.h",
+  "peak_header": "Peak.h",
+  "compiler": "emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 6.0.9-git (4e4223852a0835923411059a3929907d7df1232e)",
+  "flags": [
+    "-std=c99",
+    "-O2",
+    "-Wall",
+    "-Wextra",
+    "-sMODULARIZE=1",
+    "-sEXPORT_NAME=createDemo",
+    "-sENVIRONMENT=web",
+    "-sSINGLE_FILE=1",
+    "-sEXIT_RUNTIME=0",
+    "-sALLOW_MEMORY_GROWTH=1",
+    "-sSTACK_SIZE=1048576",
+    "-sEXPORTED_FUNCTIONS=['_main']"
+  ],
+  "input_hash": "90f5963516c281a3ed7f181df48ccbe294a993ecc3f9e74ab97099e56248f470",
+  "files": {
+    "EMSCRIPTEN-LICENSE.txt": "620a78084fc7ca97c0b5dea9abf891f3ffcadfdbf305276f099c9c4e12fc1d86",
+    "LICENSE.txt": "6b06b33ac845d73a0d86fff9710ac5a7ac115193e933ab209970f5a05c1d0408",
+    "run.html": "31f266f72614835d2daf67a2369083d1bf070bc320b9bbc5637b644fa6efddb8",
+    "demo.js": "c6bbb1928ab759de7eb0be4c83f7ef9256a718cc2c0b2895877a6d001e27d770"
+  },
+  "presentation": "Peak software window/backbuffer; same C source as native build"
+}

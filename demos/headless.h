@@ -37,7 +37,7 @@ static inline RendRenderer demo_renderer_open(PeakWindow *window, PeakCtx **ctx,
 {
 	RendRenderer renderer;
 	if (!headless) {
-		*ctx = peak_init_legacy();
+		*ctx = peak_init();
 		if (!*ctx)
 			return NULL;
 		*window = peak_window_open(*ctx, title, width, height, 0);

@@ -4,8 +4,8 @@
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {mkdtemp,writeFile,readFile,mkdir,copyFile} from 'node:fs/promises';
-import {tmpdir} from 'node:os';
-import {join,resolve,dirname} from 'node:path';
+import {tmpdir,homedir} from 'node:os';
+import {join,resolve} from 'node:path';
 import {createServer} from 'node:net';
 import {inflateSync} from 'node:zlib';
 const root=resolve(process.argv[2]||'/tmp');
@@ -91,18 +91,23 @@ print:s=>messages.push(s),printErr:s=>errors.push(s),onAbort:s=>errors.push(s)})
   await send('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
   await wait('demo._snake_test_state(5)===1');
   assert.deepEqual(await evaluate('errors'),[]);
-  const published=resolve(dirname(new URL(import.meta.url).pathname),'../site/static/demos/snake');
-  await mkdir(join(root,'published'),{recursive:true});
-  for(const file of ['demo.js','run.html'])await copyFile(join(published,file),join(root,'published',file));
-  await send('Page.navigate',{url:`http://127.0.0.1:${http}/published/run.html`});
-  await wait(`document.documentElement?.dataset.runState==='ready' && !!document.getElementById('canvas')?.getContext('webgl2')`);
-  await sleep(500);
-  assert.equal(await evaluate('document.documentElement.dataset.runState'),'ready');
-  const publishedScreenshot=Buffer.from((await send('Page.captureScreenshot')).data,'base64');
-  await writeFile(join(temp,'published.png'),publishedScreenshot);
-  assertVisibleScene(publishedScreenshot);
+  const site=resolve(process.env.GODSTACK_SITE || join(homedir(),'rsr/src/site'));
+  const published=join(site,'static/demos/snake');
+  if (process.env.GODSTACK_SKIP_PUBLISHED === '1') {
+    console.log('SKIP published runner: external site checkout not supplied');
+  } else {
+    await mkdir(join(root,'published'),{recursive:true});
+    for(const file of ['demo.js','run.html'])await copyFile(join(published,file),join(root,'published',file));
+    await send('Page.navigate',{url:`http://127.0.0.1:${http}/published/run.html`});
+    await wait(`document.documentElement?.dataset.runState==='ready' && !!document.getElementById('canvas')?.getContext('webgl2')`);
+    await sleep(500);
+    assert.equal(await evaluate('document.documentElement.dataset.runState'),'ready');
+    const publishedScreenshot=Buffer.from((await send('Page.captureScreenshot')).data,'base64');
+    await writeFile(join(temp,'published.png'),publishedScreenshot);
+    assertVisibleScene(publishedScreenshot);
+    console.log('PASS published single-file WebAssembly runner');
+  }
   assert.deepEqual(exceptions,[]);
-  console.log('PASS published single-file WebAssembly runner');
   console.log('PASS Peak keyboard steering, browser canvas resize, crash/restart, Escape, resource teardown');
   console.log('Artifacts: '+temp);
 } finally {ws?.close();browser?.kill();server?.kill();}

@@ -112,7 +112,7 @@ int main(void)
 
     descriptors.texture_binding_count=1;descriptors.texture_bindings[0]=0;descriptors.texture_array_sizes[0]=1;
     descriptors.ubo_binding_count=1;descriptors.ubo_bindings[0]=0;descriptors.ubo_array_sizes[0]=1;
-    peak=peak_init_legacy();
+    peak=peak_init();
     CHECK(peak!=NULL,"Peak initialization");
     window=peak_window_open(peak,"canvas",WIDTH,HEIGHT,0);
     CHECK(window.running,"Peak canvas open");

@@ -1,0 +1,16 @@
+{{- $id := .Get "id" -}}
+{{- if not (findRE "^[a-z0-9][a-z0-9-]*$" $id) -}}
+  {{- errorf "web-demo shortcode requires a lowercase id made of letters, numbers, and hyphens in %s" .Page.Path -}}
+{{- end -}}
+{{- $title := .Get "title" | default (title $id) -}}
+{{- $frameID := printf "web-demo-%s-%d" $id .Ordinal -}}
+{{- $src := partial "site-url.html" (printf "/demos/%s/run.html" $id) -}}
+<div class="web-demo" data-web-demo>
+  <div class="web-demo-controls">
+    <button class="button web-demo-start" type="button" aria-controls="{{ $frameID }}" data-demo-start>Run demo in browser</button>
+    <button class="web-demo-stop" type="button" aria-controls="{{ $frameID }}" data-demo-stop disabled>Stop demo</button>
+  </div>
+  <p class="web-demo-status" role="status" aria-live="polite" data-demo-status>Run loads the precompiled WebAssembly demo from this site inside an embedded frame.</p>
+  <div class="web-demo-frame" id="{{ $frameID }}" data-demo-frame data-demo-src="{{ $src }}" data-demo-title="{{ $title }}" hidden></div>
+  <noscript><a href="{{ $src }}" target="_blank" rel="noopener">Open the demo in a new tab</a></noscript>
+</div>

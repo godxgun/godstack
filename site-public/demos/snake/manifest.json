@@ -1,0 +1,32 @@
+{
+  "id": "snake",
+  "source": "demos/snake/snake.c",
+  "header": "Rend.h",
+  "peak_header": "Peak.h",
+  "compiler": "emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 6.0.9-git (4e4223852a0835923411059a3929907d7df1232e)",
+  "flags": [
+    "-std=c99",
+    "-O2",
+    "-Wall",
+    "-Wextra",
+    "-sMODULARIZE=1",
+    "-sEXPORT_NAME=createDemo",
+    "-sENVIRONMENT=web",
+    "-sSINGLE_FILE=1",
+    "-sEXIT_RUNTIME=0",
+    "-sALLOW_MEMORY_GROWTH=1",
+    "-sSTACK_SIZE=1048576",
+    "-sEXPORTED_FUNCTIONS=['_main']",
+    "-sASYNCIFY=1",
+    "-sMIN_WEBGL_VERSION=2",
+    "-sMAX_WEBGL_VERSION=2"
+  ],
+  "input_hash": "8ac97870716ef6671b6898cbffad171acf59fa8b43909883777b640afccb8161",
+  "files": {
+    "EMSCRIPTEN-LICENSE.txt": "620a78084fc7ca97c0b5dea9abf891f3ffcadfdbf305276f099c9c4e12fc1d86",
+    "LICENSE.txt": "6b06b33ac845d73a0d86fff9710ac5a7ac115193e933ab209970f5a05c1d0408",
+    "run.html": "a11a5bcc098a723fb2dbaa7350206ced9c50e641d7aaf35180031d6204e02288",
+    "demo.js": "e3c46da36c52ec5bcdc20e329f1194f96c38d0ec6b903cb28e2104732d330e4b"
+  },
+  "presentation": "Rend WebGL2; same Snake renderer/game source as native Vulkan"
+}

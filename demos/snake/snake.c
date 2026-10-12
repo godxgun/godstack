@@ -647,7 +647,7 @@ static int snake_open(SnakeDemo *d, int argc, char **argv)
 		return -1;
 	}
 	if (!d->headless) {
-		if (!(d->peak_ctx = peak_init_legacy())) {
+		if (!(d->peak_ctx = peak_init())) {
 			fprintf(stderr, "snake: Peak initialization failed\n");
 			return 0;
 		}

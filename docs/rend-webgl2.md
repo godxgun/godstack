@@ -90,9 +90,9 @@ python3 tools/test_snake_web.py --native-ppm /tmp/snake-native.ppm
 The Snake test checks a visible rendered scene, fixed-frame native/browser
 pixel agreement, keyboard steering, backing-size changes, collision/restart,
 Escape cleanup and the published browser runner. It also retains the separate
-Rend2 smoke test, so both headers have independent browser coverage.
+Rend2 smoke test in the separate `~/rsr/src/godstack-pro` repository.
 
 Legacy `Rend.h` and `Rend2.h` expose different APIs with overlapping names.
 Do not include both in the same translation unit or substitute one for the
-other. The `tools/webgl2-smoke` test exercises Rend2; this test exercises the
+other. The `godstack-pro/tools/webgl2-smoke` test exercises Rend2; this checkout's test exercises the
 legacy header.

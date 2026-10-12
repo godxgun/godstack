@@ -1,0 +1,22 @@
+{{ define "main" }}
+{{ if eq .Section "demos" }}
+  {{ if eq .Params.runtime "browser" }}
+    {{ $demoID := path.Base .Params.id }}
+    {{ $demoURL := partial "site-url.html" (printf "/demos/%s/run.html" $demoID) }}
+    {{ if in (slice "snake" "grit") $demoID }}
+    <div class="focused-demo-toolbar"><h1>{{ .Title }}</h1><a href="{{ .Params.source }}" target="_blank" rel="noopener noreferrer">Source on GitHub ↗</a></div>
+    {{ end }}
+    <iframe class="demo-run-frame" src="{{ $demoURL }}" title="{{ .Title }} WebAssembly demo" sandbox="allow-scripts"></iframe>
+  {{ else if eq .Params.runtime "native" }}
+    {{ $thumbnail := partial "site-url.html" .Params.thumbnail }}
+    <section class="native-demo-stage" aria-label="Native demo preview"><img src="{{ $thumbnail }}" alt="Captured preview of {{ .Title }}"><p class="native-demo-label">Native Vulkan demo · browser build unavailable · <a href="{{ .Params.source }}">Source</a></p><p class="native-demo-command"><span>Run locally:</span> <code tabindex="0">{{ .Params.native_command }}</code></p></section>
+  {{ end }}
+{{ else }}
+  {{ $raw := strings.TrimSpace .RawContent }}{{ $sourceStartsWithH1 := strings.HasPrefix $raw "# " }}{{ $hasTOC := strings.Contains .TableOfContents "<a href=" }}
+  <div class="reading-layout"><article class="article{{ if .Params.symbols }} symbol-reference{{ end }}"{{ if and (eq .Section "docs") .Params.id }}{{ with site.GetPage (printf "/symbols/%s" .Params.id) }} data-symbol-vault-url="{{ .RelPermalink }}"{{ end }}{{ end }}><div class="article-meta">{{ if eq .Section "symbols" }}<a href="{{ with site.GetPage "/symbols" }}{{ .RelPermalink }}{{ else }}{{ partial "site-url.html" "/symbols/" }}{{ end }}">Symbols</a>{{ else if eq .Section "guides" }}<a href="{{ with site.GetPage "/guides" }}{{ .RelPermalink }}{{ else }}{{ partial "site-url.html" "/guides/" }}{{ end }}">Guides</a>{{ else }}<a href="{{ with site.GetPage "/docs" }}{{ .RelPermalink }}{{ else }}{{ partial "site-url.html" "/docs/" }}{{ end }}">Documentation</a>{{ end }}{{ with .Params.category }}<span> / {{ . }}</span>{{ end }}{{ if eq .Section "docs" }}{{ with site.GetPage (printf "/symbols/%s" .Params.id) }}<a href="{{ .RelPermalink }}">Symbol reference</a>{{ end }}{{ end }}{{ with .OutputFormats.Get "Markdown" }}<a class="source-link" href="{{ .RelPermalink }}">View Markdown</a>{{ end }}</div>
+  {{ if not $sourceStartsWithH1 }}<h1>{{ .Title }}</h1>{{ with .Description }}<p class="lede">{{ . }}</p>{{ end }}{{ end }}
+  {{ if .Params.historical }}<aside class="notice">This is a historical review, not the current implementation inventory. Its observations refer to an earlier snapshot.</aside>{{ end }}
+  {{ if .Params.symbols }}{{ with .Params.product }}{{ $guide := site.GetPage (printf "/docs/%s" (lower .)) }}{{ with $guide }}<aside class="notice symbol-guide-hint"><strong>Symbols</strong> — per-function reference. For usage and setup, see the <a href="{{ .RelPermalink }}">{{ $.Params.product }} library guide</a>.</aside>{{ end }}{{ end }}{{ end }}
+  <div class="prose">{{ if .Params.symbols }}{{ partial "symbol-content.html" . }}{{ else }}{{ .Content }}{{ end }}</div>{{ partial "prev-next.html" . }}</article>{{ if $hasTOC }}<aside class="right-toc" aria-label="On this page"><h2>On this page</h2>{{ .TableOfContents }}</aside>{{ end }}</div>
+{{ end }}
+{{ end }}

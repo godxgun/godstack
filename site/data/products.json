@@ -1,0 +1,11 @@
+[
+  {"id":"peak","name":"Peak","description":"Platform services with explicit runtime contexts, window events, memory, and I/O.","category":"Platform","docs":"/docs/peak/","demo":"https://github.com/godxgun/godstack/tree/main/demos/peak"},
+  {"id":"rend","name":"Rend","description":"A graphics API layer with renderers, pipelines, buffers, and textures.","category":"Graphics","docs":"/docs/rend/","demo":"https://github.com/godxgun/godstack/tree/main/demos/rend"},
+  {"id":"fuse","name":"Fuse","description":"Immediate-mode UI that emits commands for your renderer to consume.","category":"UI","docs":"/docs/fuse/","demo":"https://github.com/godxgun/godstack/tree/main/demos/fuse"},
+  {"id":"grit","name":"Grit","description":"Caller-managed allocators, math, random numbers, and software raster utilities.","category":"Utilities","docs":"/docs/grit/","demo":"https://github.com/godxgun/godstack/tree/main/demos/grit"},
+  {"id":"type","name":"Type","description":"Font loading, glyph rasterization, atlases, and text layout.","category":"Text","docs":"/docs/type/","demo":"https://github.com/godxgun/godstack/tree/main/demos/type"},
+  {"id":"cast","name":"Cast","description":"A C tokenizer and parser scaffold using caller-provided storage.","category":"Parsing","docs":"/docs/cast/","demo":"https://github.com/godxgun/godstack/tree/main/demos/cast"},
+  {"id":"cool","name":"Cool","description":"HTML output helpers, a Markdown subset, and template tooling.","category":"Web","docs":"/docs/cool/","demo":"https://github.com/godxgun/godstack/tree/main/demos/doc-generator"},
+  {"id":"wire","name":"Wire","description":"A small HTTP server with request handlers.","category":"Web","docs":"/docs/wire/","demo":"https://github.com/godxgun/godstack/tree/main/demos/doc-generator"},
+  {"id":"poof","name":"Poof","description":"Header-only C build tooling for commands, compiler invocations, and batches.","category":"Build","docs":"/docs/poof/","demo":"https://github.com/godxgun/godstack/blob/main/build.c"}
+]

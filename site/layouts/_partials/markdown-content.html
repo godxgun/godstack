@@ -1,0 +1,25 @@
+{{- /* Export public content with deployment-aware links; leave code intact. */ -}}
+{{- $content := "" -}}
+{{- if and (eq .Section "demos") .IsPage -}}
+  {{- $content = printf "Source: %s\n\n" .Params.source -}}
+  {{- if eq .Params.runtime "browser" -}}
+    {{- $content = printf "%s[Load the compiled WebAssembly demo](%sdemos/%s/run.html)\n\nThis is a compiled C workload, not a browser C compiler.\n" $content site.Home.RelPermalink .File.ContentBaseName -}}
+  {{- else -}}
+    {{- $content = printf "%sNative Vulkan demo; no browser build is available.\n\n```sh\n%s\n```\n" $content .Params.native_command -}}
+  {{- end -}}
+{{- else if and (eq .Section "demos") .IsSection -}}
+  {{- range .RegularPages.ByWeight -}}
+    {{- $content = printf "%s- [%s](%s): %s (%s)\n" $content .Title .Permalink .Description .Params.runtime -}}
+  {{- end -}}
+{{- else -}}
+  {{- $chunks := slice -}}
+  {{- range $index, $chunk := split .RawContent "```" -}}
+    {{- if eq (mod $index 2) 0 -}}
+      {{- $chunk = replaceRE `\]\(/` (printf "](%s" site.Home.RelPermalink) $chunk -}}
+      {{- $chunk = replaceRE `\{\{<\s*web-demo\s+id="([^"]+)"[^>]*>\}\}` (printf "[Run the compiled browser demo](%sdemos/$1/run.html)" site.Home.RelPermalink) $chunk -}}
+    {{- end -}}
+    {{- $chunks = $chunks | append $chunk -}}
+  {{- end -}}
+  {{- $content = delimit $chunks "```" -}}
+{{- end -}}
+{{- return $content -}}

@@ -1,4 +1,4 @@
-/* GPL-3.0-only OR a separately negotiated commercial license; see LICENSE. */
+/* MIT License; see LICENSE. */
 #define TYPE_IMPLEMENTATION
 #include "../Type.h"
 #include "support.h"

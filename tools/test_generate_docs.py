@@ -103,13 +103,15 @@ class PageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "Cast.h").write_text(header("void cast_run(void);"))
-            with patch.object(docs, "ROOT", root), patch.object(docs, "LIBRARIES", ("Cast",)):
+            site = root / "website"
+            site.mkdir()
+            with patch.object(docs, "ROOT", root), patch.object(docs, "SITE", site), patch.object(docs, "LIBRARIES", ("Cast",)):
                 with patch.object(sys, "argv", ["generate_docs", "--check"]):
                     self.assertEqual(docs.main(), 1)
-                    self.assertFalse((root / "site").exists())
+                    self.assertFalse((site / "articles").exists())
                 with patch.object(sys, "argv", ["generate_docs"]):
                     self.assertEqual(docs.main(), 0)
-                page = root / "site/articles/symbols/cast.md"
+                page = site / "articles/symbols/cast.md"
                 before = page.read_bytes()
                 with patch.object(sys, "argv", ["generate_docs", "--check"]):
                     self.assertEqual(docs.main(), 0)
@@ -121,9 +123,16 @@ class PageTests(unittest.TestCase):
 
     def test_cli_works_outside_repository(self):
         with tempfile.TemporaryDirectory() as directory:
-            result = subprocess.run([sys.executable, str(docs.ROOT / "tools/generate_docs.py"), "--check"],
-                                    cwd=directory, capture_output=True, text=True)
+            command = [sys.executable, str(docs.ROOT / "tools/generate_docs.py"), "--site", directory]
+            generated = subprocess.run(command, cwd=directory, capture_output=True, text=True)
+            self.assertEqual(generated.returncode, 0, generated.stdout + generated.stderr)
+            result = subprocess.run([*command, "--check"], cwd=directory, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_missing_site_reports_configuration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(sys, "argv", ["generate_docs", "--site", str(Path(directory) / "missing")]):
+                self.assertEqual(docs.main(), 1)
 
 
 if __name__ == "__main__":

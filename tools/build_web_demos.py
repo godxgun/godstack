@@ -18,6 +18,8 @@ import subprocess
 import sys
 import tempfile
 
+from site_paths import SITE
+
 ROOT = Path(__file__).resolve().parents[1]
 DEMOS = {"grit": "Grit.h", "snake": "Rend.h"}
 TITLES = {"grit": "Particle Observatory", "snake": "Snake"}
@@ -73,6 +75,7 @@ def source_path(name):
 
 def input_hash(name):
     inputs = [source_path(name), ROOT / DEMOS[name], ROOT / "Peak.h", Path(__file__)]
+    inputs += [ROOT / notice for notice in ("LICENSE", "THIRD-PARTY-NOTICES.md")]
     inputs += ([ROOT / "Grit.h"] if name == "snake" else [ROOT / f"demos/{name}/visual.h"])
     return digest(json.dumps(demo_flags(name)).encode() + b"".join(path.read_bytes() for path in inputs))
 
@@ -84,7 +87,8 @@ def current(destination, name):
         return (manifest["input_hash"] == input_hash(name)
                 and all(digest((directory / filename).read_bytes()) == checksum
                         for filename, checksum in manifest["files"].items())
-                and {"demo.js", "run.html", "LICENSE.txt"}.issubset(manifest["files"]))
+                and {"demo.js", "run.html", "LICENSE.txt",
+                     "THIRD-PARTY-NOTICES.md"}.issubset(manifest["files"]))
     except (OSError, KeyError, ValueError):
         return False
 
@@ -93,7 +97,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("demos", nargs="*", choices=tuple(DEMOS), help="default: both demos")
     parser.add_argument("--check", action="store_true", help="check sources and artifacts without compiling")
-    parser.add_argument("--output", type=Path, default=ROOT / "site/static/demos")
+    parser.add_argument("--output", type=Path, default=SITE / "static/demos")
     args = parser.parse_args()
     names = args.demos or list(DEMOS)
     if args.check:
@@ -134,6 +138,8 @@ def main():
                 shell = shell.replace("__ARGUMENTS__", "[]" if name == "snake" else "(matchMedia('(prefers-reduced-motion: reduce)').matches?['--paused']:[])")
                 (directory / "run.html").write_text(shell)
                 shutil.copyfile(ROOT / "LICENSE", directory / "LICENSE.txt")
+                shutil.copyfile(ROOT / "THIRD-PARTY-NOTICES.md",
+                                directory / "THIRD-PARTY-NOTICES.md")
                 runtime_license = Path(compiler).resolve().parent / "LICENSE"
                 if runtime_license.is_file():
                     shutil.copyfile(runtime_license, directory / "EMSCRIPTEN-LICENSE.txt")

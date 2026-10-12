@@ -1,0 +1,25 @@
+# {{ site.Title }}: compact setup
+
+{{ site.Params.description }}
+
+## Setup
+{{ with site.GetPage "/guides/getting-started" }}
+{{ .Params.agent_setup }}
+{{ end }}
+
+## Essential links
+
+- Getting started: {{ "guides/getting-started/" | absURL }}
+- Documentation index: {{ "docs/" | absURL }}
+- Symbols: {{ "symbols/" | absURL }}
+- Demo gallery: {{ "demos/" | absURL }}
+- Documentation catalog: {{ "catalog.json" | absURL }}
+- Choose a library: {{ "docs/" | absURL }}
+- Agent instructions: {{ "ai/" | absURL }}
+- Project skill: {{ "agent/SKILL.md" | absURL }}
+- AGENTS.md snippet: {{ "agent/AGENTS.md" | absURL }}
+- Full public documentation: {{ "llms-full.txt" | absURL }}
+- Source: {{ site.Params.github }}
+- License: {{ "license/" | absURL }}
+
+Use the catalog's markdown_url for the relevant document rather than loading the full collection into every prompt. Verify APIs against the matching header. Do not confuse C browser examples with native execution, assume every detected platform is supported, or use ./build cpu (the current build driver accepts ./build demo <name>). Do not introduce dependencies or an MCP backend without approval.

@@ -1,8 +1,7 @@
-/* GPL-3.0-only OR a separately negotiated commercial license; see LICENSE. */
+/* MIT License; see LICENSE. */
 #ifndef TYPE_SYNTHETIC_H
 #define TYPE_SYNTHETIC_H
-/* Original synthetic sfnt data: GPL-3.0-only OR a separately negotiated
- * commercial license, as described in the repository LICENSE. */
+/* Original synthetic sfnt data: MIT License; see LICENSE. */
 static void synth_u16(unsigned char *p, uint32_t n)
 {
     p[0] = (unsigned char)(n >> 8);

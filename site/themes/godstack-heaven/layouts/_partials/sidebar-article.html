@@ -1,0 +1,14 @@
+{{ $page := .page }}
+{{ $current := eq $page .current }}
+<li class="sidebar-article">
+  {{ if strings.Contains $page.TableOfContents "<a href=" }}
+  <details{{ if $current }} open{{ end }}>
+    <summary><a href="{{ $page.RelPermalink }}"{{ if $current }} aria-current="page"{{ end }}>{{ $page.Title }}</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      {{ partial "sidebar-headings.html" (dict "headings" $page.Fragments.Headings "page" $page) }}
+    </ul>
+  </details>
+  {{ else }}
+  <a href="{{ $page.RelPermalink }}"{{ if $current }} aria-current="page"{{ end }}>{{ $page.Title }}</a>
+  {{ end }}
+</li>

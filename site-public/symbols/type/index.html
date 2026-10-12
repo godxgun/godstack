@@ -1,0 +1,1311 @@
+<!doctype html>
+<html lang="en" class="no-js">
+    <head>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+        <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark">
+        <script>document.documentElement.classList.replace('no-js','js');</script>
+        <title>Type symbols · Godstack</title><meta name="description" content="Types, macros, and functions declared by Type.h."><link rel="canonical" href="https://example.org/symbols/type/">
+        
+        <link rel="stylesheet" href="/css/main.a87a5ada49af1cc103390b31f69448f8f98137dea361366aade0bedb9598ba04.css" integrity="sha256-qHpa2kmvHMEDOQsx9pRI&#43;PmBN96jYTZqreC&#43;25WYugQ=">
+    </head>
+    <body>
+        
+        <div class="heaven-scenery" aria-hidden="true"><img src="/images/ocean-sky_hu_f78afa269ada3c1a.webp" alt="" fetchpriority="high"><canvas hidden></canvas></div>
+        <a class="skip-link" href="#main">Skip to content</a>
+        <header class="topbar">
+            <a class="brand heaven-button" href="/">Godstack</a>
+            
+            <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="sidebar">Menu</button>
+            
+            <nav class="topnav" aria-label="Main navigation">
+                
+                    <a href="/docs/">Docs</a>
+                    
+
+                
+                    <a href="/demos/">Demos</a>
+                    
+
+                
+                    <a href="/symbols/">Symbols</a>
+                    
+
+                <a href="/ai/">AI</a><a href="https://github.com/godxgun/godstack">GitHub</a></nav><div class="top-actions"><button type="button" class="search-open" aria-haspopup="dialog" aria-controls="site-search">Search <kbd>⌘ K</kbd></button><noscript><a class="noscript-search" href="/docs/">Browse docs</a></noscript></div></header>
+        
+        <div class="site-layout">
+            
+<nav class="sidebar" id="sidebar" aria-label="Documentation and guides">
+
+
+    
+    
+    <h2 class="nav-label">Guides</h2>
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/guides/getting-started/">Getting Started</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/guides/getting-started/#peak---platform-layer">Peak - Platform Layer</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/guides/getting-started/#poof---a-build-system">Poof - A Build System</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+
+    
+    
+    
+    
+    <h2 class="nav-label">Build</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/poof/">Poof</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/poof/#running-a-command">Running a Command</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#compiling-a-program">Compiling a Program</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#platform-flags-and-cross-targets">Platform Flags and Cross Targets</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#building-in-parallel">Building in Parallel</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#skipping-up-to-date-work">Skipping Up-to-Date Work</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#rebuilding-the-build-script">Rebuilding the Build Script</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#printing-status">Printing Status</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">Core Libraries</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/peak/">Peak</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/peak/#opening-a-window">Opening a Window</a>
+    <ul>
+
+  
+  <li>
+    <a href="/docs/peak/#a-basic-event-loop">A Basic Event Loop</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#with-the-callback-api">With The Callback API</a>
+    
+  </li>
+  
+
+</ul>
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#using-the-filesystem">Using the Filesystem</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#spawning-a-tty">Spawning a TTY</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#memory-mapped-circular-ring-buffer">Memory Mapped Circular Ring Buffer</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#streaming-audio">Streaming Audio</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/rend/">Rend</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/rend/#creating-a-renderer">Creating a Renderer</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/rend/#creating-your-first-pipeline">Creating your first Pipeline</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/rend/#drawing-a-triangle">Drawing a triangle</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/rend/#drawing-a-mesh">Drawing a Mesh</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/fuse/">Fuse</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/fuse/#building-a-frame">Building a Frame</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#drawing-the-commands">Drawing the Commands</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#laying-out-with-classes">Laying Out with Classes</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#identifying-widgets">Identifying Widgets</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#sliders-scrolling-and-text-input">Sliders, Scrolling and Text Input</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#docking-windows">Docking Windows</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#handling-errors">Handling Errors</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/grit/">Grit</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/grit/#allocating-from-an-arena">Allocating from an Arena</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#stack-allocation">Stack Allocation</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#pools-of-equal-sized-objects">Pools of Equal-Sized Objects</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#dynamic-arrays-and-hash-maps">Dynamic Arrays and Hash Maps</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#random-numbers">Random Numbers</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#vectors-and-matrices">Vectors and Matrices</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#drawing-pixels">Drawing Pixels</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/type/">Type</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/type/#creating-a-context">Creating a Context</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#rendering-text">Rendering Text</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#scratch-memory">Scratch Memory</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#uploading-the-atlas">Uploading the Atlas</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#faces-styles-and-fallbacks">Faces, Styles and Fallbacks</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#shaped-text">Shaped Text</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#lower-level-building-blocks">Lower-Level Building Blocks</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">Utilities</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/cast/">Cast</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/cast/#tokenizing-source">Tokenizing Source</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#reading-tokens">Reading Tokens</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#parsing-declarations">Parsing Declarations</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#handling-unparsable-input">Handling Unparsable Input</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#sizing-and-reusing-memory">Sizing and Reusing Memory</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">Web</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/cool/">Cool</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/cool/#writing-text">Writing Text</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#writing-markup">Writing Markup</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#choosing-the-output-stream">Choosing the Output Stream</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#rendering-markdown">Rendering Markdown</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#compiling-templates">Compiling Templates</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/wire/">Wire</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/wire/#serving-a-response">Serving a Response</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#routing-requests">Routing Requests</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#serving-static-files">Serving Static Files</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#partial-responses-for-htmx">Partial Responses for htmx</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#running-your-own-loop">Running Your Own Loop</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#limits">Limits</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">API references</h2>
+
+    <ul class="sidebar-list">
+        <li><a href="/symbols/">Symbols</a></li>
+    </ul>
+
+    <div class="sidebar-footer">
+        <a href="/docs/">All libraries</a>
+        <a href="/ai/">Coding agent guide</a>
+    </div>
+</nav>
+
+            <main id="main" tabindex="-1">
+                
+
+  
+  <div class="reading-layout"><article class="article symbol-reference"><div class="article-meta"><a href="/symbols/">Symbols</a><span> / Symbols</span><a class="source-link" href="/symbols/type.md">View Markdown</a></div>
+  
+  
+  <aside class="notice symbol-guide-hint"><strong>Symbols</strong> — per-function reference. For usage and setup, see the <a href="/docs/type/">Type library guide</a>.</aside>
+  <div class="prose"><h1 id="type-symbols">Type symbols<a class="heading-anchor" href="#type-symbols" aria-label="Link to Type symbols">#</a></h1>
+<p>For setup and API workflows, read the <a href="/docs/type/">Type guide</a>
+. This vault lists individual declarations; it is not a tutorial.</p>
+<h2 id="api-reference">API reference<a class="heading-anchor" href="#api-reference" aria-label="Link to API reference">#</a></h2>
+<p>Generated from <code>Type.h</code> by <code>tools/generate_docs.py</code>. Edit the header comments, not this section.</p>
+<p>Declarations from all platform branches are listed; this is not a preprocessed API.</p>
+<h3 id="types">Types<a class="heading-anchor" href="#types" aria-label="Link to Types">#</a></h3>
+<section class="symbol-card"><h4 id="typettf">TypeTTF<a class="heading-anchor" href="#typettf" aria-label="Link to TypeTTF">#</a></h4>
+<p>Source: <code>Type.h:84</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">TypeTTF</span> <span class="n">TypeTTF</span><span class="p">;</span>
+</span></span></code></pre></div><p>Parsed sfnt face: glyf, CFF or CFF2.</p>
+</section><section class="symbol-card"><h4 id="typeotf">TypeOTF<a class="heading-anchor" href="#typeotf" aria-label="Link to TypeOTF">#</a></h4>
+<p>Source: <code>Type.h:85</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">TypeOTF</span> <span class="n">TypeOTF</span><span class="p">;</span>
+</span></span></code></pre></div><p>OpenType placement view.</p>
+</section><section class="symbol-card"><h4 id="typefont">TypeFont<a class="heading-anchor" href="#typefont" aria-label="Link to TypeFont">#</a></h4>
+<p>Source: <code>Type.h:86</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">TypeFont</span> <span class="n">TypeFont</span><span class="p">;</span>
+</span></span></code></pre></div><p>Face view: parsed file + weight + style. Borrows the file.</p>
+</section><section class="symbol-card"><h4 id="typeatlas">TypeAtlas<a class="heading-anchor" href="#typeatlas" aria-label="Link to TypeAtlas">#</a></h4>
+<p>Source: <code>Type.h:87</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">TypeAtlas</span> <span class="n">TypeAtlas</span><span class="p">;</span>
+</span></span></code></pre></div><p>Shelf-packed coverage atlas.</p>
+</section><section class="symbol-card"><h4 id="typeatlasrgba">TypeAtlasRgba<a class="heading-anchor" href="#typeatlasrgba" aria-label="Link to TypeAtlasRgba">#</a></h4>
+<p>Source: <code>Type.h:88</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">TypeAtlasRgba</span> <span class="n">TypeAtlasRgba</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="typectx">TypeCtx<a class="heading-anchor" href="#typectx" aria-label="Link to TypeCtx">#</a></h4>
+<p>Source: <code>Type.h:89</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">TypeCtx</span> <span class="n">TypeCtx</span><span class="p">;</span>
+</span></span></code></pre></div><p>Faces, fallbacks, atlases, glyph LRU.</p>
+</section><section class="symbol-card"><h4 id="typeerror">TypeError<a class="heading-anchor" href="#typeerror" aria-label="Link to TypeError">#</a></h4>
+<p>Source: <code>Type.h:91</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">enum</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_OK</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_ERR_INVALID_FONT</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_ERR_UNSUPPORTED_TABLE</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_ERR_GLYPH_NOT_FOUND</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_ERR_ATLAS_FULL</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_ERR_INVALID_UTF8</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_ERR_UNIMPLEMENTED</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_ERR_BUF_TOO_SMALL</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_ERR_SCRATCH_REQUIRED</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_ERR_SCRATCH_FULL</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_ERR_UNTRUSTED_FONT</span><span class="p">,</span> <span class="cm">/* retained enum value for source compatibility */</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_ERR_LIMIT</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">TypeError</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="typescratch">TypeScratch<a class="heading-anchor" href="#typescratch" aria-label="Link to TypeScratch">#</a></h4>
+<p>Source: <code>Type.h:110</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">TypeScratch</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint8_t</span> <span class="o">*</span><span class="n">data</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">size_t</span> <span class="n">capacity</span><span class="p">,</span> <span class="n">used</span><span class="p">,</span> <span class="n">peak</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">int</span> <span class="n">failed</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">TypeScratch</span><span class="p">;</span>
+</span></span></code></pre></div><p>Caller-owned temporary-arena view. No allocation or heap fallback.
+Initialize once per borrowed slice. Operations restore used, retain peak and
+failed diagnostics. Do not share a view across concurrent/reentrant calls.
+data must not overlap context, font bytes, output or bitmap storage.</p>
+</section><section class="symbol-card"><h4 id="typeantialias">TypeAntiAlias<a class="heading-anchor" href="#typeantialias" aria-label="Link to TypeAntiAlias">#</a></h4>
+<p>Source: <code>Type.h:120</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">enum</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_AA_NONE</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="cm">/* binary coverage */</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_AA_BOX</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>  <span class="cm">/* box-filter antialiasing */</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_AA_SDF</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>  <span class="cm">/* signed distance; raster returns TYPE_ERR_UNIMPLEMENTED */</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">TypeAntiAlias</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="typeweight">TypeWeight<a class="heading-anchor" href="#typeweight" aria-label="Link to TypeWeight">#</a></h4>
+<p>Source: <code>Type.h:127</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">enum</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_WEIGHT_THIN</span> <span class="o">=</span> <span class="mi">100</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_WEIGHT_EXTRA_LIGHT</span> <span class="o">=</span> <span class="mi">200</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_WEIGHT_LIGHT</span> <span class="o">=</span> <span class="mi">300</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_WEIGHT_REGULAR</span> <span class="o">=</span> <span class="mi">400</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_WEIGHT_MEDIUM</span> <span class="o">=</span> <span class="mi">500</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_WEIGHT_SEMI_BOLD</span> <span class="o">=</span> <span class="mi">600</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_WEIGHT_BOLD</span> <span class="o">=</span> <span class="mi">700</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_WEIGHT_EXTRA_BOLD</span> <span class="o">=</span> <span class="mi">800</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_WEIGHT_BLACK</span> <span class="o">=</span> <span class="mi">900</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">TypeWeight</span><span class="p">;</span>
+</span></span></code></pre></div><p>CSS-ish usWeightClass. Any u16 is legal; these are the named stops.</p>
+</section><section class="symbol-card"><h4 id="typewidth">TypeWidth<a class="heading-anchor" href="#typewidth" aria-label="Link to TypeWidth">#</a></h4>
+<p>Source: <code>Type.h:140</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">enum</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_WIDTH_NARROW</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_WIDTH_WIDE</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_WIDTH_AMBIGUOUS</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TYPE_WIDTH_NEUTRAL</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">TypeWidth</span><span class="p">;</span>
+</span></span></code></pre></div><p>UAX #11. Neutral is the default outside the wide and ambiguous ranges.</p>
+</section><section class="symbol-card"><h4 id="typestyle">TypeStyle<a class="heading-anchor" href="#typestyle" aria-label="Link to TypeStyle">#</a></h4>
+<p>Source: <code>Type.h:147</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">TypeStyle</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint8_t</span> <span class="n">italic</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint8_t</span> <span class="n">bold</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">TypeStyle</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="typefaceparams">TypeFaceParams<a class="heading-anchor" href="#typefaceparams" aria-label="Link to TypeFaceParams">#</a></h4>
+<p>Source: <code>Type.h:153</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">TypeFaceParams</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint16_t</span> <span class="n">weight</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TypeStyle</span> <span class="n">style</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">TypeFaceParams</span><span class="p">;</span>
+</span></span></code></pre></div><p>weight 0 means &ldquo;unset&rdquo;: bold style selects TYPE_WEIGHT_BOLD, otherwise REGULAR.</p>
+</section><section class="symbol-card"><h4 id="typeparams">TypeParams<a class="heading-anchor" href="#typeparams" aria-label="Link to TypeParams">#</a></h4>
+<p>Source: <code>Type.h:164</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">TypeParams</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint32_t</span> <span class="n">atlas_width</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint32_t</span> <span class="n">atlas_height</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint32_t</span> <span class="n">cache_capacity</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint32_t</span> <span class="n">max_faces</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint32_t</span> <span class="n">max_fallbacks</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint8_t</span> <span class="n">ligatures</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint8_t</span> <span class="n">color_emoji</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint8_t</span> <span class="n">antialias</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">TypeParams</span><span class="p">;</span>
+</span></span></code></pre></div><p>atlas_* and cache_capacity must be &gt; 0 (type_params_default fills the
+velocitty defaults). max_faces and max_fallbacks bound storage inside the
+context buffer. ligatures/color_emoji are reserved; the unshaped helper
+applies neither GSUB nor color glyphs. antialias is TypeAntiAlias.</p>
+</section><section class="symbol-card"><h4 id="typemetrics">TypeMetrics<a class="heading-anchor" href="#typemetrics" aria-label="Link to TypeMetrics">#</a></h4>
+<p>Source: <code>Type.h:175</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">TypeMetrics</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">float</span> <span class="n">ascender</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">float</span> <span class="n">descender</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">float</span> <span class="n">line_gap</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint16_t</span> <span class="n">units_per_em</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">TypeMetrics</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="typebitmap">TypeBitmap<a class="heading-anchor" href="#typebitmap" aria-label="Link to TypeBitmap">#</a></h4>
+<p>Source: <code>Type.h:185</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">TypeBitmap</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint16_t</span> <span class="n">width</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint16_t</span> <span class="n">height</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">int16_t</span> <span class="n">bearing_x</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">int16_t</span> <span class="n">bearing_y</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint16_t</span> <span class="n">advance</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint8_t</span> <span class="o">*</span><span class="n">pixels</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint8_t</span> <span class="n">color</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">TypeBitmap</span><span class="p">;</span>
+</span></span></code></pre></div><p>pixels is coverage (1 byte) or straight RGBA8 (4 bytes) when color != 0.
+advance is pixels at the requested size. Bearing is the bitmap origin
+relative to the pen, y up.</p>
+</section><section class="symbol-card"><h4 id="typeglyph">TypeGlyph<a class="heading-anchor" href="#typeglyph" aria-label="Link to TypeGlyph">#</a></h4>
+<p>Source: <code>Type.h:195</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">TypeGlyph</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint32_t</span> <span class="n">font_id</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint16_t</span> <span class="n">glyph_id</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">float</span> <span class="n">advance</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">float</span> <span class="n">bearing_x</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">float</span> <span class="n">bearing_y</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint16_t</span> <span class="n">width</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint16_t</span> <span class="n">height</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint16_t</span> <span class="n">atlas_x</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint16_t</span> <span class="n">atlas_y</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint8_t</span> <span class="n">color</span><span class="p">;</span> <span class="cm">/* 0 coverage atlas, 1 color atlas */</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">TypeGlyph</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="typecell">TypeCell<a class="heading-anchor" href="#typecell" aria-label="Link to TypeCell">#</a></h4>
+<p>Source: <code>Type.h:208</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">TypeCell</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TypeGlyph</span> <span class="n">glyph</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">float</span> <span class="n">x</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">float</span> <span class="n">y</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint32_t</span> <span class="n">codepoint</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">TypeCell</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="typeshapedglyph">TypeShapedGlyph<a class="heading-anchor" href="#typeshapedglyph" aria-label="Link to TypeShapedGlyph">#</a></h4>
+<p>Source: <code>Type.h:220</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">TypeShapedGlyph</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint32_t</span> <span class="n">font_id</span><span class="p">,</span> <span class="n">glyph_id</span><span class="p">,</span> <span class="n">cluster</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">float</span> <span class="n">x_advance</span><span class="p">,</span> <span class="n">y_advance</span><span class="p">,</span> <span class="n">x_offset</span><span class="p">,</span> <span class="n">y_offset</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">TypeShapedGlyph</span><span class="p">;</span>
+</span></span></code></pre></div><p>External shaper output, in visual glyph order. cluster is a UTF-8 byte
+offset in the caller&rsquo;s logical text, never a glyph index. Positions are
+pixels, fractional, y down (negate HarfBuzz y values on import). font_id
+and glyph_id must refer to exactly the face shaped, including glyph 0.
+Run size uses the same integer-pixel rounding as type_glyph.</p>
+</section><section class="symbol-card"><h4 id="typepositionedglyph">TypePositionedGlyph<a class="heading-anchor" href="#typepositionedglyph" aria-label="Link to TypePositionedGlyph">#</a></h4>
+<p>Source: <code>Type.h:225</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">TypePositionedGlyph</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="n">TypeGlyph</span> <span class="n">glyph</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint32_t</span> <span class="n">cluster</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">float</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">TypePositionedGlyph</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="typetextmetrics">TypeTextMetrics<a class="heading-anchor" href="#typetextmetrics" aria-label="Link to TypeTextMetrics">#</a></h4>
+<p>Source: <code>Type.h:233</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">TypeTextMetrics</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">float</span> <span class="n">advance_x</span><span class="p">,</span> <span class="n">advance_y</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">float</span> <span class="n">min_x</span><span class="p">,</span> <span class="n">min_y</span><span class="p">,</span> <span class="n">max_x</span><span class="p">,</span> <span class="n">max_y</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint8_t</span> <span class="n">has_ink</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">TypeTextMetrics</span><span class="p">;</span>
+</span></span></code></pre></div><p>Ink bounds relative to initial baseline; advance includes invisible glyphs.
+has_ink == 0 means all bounds are zero.</p>
+</section><section class="symbol-card"><h4 id="typeglyphkey">TypeGlyphKey<a class="heading-anchor" href="#typeglyphkey" aria-label="Link to TypeGlyphKey">#</a></h4>
+<p>Source: <code>Type.h:239</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">TypeGlyphKey</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint32_t</span> <span class="n">font_id</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint32_t</span> <span class="n">glyph_id</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint16_t</span> <span class="n">size_px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint16_t</span> <span class="n">flags</span><span class="p">;</span> <span class="cm">/* TYPE_STYLE_BOLD | TYPE_STYLE_ITALIC */</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">TypeGlyphKey</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="typeglyphstats">TypeGlyphStats<a class="heading-anchor" href="#typeglyphstats" aria-label="Link to TypeGlyphStats">#</a></h4>
+<p>Source: <code>Type.h:246</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">TypeGlyphStats</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint64_t</span> <span class="n">hits</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint64_t</span> <span class="n">misses</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint64_t</span> <span class="n">raster_ns</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint64_t</span> <span class="n">atlas_ns</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">TypeGlyphStats</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="typerect">TypeRect<a class="heading-anchor" href="#typerect" aria-label="Link to TypeRect">#</a></h4>
+<p>Source: <code>Type.h:253</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">TypeRect</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint32_t</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">h</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">TypeRect</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="typevertex">TypeVertex<a class="heading-anchor" href="#typevertex" aria-label="Link to TypeVertex">#</a></h4>
+<p>Source: <code>Type.h:316</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">TypeVertex</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">double</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">cx</span><span class="p">,</span> <span class="n">cy</span><span class="p">,</span> <span class="n">cx1</span><span class="p">,</span> <span class="n">cy1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">uint8_t</span> <span class="n">type</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">TypeVertex</span><span class="p">;</span>
+</span></span></code></pre></div></section><h3 id="functions">Functions<a class="heading-anchor" href="#functions" aria-label="Link to Functions">#</a></h3>
+<section class="symbol-card"><h4 id="type_scratch_init">type_scratch_init<a class="heading-anchor" href="#type_scratch_init" aria-label="Link to type_scratch_init">#</a></h4>
+<p>Source: <code>Type.h:116</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">type_scratch_init</span><span class="p">(</span><span class="n">TypeScratch</span> <span class="o">*</span><span class="n">scratch</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">data</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">capacity</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_set_scratch">type_set_scratch<a class="heading-anchor" href="#type_set_scratch" aria-label="Link to type_set_scratch">#</a></h4>
+<p>Source: <code>Type.h:118</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">type_set_scratch</span><span class="p">(</span><span class="n">TypeCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">,</span> <span class="n">TypeScratch</span> <span class="o">*</span><span class="n">scratch</span><span class="p">);</span>
+</span></span></code></pre></div><p>Borrow until detached (NULL). No operation may overlap an arena reset.</p>
+</section><section class="symbol-card"><h4 id="type_params_default">type_params_default<a class="heading-anchor" href="#type_params_default" aria-label="Link to type_params_default">#</a></h4>
+<p>Source: <code>Type.h:257</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">type_params_default</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="n">TypeParams</span> <span class="o">*</span><span class="n">params</span><span class="p">);</span>
+</span></span></code></pre></div><p>1024^2 atlas, 2048 cache, 8 faces, ligatures, color emoji, box AA.</p>
+</section><section class="symbol-card"><h4 id="type_face_params_default">type_face_params_default<a class="heading-anchor" href="#type_face_params_default" aria-label="Link to type_face_params_default">#</a></h4>
+<p>Source: <code>Type.h:259</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">type_face_params_default</span><span class="p">(</span><span class="n">TypeFaceParams</span> <span class="o">*</span><span class="n">face</span><span class="p">);</span>
+</span></span></code></pre></div><p>weight unset, roman.</p>
+</section><section class="symbol-card"><h4 id="type_ttf_memory">type_ttf_memory<a class="heading-anchor" href="#type_ttf_memory" aria-label="Link to type_ttf_memory">#</a></h4>
+<p>Source: <code>Type.h:266</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">size_t</span> <span class="nf">type_ttf_memory</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+</span></span></code></pre></div><hr>
+</section><h2 id="typeh-implementation">Parsed files. Bytes are borrowed for the life of the placed object.
+Type.h implementation<a class="heading-anchor" href="#typeh-implementation" aria-label="Link to Parsed files. Bytes are borrowed for the life of the placed object.
+Type.h implementation">#</a></h2>
+<section class="symbol-card"><h4 id="type_otf_memory">type_otf_memory<a class="heading-anchor" href="#type_otf_memory" aria-label="Link to type_otf_memory">#</a></h4>
+<p>Source: <code>Type.h:267</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">size_t</span> <span class="nf">type_otf_memory</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_ttf_place_index">type_ttf_place_index<a class="heading-anchor" href="#type_ttf_place_index" aria-label="Link to type_ttf_place_index">#</a></h4>
+<p>Source: <code>Type.h:274</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeTTF</span> <span class="o">*</span><span class="nf">type_ttf_place_index</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="n">buf</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">bufsize</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">bytes</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">len</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">			      <span class="kt">uint32_t</span> <span class="n">face_index</span><span class="p">);</span>
+</span></span></code></pre></div><p>All admission paths validate bounded table views. Nested outlines are checked
+on access and may return TYPE_ERR_INVALID_FONT, TYPE_ERR_UNSUPPORTED_TABLE or
+TYPE_ERR_LIMIT. Font bytes must remain immutable. Placement is 16-byte aligned.
+The trusted suffix is retained as an alias, without bypassing validation.
+Both placement types accept glyf/CFF/CFF2. TTC chooses face zero by default.</p>
+</section><section class="symbol-card"><h4 id="type_ttf_place">type_ttf_place<a class="heading-anchor" href="#type_ttf_place" aria-label="Link to type_ttf_place">#</a></h4>
+<p>Source: <code>Type.h:276</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeTTF</span> <span class="o">*</span><span class="nf">type_ttf_place</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="n">buf</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">bufsize</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">bytes</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">len</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_ttf_place_trusted">type_ttf_place_trusted<a class="heading-anchor" href="#type_ttf_place_trusted" aria-label="Link to type_ttf_place_trusted">#</a></h4>
+<p>Source: <code>Type.h:277</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeTTF</span> <span class="o">*</span><span class="nf">type_ttf_place_trusted</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="n">buf</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">bufsize</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">bytes</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">len</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_otf_place">type_otf_place<a class="heading-anchor" href="#type_otf_place" aria-label="Link to type_otf_place">#</a></h4>
+<p>Source: <code>Type.h:278</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeOTF</span> <span class="o">*</span><span class="nf">type_otf_place</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="n">buf</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">bufsize</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">bytes</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">len</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_ttf_error">type_ttf_error<a class="heading-anchor" href="#type_ttf_error" aria-label="Link to type_ttf_error">#</a></h4>
+<p>Source: <code>Type.h:280</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeError</span> <span class="nf">type_ttf_error</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="k">const</span> <span class="n">TypeTTF</span> <span class="o">*</span><span class="n">font</span><span class="p">);</span>
+</span></span></code></pre></div><p>TYPE_OK, or why place failed. place(NULL buf) is not required.</p>
+</section><section class="symbol-card"><h4 id="type_otf_error">type_otf_error<a class="heading-anchor" href="#type_otf_error" aria-label="Link to type_otf_error">#</a></h4>
+<p>Source: <code>Type.h:282</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeError</span> <span class="nf">type_otf_error</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeOTF</span> <span class="o">*</span><span class="n">font</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_ttf_outline">type_ttf_outline<a class="heading-anchor" href="#type_ttf_outline" aria-label="Link to type_ttf_outline">#</a></h4>
+<p>Source: <code>Type.h:284</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">type_ttf_outline</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeTTF</span> <span class="o">*</span><span class="n">font</span><span class="p">);</span>
+</span></span></code></pre></div><p>1 when glyf outlines are usable.</p>
+</section><section class="symbol-card"><h4 id="type_otf_outline">type_otf_outline<a class="heading-anchor" href="#type_otf_outline" aria-label="Link to type_otf_outline">#</a></h4>
+<p>Source: <code>Type.h:285</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">type_otf_outline</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeOTF</span> <span class="o">*</span><span class="n">font</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_ttf_color">type_ttf_color<a class="heading-anchor" href="#type_ttf_color" aria-label="Link to type_ttf_color">#</a></h4>
+<p>Source: <code>Type.h:286</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">type_ttf_color</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeTTF</span> <span class="o">*</span><span class="n">font</span><span class="p">);</span>
+</span></span></code></pre></div><p>1 when a CBDT/CBLC face was parsed.</p>
+</section><section class="symbol-card"><h4 id="type_otf_color">type_otf_color<a class="heading-anchor" href="#type_otf_color" aria-label="Link to type_otf_color">#</a></h4>
+<p>Source: <code>Type.h:287</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">type_otf_color</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeOTF</span> <span class="o">*</span><span class="n">font</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_font_memory">type_font_memory<a class="heading-anchor" href="#type_font_memory" aria-label="Link to type_font_memory">#</a></h4>
+<p>Source: <code>Type.h:293</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">size_t</span> <span class="nf">type_font_memory</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+</span></span></code></pre></div><hr>
+</section><h2 id="face-borrows-the-placed-file-does-not-copy-glyph-bytes">Face. Borrows the placed file; does not copy glyph bytes.<a class="heading-anchor" href="#face-borrows-the-placed-file-does-not-copy-glyph-bytes" aria-label="Link to Face. Borrows the placed file; does not copy glyph bytes.">#</a></h2>
+<section class="symbol-card"><h4 id="type_font_from_ttf">type_font_from_ttf<a class="heading-anchor" href="#type_font_from_ttf" aria-label="Link to type_font_from_ttf">#</a></h4>
+<p>Source: <code>Type.h:295</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeFont</span> <span class="o">*</span><span class="nf">type_font_from_ttf</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="n">buf</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">bufsize</span><span class="p">,</span> <span class="k">const</span> <span class="n">TypeTTF</span> <span class="o">*</span><span class="n">ttf</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">			     <span class="k">const</span> <span class="n">TypeFaceParams</span> <span class="o">*</span><span class="n">face</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_font_from_otf">type_font_from_otf<a class="heading-anchor" href="#type_font_from_otf" aria-label="Link to type_font_from_otf">#</a></h4>
+<p>Source: <code>Type.h:297</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeFont</span> <span class="o">*</span><span class="nf">type_font_from_otf</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="n">buf</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">bufsize</span><span class="p">,</span> <span class="k">const</span> <span class="n">TypeOTF</span> <span class="o">*</span><span class="n">otf</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">			     <span class="k">const</span> <span class="n">TypeFaceParams</span> <span class="o">*</span><span class="n">face</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_font_weight">type_font_weight<a class="heading-anchor" href="#type_font_weight" aria-label="Link to type_font_weight">#</a></h4>
+<p>Source: <code>Type.h:300</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">uint16_t</span> <span class="nf">type_font_weight</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeFont</span> <span class="o">*</span><span class="n">font</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_font_style">type_font_style<a class="heading-anchor" href="#type_font_style" aria-label="Link to type_font_style">#</a></h4>
+<p>Source: <code>Type.h:301</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeStyle</span> <span class="nf">type_font_style</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeFont</span> <span class="o">*</span><span class="n">font</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_font_metrics">type_font_metrics<a class="heading-anchor" href="#type_font_metrics" aria-label="Link to type_font_metrics">#</a></h4>
+<p>Source: <code>Type.h:303</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeError</span> <span class="nf">type_font_metrics</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeFont</span> <span class="o">*</span><span class="n">font</span><span class="p">,</span> <span class="kt">float</span> <span class="n">size_px</span><span class="p">,</span> <span class="n">TypeMetrics</span> <span class="o">*</span><span class="n">out</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_font_glyph_index">type_font_glyph_index<a class="heading-anchor" href="#type_font_glyph_index" aria-label="Link to type_font_glyph_index">#</a></h4>
+<p>Source: <code>Type.h:304</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeError</span> <span class="nf">type_font_glyph_index</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="k">const</span> <span class="n">TypeFont</span> <span class="o">*</span><span class="n">font</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">codepoint</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">uint16_t</span> <span class="o">*</span><span class="n">out_gid</span><span class="p">);</span>
+</span></span></code></pre></div><p>TYPE_ERR_GLYPH_NOT_FOUND when unmapped. .notdef is not a hit.</p>
+</section><section class="symbol-card"><h4 id="type_font_advance">type_font_advance<a class="heading-anchor" href="#type_font_advance" aria-label="Link to type_font_advance">#</a></h4>
+<p>Source: <code>Type.h:307</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeError</span> <span class="nf">type_font_advance</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeFont</span> <span class="o">*</span><span class="n">font</span><span class="p">,</span> <span class="kt">uint16_t</span> <span class="n">glyph_id</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">			    <span class="kt">uint16_t</span> <span class="o">*</span><span class="n">out_fu</span><span class="p">);</span>
+</span></span></code></pre></div><p>font units</p>
+</section><section class="symbol-card"><h4 id="type_font_has_drawable">type_font_has_drawable<a class="heading-anchor" href="#type_font_has_drawable" aria-label="Link to type_font_has_drawable">#</a></h4>
+<p>Source: <code>Type.h:309</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">type_font_has_drawable</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeFont</span> <span class="o">*</span><span class="n">font</span><span class="p">,</span> <span class="kt">uint16_t</span> <span class="n">glyph_id</span><span class="p">);</span>
+</span></span></code></pre></div><p>1 outline or color bitmap</p>
+</section><section class="symbol-card"><h4 id="type_font_outline">type_font_outline<a class="heading-anchor" href="#type_font_outline" aria-label="Link to type_font_outline">#</a></h4>
+<p>Source: <code>Type.h:320</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeError</span> <span class="nf">type_font_outline</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeFont</span> <span class="o">*</span><span class="n">font</span><span class="p">,</span> <span class="kt">uint16_t</span> <span class="n">glyph_id</span><span class="p">,</span> <span class="n">TypeScratch</span> <span class="o">*</span><span class="n">scratch</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">			    <span class="n">TypeVertex</span> <span class="o">*</span><span class="n">vertices</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">capacity</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="o">*</span><span class="n">count</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_font_name">type_font_name<a class="heading-anchor" href="#type_font_name" aria-label="Link to type_font_name">#</a></h4>
+<p>Source: <code>Type.h:324</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeError</span> <span class="nf">type_font_name</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeFont</span> <span class="o">*</span><span class="n">font</span><span class="p">,</span> <span class="kt">uint16_t</span> <span class="n">name_id</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">**</span><span class="n">bytes</span><span class="p">,</span> <span class="kt">size_t</span> <span class="o">*</span><span class="n">len</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">			 <span class="kt">uint16_t</span> <span class="o">*</span><span class="n">platform</span><span class="p">);</span>
+</span></span></code></pre></div><p>Name bytes are borrowed, in the encoding identified by platform (typically
+platform 3 = UTF-16BE). No decoding or allocation is performed.</p>
+</section><section class="symbol-card"><h4 id="type_font_vertical_advance">type_font_vertical_advance<a class="heading-anchor" href="#type_font_vertical_advance" aria-label="Link to type_font_vertical_advance">#</a></h4>
+<p>Source: <code>Type.h:326</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeError</span> <span class="nf">type_font_vertical_advance</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeFont</span> <span class="o">*</span><span class="n">font</span><span class="p">,</span> <span class="kt">uint16_t</span> <span class="n">glyph_id</span><span class="p">,</span> <span class="kt">uint16_t</span> <span class="o">*</span><span class="n">advance</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">				     <span class="kt">int16_t</span> <span class="o">*</span><span class="n">bearing</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_font_bitmap_info">type_font_bitmap_info<a class="heading-anchor" href="#type_font_bitmap_info" aria-label="Link to type_font_bitmap_info">#</a></h4>
+<p>Source: <code>Type.h:330</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeError</span> <span class="nf">type_font_bitmap_info</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeFont</span> <span class="o">*</span><span class="n">font</span><span class="p">,</span> <span class="kt">uint16_t</span> <span class="n">glyph_id</span><span class="p">,</span> <span class="kt">float</span> <span class="n">size_px</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">				<span class="n">TypeBitmap</span> <span class="o">*</span><span class="n">out</span><span class="p">);</span>
+</span></span></code></pre></div><p>Fill everything except pixels. Use type_bitmap_bytes to size the caller buffer.</p>
+</section><section class="symbol-card"><h4 id="type_bitmap_bytes">type_bitmap_bytes<a class="heading-anchor" href="#type_bitmap_bytes" aria-label="Link to type_bitmap_bytes">#</a></h4>
+<p>Source: <code>Type.h:332</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">size_t</span> <span class="nf">type_bitmap_bytes</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeBitmap</span> <span class="o">*</span><span class="n">info</span><span class="p">);</span>
+</span></span></code></pre></div><p>width*height, or *4 when color</p>
+</section><section class="symbol-card"><h4 id="type_font_render_bitmap">type_font_render_bitmap<a class="heading-anchor" href="#type_font_render_bitmap" aria-label="Link to type_font_render_bitmap">#</a></h4>
+<p>Source: <code>Type.h:339</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeError</span> <span class="nf">type_font_render_bitmap</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeFont</span> <span class="o">*</span><span class="n">font</span><span class="p">,</span> <span class="kt">uint16_t</span> <span class="n">glyph_id</span><span class="p">,</span> <span class="kt">float</span> <span class="n">size_px</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">				  <span class="n">TypeAntiAlias</span> <span class="n">aa</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">pixels</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">len</span><span class="p">,</span> <span class="n">TypeBitmap</span> <span class="o">*</span><span class="n">out</span><span class="p">);</span>
+</span></span></code></pre></div><p>pixels must hold type_bitmap_bytes of the info at this size. Empty glyphs
+(width or height 0) succeed and leave pixels untouched. On raster scratch
+exhaustion coverage is zeroed and out is not published.
+Legacy entry point needs no scratch for empty glyphs; otherwise returns
+TYPE_ERR_SCRATCH_REQUIRED. Use the explicit-scratch variant for rendering.</p>
+</section><section class="symbol-card"><h4 id="type_font_render_bitmap_scratch">type_font_render_bitmap_scratch<a class="heading-anchor" href="#type_font_render_bitmap_scratch" aria-label="Link to type_font_render_bitmap_scratch">#</a></h4>
+<p>Source: <code>Type.h:341</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeError</span> <span class="nf">type_font_render_bitmap_scratch</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeFont</span> <span class="o">*</span><span class="n">font</span><span class="p">,</span> <span class="kt">uint16_t</span> <span class="n">glyph_id</span><span class="p">,</span> <span class="kt">float</span> <span class="n">size_px</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">					  <span class="n">TypeAntiAlias</span> <span class="n">aa</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">pixels</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">len</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">					  <span class="n">TypeScratch</span> <span class="o">*</span><span class="n">scratch</span><span class="p">,</span> <span class="n">TypeBitmap</span> <span class="o">*</span><span class="n">out</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_font_render_sdf">type_font_render_sdf<a class="heading-anchor" href="#type_font_render_sdf" aria-label="Link to type_font_render_sdf">#</a></h4>
+<p>Source: <code>Type.h:344</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeError</span> <span class="nf">type_font_render_sdf</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeFont</span> <span class="o">*</span><span class="n">font</span><span class="p">,</span> <span class="kt">uint16_t</span> <span class="n">glyph_id</span><span class="p">,</span> <span class="kt">float</span> <span class="n">size_px</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">pixels</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">			       <span class="kt">size_t</span> <span class="n">len</span><span class="p">,</span> <span class="n">TypeBitmap</span> <span class="o">*</span><span class="n">out</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_atlas_memory">type_atlas_memory<a class="heading-anchor" href="#type_atlas_memory" aria-label="Link to type_atlas_memory">#</a></h4>
+<p>Source: <code>Type.h:352</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">size_t</span> <span class="nf">type_atlas_memory</span><span class="p">(</span><span class="kt">uint32_t</span> <span class="n">width</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">height</span><span class="p">);</span>
+</span></span></code></pre></div><hr>
+</section><h2 id="storage-is-widthheight-samples-inside-the-same-buffer-as-the-header">Shelf atlas. One byte per pixel, or one u32 (straight RGBA8) for color.
+Storage is width*height samples inside the same buffer as the header.<a class="heading-anchor" href="#storage-is-widthheight-samples-inside-the-same-buffer-as-the-header" aria-label="Link to Shelf atlas. One byte per pixel, or one u32 (straight RGBA8) for color.
+Storage is width*height samples inside the same buffer as the header.">#</a></h2>
+<section class="symbol-card"><h4 id="type_atlas_rgba_memory">type_atlas_rgba_memory<a class="heading-anchor" href="#type_atlas_rgba_memory" aria-label="Link to type_atlas_rgba_memory">#</a></h4>
+<p>Source: <code>Type.h:353</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">size_t</span> <span class="nf">type_atlas_rgba_memory</span><span class="p">(</span><span class="kt">uint32_t</span> <span class="n">width</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">height</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_atlas_place">type_atlas_place<a class="heading-anchor" href="#type_atlas_place" aria-label="Link to type_atlas_place">#</a></h4>
+<p>Source: <code>Type.h:355</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeAtlas</span> <span class="o">*</span><span class="nf">type_atlas_place</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="n">buf</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">bufsize</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">width</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">height</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_atlas_rgba_place">type_atlas_rgba_place<a class="heading-anchor" href="#type_atlas_rgba_place" aria-label="Link to type_atlas_rgba_place">#</a></h4>
+<p>Source: <code>Type.h:356</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeAtlasRgba</span> <span class="o">*</span><span class="nf">type_atlas_rgba_place</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="n">buf</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">bufsize</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">width</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">height</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_atlas_pixels">type_atlas_pixels<a class="heading-anchor" href="#type_atlas_pixels" aria-label="Link to type_atlas_pixels">#</a></h4>
+<p>Source: <code>Type.h:358</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">const</span> <span class="kt">uint8_t</span> <span class="o">*</span><span class="nf">type_atlas_pixels</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeAtlas</span> <span class="o">*</span><span class="n">atlas</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="o">*</span><span class="n">width</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="o">*</span><span class="n">height</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_atlas_rgba_pixels">type_atlas_rgba_pixels<a class="heading-anchor" href="#type_atlas_rgba_pixels" aria-label="Link to type_atlas_rgba_pixels">#</a></h4>
+<p>Source: <code>Type.h:359</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">const</span> <span class="kt">uint32_t</span> <span class="o">*</span><span class="nf">type_atlas_rgba_pixels</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeAtlasRgba</span> <span class="o">*</span><span class="n">atlas</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="o">*</span><span class="n">width</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">				       <span class="kt">uint32_t</span> <span class="o">*</span><span class="n">height</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_atlas_pack">type_atlas_pack<a class="heading-anchor" href="#type_atlas_pack" aria-label="Link to type_atlas_pack">#</a></h4>
+<p>Source: <code>Type.h:362</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">type_atlas_pack</span><span class="p">(</span><span class="n">TypeAtlas</span> <span class="o">*</span><span class="n">atlas</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">w</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">h</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">		    <span class="n">TypeRect</span> <span class="o">*</span><span class="n">out</span><span class="p">);</span>
+</span></span></code></pre></div><p>1 placed, 0 does not fit</p>
+</section><section class="symbol-card"><h4 id="type_atlas_rgba_pack">type_atlas_rgba_pack<a class="heading-anchor" href="#type_atlas_rgba_pack" aria-label="Link to type_atlas_rgba_pack">#</a></h4>
+<p>Source: <code>Type.h:364</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">type_atlas_rgba_pack</span><span class="p">(</span><span class="n">TypeAtlasRgba</span> <span class="o">*</span><span class="n">atlas</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">w</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">h</span><span class="p">,</span> <span class="n">TypeRect</span> <span class="o">*</span><span class="n">out</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_atlas_blit">type_atlas_blit<a class="heading-anchor" href="#type_atlas_blit" aria-label="Link to type_atlas_blit">#</a></h4>
+<p>Source: <code>Type.h:365</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">type_atlas_blit</span><span class="p">(</span><span class="n">TypeAtlas</span> <span class="o">*</span><span class="n">atlas</span><span class="p">,</span> <span class="k">const</span> <span class="n">TypeRect</span> <span class="o">*</span><span class="n">rect</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">		     <span class="k">const</span> <span class="kt">uint8_t</span> <span class="o">*</span><span class="n">src</span><span class="p">);</span>
+</span></span></code></pre></div><p>src is w*h coverage</p>
+</section><section class="symbol-card"><h4 id="type_atlas_rgba_blit">type_atlas_rgba_blit<a class="heading-anchor" href="#type_atlas_rgba_blit" aria-label="Link to type_atlas_rgba_blit">#</a></h4>
+<p>Source: <code>Type.h:367</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">type_atlas_rgba_blit</span><span class="p">(</span><span class="n">TypeAtlasRgba</span> <span class="o">*</span><span class="n">atlas</span><span class="p">,</span> <span class="k">const</span> <span class="n">TypeRect</span> <span class="o">*</span><span class="n">rect</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">			  <span class="k">const</span> <span class="kt">uint8_t</span> <span class="o">*</span><span class="n">src</span><span class="p">);</span>
+</span></span></code></pre></div><p>src is w<em>h</em>4</p>
+</section><section class="symbol-card"><h4 id="type_atlas_clear">type_atlas_clear<a class="heading-anchor" href="#type_atlas_clear" aria-label="Link to type_atlas_clear">#</a></h4>
+<p>Source: <code>Type.h:369</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">type_atlas_clear</span><span class="p">(</span><span class="n">TypeAtlas</span> <span class="o">*</span><span class="n">atlas</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_atlas_rgba_clear">type_atlas_rgba_clear<a class="heading-anchor" href="#type_atlas_rgba_clear" aria-label="Link to type_atlas_rgba_clear">#</a></h4>
+<p>Source: <code>Type.h:370</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">type_atlas_rgba_clear</span><span class="p">(</span><span class="n">TypeAtlasRgba</span> <span class="o">*</span><span class="n">atlas</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_memory">type_memory<a class="heading-anchor" href="#type_memory" aria-label="Link to type_memory">#</a></h4>
+<p>Source: <code>Type.h:388</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">size_t</span> <span class="nf">type_memory</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeParams</span> <span class="o">*</span><span class="n">params</span><span class="p">);</span>
+</span></span></code></pre></div><p>Context reserves memory for all our needs,
+based on the parameters we pass to it.</p>
+<p>NOTE(vasco): First added face becomes primary. A bold+italic face is remembered
+as bold-italic; a bold face as bold; an italic face as italic. Later adds
+of the same kind replace that slot. Fallback order is the set_fallbacks list.</p>
+<p>Resolve: color emoji prefers a color fallback, then the style face
+(bold-italic, else italic, else bold), then primary, then fallbacks.
+A miss draws the primary .notdef (glyph id 0).</p>
+<p>Printable ASCII (32..126) and U+FFFD at the current pixel size bypass the
+LRU. Styled lookups always use the LRU. Changing size drops those slots
+and warms ASCII again.
+0 when params are unusable.</p>
+</section><section class="symbol-card"><h4 id="type_place">type_place<a class="heading-anchor" href="#type_place" aria-label="Link to type_place">#</a></h4>
+<p>Source: <code>Type.h:389</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeCtx</span> <span class="o">*</span><span class="nf">type_place</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="n">buf</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">bufsize</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">		    <span class="k">const</span> <span class="n">TypeParams</span> <span class="o">*</span><span class="n">params</span><span class="p">);</span>
+</span></span></code></pre></div><p>buf must be 16-byte aligned.</p>
+</section><section class="symbol-card"><h4 id="type_add_font">type_add_font<a class="heading-anchor" href="#type_add_font" aria-label="Link to type_add_font">#</a></h4>
+<p>Source: <code>Type.h:393</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeError</span> <span class="nf">type_add_font</span><span class="p">(</span><span class="n">TypeCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">bytes</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">len</span><span class="p">,</span> <span class="k">const</span> <span class="n">TypeFaceParams</span> <span class="o">*</span><span class="n">face</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">			<span class="kt">uint32_t</span> <span class="o">*</span><span class="n">out_id</span><span class="p">);</span>
+</span></span></code></pre></div><p>Imported and bundled bytes receive identical bounded validation.</p>
+</section><section class="symbol-card"><h4 id="type_add_font_trusted">type_add_font_trusted<a class="heading-anchor" href="#type_add_font_trusted" aria-label="Link to type_add_font_trusted">#</a></h4>
+<p>Source: <code>Type.h:395</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeError</span> <span class="nf">type_add_font_trusted</span><span class="p">(</span><span class="n">TypeCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">bytes</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">len</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">				<span class="k">const</span> <span class="n">TypeFaceParams</span> <span class="o">*</span><span class="n">face</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="o">*</span><span class="n">out_id</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_clear_fonts">type_clear_fonts<a class="heading-anchor" href="#type_clear_fonts" aria-label="Link to type_clear_fonts">#</a></h4>
+<p>Source: <code>Type.h:397</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">type_clear_fonts</span><span class="p">(</span><span class="n">TypeCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">);</span>
+</span></span></code></pre></div><p>Drops faces. Font bytes may be freed after this returns.</p>
+</section><section class="symbol-card"><h4 id="type_select">type_select<a class="heading-anchor" href="#type_select" aria-label="Link to type_select">#</a></h4>
+<p>Source: <code>Type.h:398</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">type_select</span><span class="p">(</span><span class="n">TypeCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">font_id</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_set_fallbacks">type_set_fallbacks<a class="heading-anchor" href="#type_set_fallbacks" aria-label="Link to type_set_fallbacks">#</a></h4>
+<p>Source: <code>Type.h:399</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeError</span> <span class="nf">type_set_fallbacks</span><span class="p">(</span><span class="n">TypeCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">,</span> <span class="k">const</span> <span class="kt">uint32_t</span> <span class="o">*</span><span class="n">ids</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">count</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_ctx_atlas_revision">type_ctx_atlas_revision<a class="heading-anchor" href="#type_ctx_atlas_revision" aria-label="Link to type_ctx_atlas_revision">#</a></h4>
+<p>Source: <code>Type.h:403</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">uint64_t</span> <span class="nf">type_ctx_atlas_revision</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">);</span>
+</span></span></code></pre></div><p>Coverage pixel revision; cache hits/packing alone do not change it.
+Non-consuming: each GPU consumer keeps its own last uploaded revision.</p>
+</section><section class="symbol-card"><h4 id="type_ctx_atlas">type_ctx_atlas<a class="heading-anchor" href="#type_ctx_atlas" aria-label="Link to type_ctx_atlas">#</a></h4>
+<p>Source: <code>Type.h:404</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">const</span> <span class="kt">uint8_t</span> <span class="o">*</span><span class="nf">type_ctx_atlas</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="o">*</span><span class="n">width</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="o">*</span><span class="n">height</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_ctx_color_atlas">type_ctx_color_atlas<a class="heading-anchor" href="#type_ctx_color_atlas" aria-label="Link to type_ctx_color_atlas">#</a></h4>
+<p>Source: <code>Type.h:405</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">const</span> <span class="kt">uint32_t</span> <span class="o">*</span><span class="nf">type_ctx_color_atlas</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="o">*</span><span class="n">width</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="o">*</span><span class="n">height</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_metrics">type_metrics<a class="heading-anchor" href="#type_metrics" aria-label="Link to type_metrics">#</a></h4>
+<p>Source: <code>Type.h:407</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeError</span> <span class="nf">type_metrics</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">,</span> <span class="kt">float</span> <span class="n">size_px</span><span class="p">,</span> <span class="n">TypeMetrics</span> <span class="o">*</span><span class="n">out</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_peek_glyph">type_peek_glyph<a class="heading-anchor" href="#type_peek_glyph" aria-label="Link to type_peek_glyph">#</a></h4>
+<p>Source: <code>Type.h:411</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeError</span> <span class="nf">type_peek_glyph</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">codepoint</span><span class="p">,</span> <span class="kt">float</span> <span class="n">size_px</span><span class="p">,</span> <span class="n">TypeGlyph</span> <span class="o">*</span><span class="n">out</span><span class="p">);</span>
+</span></span></code></pre></div><p>Cache probe only. Does not rasterize, does not move the LRU, does not bump stats.
+TYPE_ERR_GLYPH_NOT_FOUND when the size does not match the ASCII cache or the key is cold.</p>
+</section><section class="symbol-card"><h4 id="type_peek_glyph_styled">type_peek_glyph_styled<a class="heading-anchor" href="#type_peek_glyph_styled" aria-label="Link to type_peek_glyph_styled">#</a></h4>
+<p>Source: <code>Type.h:412</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeError</span> <span class="nf">type_peek_glyph_styled</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">codepoint</span><span class="p">,</span> <span class="kt">float</span> <span class="n">size_px</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">				 <span class="n">TypeStyle</span> <span class="n">style</span><span class="p">,</span> <span class="n">TypeGlyph</span> <span class="o">*</span><span class="n">out</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_glyph">type_glyph<a class="heading-anchor" href="#type_glyph" aria-label="Link to type_glyph">#</a></h4>
+<p>Source: <code>Type.h:414</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeError</span> <span class="nf">type_glyph</span><span class="p">(</span><span class="n">TypeCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">codepoint</span><span class="p">,</span> <span class="kt">float</span> <span class="n">size_px</span><span class="p">,</span> <span class="n">TypeGlyph</span> <span class="o">*</span><span class="n">out</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_glyph_styled">type_glyph_styled<a class="heading-anchor" href="#type_glyph_styled" aria-label="Link to type_glyph_styled">#</a></h4>
+<p>Source: <code>Type.h:415</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeError</span> <span class="nf">type_glyph_styled</span><span class="p">(</span><span class="n">TypeCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">codepoint</span><span class="p">,</span> <span class="kt">float</span> <span class="n">size_px</span><span class="p">,</span> <span class="n">TypeStyle</span> <span class="n">style</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">			    <span class="n">TypeGlyph</span> <span class="o">*</span><span class="n">out</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_warm_ascii">type_warm_ascii<a class="heading-anchor" href="#type_warm_ascii" aria-label="Link to type_warm_ascii">#</a></h4>
+<p>Source: <code>Type.h:417</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeError</span> <span class="nf">type_warm_ascii</span><span class="p">(</span><span class="n">TypeCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">,</span> <span class="kt">float</span> <span class="n">size_px</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_glyph_id">type_glyph_id<a class="heading-anchor" href="#type_glyph_id" aria-label="Link to type_glyph_id">#</a></h4>
+<p>Source: <code>Type.h:420</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeError</span> <span class="nf">type_glyph_id</span><span class="p">(</span><span class="n">TypeCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">font_id</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">glyph_id</span><span class="p">,</span> <span class="kt">float</span> <span class="n">size_px</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">			<span class="n">TypeGlyph</span> <span class="o">*</span><span class="n">out</span><span class="p">);</span>
+</span></span></code></pre></div><p>Raster/cache by font-local ID, with no codepoint remapping or ASCII warmup.</p>
+</section><section class="symbol-card"><h4 id="type_layout_shaped">type_layout_shaped<a class="heading-anchor" href="#type_layout_shaped" aria-label="Link to type_layout_shaped">#</a></h4>
+<p>Source: <code>Type.h:427</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeError</span> <span class="nf">type_layout_shaped</span><span class="p">(</span><span class="n">TypeCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">,</span> <span class="k">const</span> <span class="n">TypeShapedGlyph</span> <span class="o">*</span><span class="n">run</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">count</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">			     <span class="kt">float</span> <span class="n">size_px</span><span class="p">,</span> <span class="n">TypePositionedGlyph</span> <span class="o">*</span><span class="n">out</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">cap</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">			     <span class="kt">uint32_t</span> <span class="o">*</span><span class="n">written</span><span class="p">,</span> <span class="n">TypeTextMetrics</span> <span class="o">*</span><span class="n">metrics</span><span class="p">);</span>
+</span></span></code></pre></div><p>No shaping, bidi, wrapping or fallback is invented here. Use the actual
+shaper&rsquo;s glyph order, IDs, clusters and positions. On error, written and
+metrics describe the completed prefix; atlas/cache may retain that prefix.
+metrics can be requested with out == NULL (cap still bounds the operation).
+Glyph advance in out remains nominal; metrics uses shaped advances.</p>
+</section><section class="symbol-card"><h4 id="type_measure_shaped">type_measure_shaped<a class="heading-anchor" href="#type_measure_shaped" aria-label="Link to type_measure_shaped">#</a></h4>
+<p>Source: <code>Type.h:432</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeError</span> <span class="nf">type_measure_shaped</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">,</span> <span class="k">const</span> <span class="n">TypeShapedGlyph</span> <span class="o">*</span><span class="n">run</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">count</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">			      <span class="kt">float</span> <span class="n">size_px</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="o">*</span><span class="n">written</span><span class="p">,</span> <span class="n">TypeTextMetrics</span> <span class="o">*</span><span class="n">metrics</span><span class="p">);</span>
+</span></span></code></pre></div><p>Same ink/advance computation without rasterization, scratch, atlas mutation
+or cache statistics. count itself is the caller&rsquo;s work bound.</p>
+</section><section class="symbol-card"><h4 id="type_clear_atlas">type_clear_atlas<a class="heading-anchor" href="#type_clear_atlas" aria-label="Link to type_clear_atlas">#</a></h4>
+<p>Source: <code>Type.h:436</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">type_clear_atlas</span><span class="p">(</span><span class="n">TypeCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">);</span>
+</span></span></code></pre></div><p>Clear both atlases and the LRU, then warm ASCII at the last size.</p>
+</section><section class="symbol-card"><h4 id="type_layout_utf8">type_layout_utf8<a class="heading-anchor" href="#type_layout_utf8" aria-label="Link to type_layout_utf8">#</a></h4>
+<p>Source: <code>Type.h:442</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeError</span> <span class="nf">type_layout_utf8</span><span class="p">(</span><span class="n">TypeCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">text</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">len</span><span class="p">,</span> <span class="kt">float</span> <span class="n">size_px</span><span class="p">,</span> <span class="n">TypeCell</span> <span class="o">*</span><span class="n">out</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">			   <span class="kt">uint32_t</span> <span class="n">cap</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="o">*</span><span class="n">written</span><span class="p">,</span> <span class="kt">size_t</span> <span class="o">*</span><span class="n">bytes_used</span><span class="p">);</span>
+</span></span></code></pre></div><p>One line at baseline y = 0. x advances by glyph.advance. No wrap, no bidi.
+On TYPE_ERR_BUF_TOO_SMALL, *written is cap and *bytes_used is the next
+unconsumed byte. On TYPE_ERR_INVALID_UTF8, *bytes_used is the bad byte and
+cells before it are kept. Both out-counts may be NULL.</p>
+</section><section class="symbol-card"><h4 id="type_stats">type_stats<a class="heading-anchor" href="#type_stats" aria-label="Link to type_stats">#</a></h4>
+<p>Source: <code>Type.h:445</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">type_stats</span><span class="p">(</span><span class="k">const</span> <span class="n">TypeCtx</span> <span class="o">*</span><span class="n">ctx</span><span class="p">,</span> <span class="n">TypeGlyphStats</span> <span class="o">*</span><span class="n">out</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_utf8_next">type_utf8_next<a class="heading-anchor" href="#type_utf8_next" aria-label="Link to type_utf8_next">#</a></h4>
+<p>Source: <code>Type.h:452</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">uint32_t</span> <span class="nf">type_utf8_next</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">s</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">len</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="o">*</span><span class="n">codepoint</span><span class="p">);</span>
+</span></span></code></pre></div><hr>
+</section><h2 id="short-or-illegal-codepoint-is-unchanged">UTF-8. type_utf8_next returns the byte length, or 0 when the sequence is
+short or illegal (*codepoint is unchanged).<a class="heading-anchor" href="#short-or-illegal-codepoint-is-unchanged" aria-label="Link to UTF-8. type_utf8_next returns the byte length, or 0 when the sequence is
+short or illegal (*codepoint is unchanged).">#</a></h2>
+<section class="symbol-card"><h4 id="type_utf8_validate">type_utf8_validate<a class="heading-anchor" href="#type_utf8_validate" aria-label="Link to type_utf8_validate">#</a></h4>
+<p>Source: <code>Type.h:453</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">type_utf8_validate</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">s</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">len</span><span class="p">);</span>
+</span></span></code></pre></div><p>1 valid, 0 not</p>
+</section><section class="symbol-card"><h4 id="type_width">type_width<a class="heading-anchor" href="#type_width" aria-label="Link to type_width">#</a></h4>
+<p>Source: <code>Type.h:459</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">TypeWidth</span> <span class="nf">type_width</span><span class="p">(</span><span class="kt">uint32_t</span> <span class="n">codepoint</span><span class="p">);</span>
+</span></span></code></pre></div><hr>
+</section><h2 id="east-asian-width-and-emoji-class-cell-width-is-1-or-2">East Asian width and emoji class. cell width is 1 or 2.<a class="heading-anchor" href="#east-asian-width-and-emoji-class-cell-width-is-1-or-2" aria-label="Link to East Asian width and emoji class. cell width is 1 or 2.">#</a></h2>
+<section class="symbol-card"><h4 id="type_is_cjk">type_is_cjk<a class="heading-anchor" href="#type_is_cjk" aria-label="Link to type_is_cjk">#</a></h4>
+<p>Source: <code>Type.h:460</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">type_is_cjk</span><span class="p">(</span><span class="kt">uint32_t</span> <span class="n">codepoint</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_is_emoji">type_is_emoji<a class="heading-anchor" href="#type_is_emoji" aria-label="Link to type_is_emoji">#</a></h4>
+<p>Source: <code>Type.h:461</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">type_is_emoji</span><span class="p">(</span><span class="kt">uint32_t</span> <span class="n">codepoint</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_cell_width">type_cell_width<a class="heading-anchor" href="#type_cell_width" aria-label="Link to type_cell_width">#</a></h4>
+<p>Source: <code>Type.h:462</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">type_cell_width</span><span class="p">(</span><span class="kt">uint32_t</span> <span class="n">codepoint</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="type_is_combining">type_is_combining<a class="heading-anchor" href="#type_is_combining" aria-label="Link to type_is_combining">#</a></h4>
+<p>Source: <code>Type.h:463</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">type_is_combining</span><span class="p">(</span><span class="kt">uint32_t</span> <span class="n">codepoint</span><span class="p">);</span>
+</span></span></code></pre></div></section></div><nav class="prev-next" aria-label="Page navigation"><a href="/symbols/rend/"><small>Previous</small><strong>← Rend symbols</strong></a><a href="/symbols/wire/"><small>Next</small><strong>Wire symbols →</strong></a></nav></article><aside class="right-toc" aria-label="On this page"><h2>On this page</h2><nav id="TableOfContents">
+  <ul>
+    <li><a href="#api-reference">API reference</a>
+      <ul>
+        <li><a href="#types">Types</a></li>
+        <li><a href="#functions">Functions</a></li>
+      </ul>
+    </li>
+    <li><a href="#typeh-implementation">Parsed files. Bytes are borrowed for the life of the placed object.
+Type.h implementation</a>
+      <ul>
+        <li></li>
+      </ul>
+    </li>
+    <li><a href="#face-borrows-the-placed-file-does-not-copy-glyph-bytes">Face. Borrows the placed file; does not copy glyph bytes.</a>
+      <ul>
+        <li></li>
+      </ul>
+    </li>
+    <li><a href="#storage-is-widthheight-samples-inside-the-same-buffer-as-the-header">Shelf atlas. One byte per pixel, or one u32 (straight RGBA8) for color.
+Storage is width*height samples inside the same buffer as the header.</a>
+      <ul>
+        <li></li>
+      </ul>
+    </li>
+    <li><a href="#short-or-illegal-codepoint-is-unchanged">UTF-8. type_utf8_next returns the byte length, or 0 when the sequence is
+short or illegal (*codepoint is unchanged).</a>
+      <ul>
+        <li></li>
+      </ul>
+    </li>
+    <li><a href="#east-asian-width-and-emoji-class-cell-width-is-1-or-2">East Asian width and emoji class. cell width is 1 or 2.</a>
+      <ul>
+        <li></li>
+      </ul>
+    </li>
+  </ul>
+</nav></aside></div>
+
+</main>
+            </div>
+            
+                <footer class="site-footer"><span>Godstack · MIT License.</span><nav aria-label="Footer"><a href="/docs/">Documentation</a><a href="/demos/">Demos</a><a href="/ai/">AI guide</a><a href="/symbols/">Symbols</a><a href="/llms.txt">llms.txt</a><a href="/catalog.json">Documentation index</a><a href="/agent/SKILL.md">Agent skill</a><a href="https://github.com/godxgun/godstack">GitHub</a><a href="/license/">License</a></nav></footer>
+            <dialog class="search-dialog" id="site-search" aria-labelledby="search-title"><h2 id="search-title">Search</h2><form method="dialog"><label for="search-input">Search documentation</label><input id="search-input" type="search" placeholder="Search libraries, guides, and symbols…" autocomplete="off"><button value="close" aria-label="Close search">×</button></form><p class="search-status" role="status">Search libraries, guides, and symbols.<noscript> Browse the <a href="/docs/">documentation index</a>.</noscript></p><div class="search-results" aria-live="polite"></div></dialog>
+            
+            <script src="/js/site.91617de8440f7e0decb452fb29d31188802484fb967ace6f8d6e2237b3be3ce0.js" integrity="sha256-kWF96EQPfg3stFL7KdMRiIAkhPuWes5vjW4iN7O&#43;POA=" defer></script>
+            <script src="/js/ocean.9e84093c8df56dc7d9d5f8ce9fb81b2abb236ba42cd5ba5af0088399081c1a9b.js" integrity="sha256-noQJPI31bcfZ1fjOn7gbKrsja6Qs1bpa8AiDmQgcGps=" defer></script>
+            <script src="/js/scrollbars.5cd0b9c314b3371d0db03eabe2c5870b013108197b4258c7cda71bd685b60b11.js" integrity="sha256-XNC5wxSzNx0NsD6r4sWHCwExCBl7QljHzacb1oW2CxE=" defer></script>
+    </body></html>

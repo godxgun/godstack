@@ -1,0 +1,70 @@
+{{ define "main" }}
+<section class="hero">
+    <h1>We can build everything!</h1>
+    <div class="prose">
+        {{ .Content }}
+    </div>
+    <div class="home-actions">
+        <span class="heaven-button">
+        {{ with site.GetPage "/guides/getting-started" }}
+        <a class="button" href="{{ .RelPermalink }}">Get started</a>
+        {{ else }}
+            {{ with site.GetPage "/docs" }}
+            <a class="button" href="{{ .RelPermalink }}">Read the docs</a>
+            {{ end }}
+        {{ end }}
+        </span>
+
+        <a class="text-action" href="{{ with site.GetPage "/ai" }}{{ .RelPermalink }}{{ else }}{{ partial "site-url.html" "/ai/" }}{{ end }}">
+            [Click here if you are an LLM]
+        </a>
+    </div>
+</section>
+
+<section class="home-section">
+    <div class="section-heading">
+        <div>
+            <h2>All Libraries</h2>
+        </div>
+    </div>
+    <div class="product-grid">{{ range hugo.Data.products }}{{ $page := site.GetPage (printf "/docs/%s" .id) }}<article class="product-card"><h3 class="library-title">{{ partial "library-icon.html" .id }}{{ .name }}</h3><p>{{ .description }}</p><div class="product-links">{{ with $page }}<a class="card-action" href="{{ .RelPermalink }}">Documentation →</a>{{ else }}<a class="card-action" href="{{ partial "site-url.html" .docs }}">Documentation →</a>{{ end }}<a class="source-action" href="{{ .demo }}">Source demo ↗</a></div></article>{{ end }}</div>
+</section>
+
+<section class="home-section license-section">
+    <h2>Released under the MIT License.</h2>
+    <a href="{{ with site.GetPage "/license" }}{{ .RelPermalink }}{{ else }}https://github.com/godxgun/godstack/blob/main/LICENSE{{ end }}">Read the licensing guide</a>
+</section>
+
+<section class="home-section license-section">
+        <h2>Check it out.</h2>
+<pre><code>
+git clone https://github.com/godxgun/godstack.git
+cd godstack
+</code></pre>
+        <a href="{{ with site.GetPage "/guides/getting-started" }}{{ .RelPermalink }}{{ else }}{{ partial "site-url.html" "/docs/" }}{{ end }}">
+            Read installation and setup
+        </a>
+</section>
+
+<section class="home-section faq-section">
+    <p class="eyebrow">Common questions</p>
+    <h2>FAQ</h2>
+    <details>
+        <summary>Do I need to use every library?</summary>
+        <p>No. Choose the libraries you need and follow their documented dependencies; for example, Rend integrates with Peak.</p>
+    </details>
+    <details>
+        <summary>Does this page compile C in my browser?</summary>
+        <p>No compiler runs in your browser. The <a href="{{ with site.GetPage "/demos" }}{{ .RelPermalink }}{{ end }}">browser demos</a> run C code that was compiled to WebAssembly before publishing.</p>
+    </details>
+    <details>
+        <summary>Is Godstack free to use?</summary>
+        <p>Yes. Project-owned code is released under the MIT License, so you can use, modify and distribute it, including in proprietary applications. Keep the copyright and permission notice with copies of the software. Third-party assets keep their own terms; see the licensing guide for details.</p>
+    </details>
+    <details>
+        <summary>Where do I begin?</summary>
+        <p>Follow the <a href="{{ with site.GetPage "/guides/getting-started" }}{{ .RelPermalink }}{{ else }}{{ partial "site-url.html" "/docs/" }}{{ end }}">getting started guide</a>,
+        then open the documentation for the library you need.</p>
+    </details>
+</section>
+{{ end }}

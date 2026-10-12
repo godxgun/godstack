@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en" data-run-state="loading">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Particle Observatory</title>
+<style>
+*{box-sizing:border-box}html,body,main{width:100%;height:100%;margin:0;overflow:hidden;background:transparent}
+main{display:grid;place-items:center}
+canvas{display:block;width:100%;height:100%;min-width:0;min-height:0;outline:none}
+canvas:focus-visible{outline:2px solid #ff8800;outline-offset:-2px}
+#status{position:fixed;inset:0;display:grid;place-items:center;margin:0;padding:1rem;background:#141413;color:#eeedea;font:15px/1.65 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+#status[hidden]{display:none}
+</style></head>
+<body><main><canvas id="canvas" width="960" height="720" tabindex="0" aria-label="Particle Observatory. Space pauses or resumes; R restarts; S toggles stress mode."></canvas></main>
+<p id="status" role="status">Loading Particle Observatory…</p><noscript>This demo requires JavaScript and WebAssembly.</noscript>
+<script src="demo.js"></script><script>
+(()=>{const status=document.getElementById('status'),root=document.documentElement;
+function failed(error){root.dataset.runState='failed';status.hidden=false;status.textContent='Particle Observatory failed: '+String(error);}
+function ready(){if(root.dataset.runState!=='failed'){root.dataset.runState='ready';status.hidden=true;}}
+try{
+  if(typeof WebAssembly==='undefined')throw new Error('This browser does not support WebAssembly');
+  if(typeof createDemo!=='function')throw new Error('Compiled Particle Observatory assets are unavailable');
+  createDemo({arguments:(matchMedia('(prefers-reduced-motion: reduce)').matches?['--paused']:[]),onRuntimeInitialized:ready,onAbort:failed,printErr:failed}).then(()=>{
+    ready();
+    const canvas=document.getElementById('canvas'),stage=document.querySelector('main');
+    function fit(){const w=Math.max(1,Math.round(stage.clientWidth)),h=Math.max(1,Math.round(stage.clientHeight));if(canvas.width!==w)canvas.width=w;if(canvas.height!==h)canvas.height=h;}
+    new ResizeObserver(fit).observe(stage);fit();
+  }).catch(failed);
+}catch(error){failed(error);}
+})();
+</script></body></html>

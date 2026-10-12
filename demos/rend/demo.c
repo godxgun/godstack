@@ -101,7 +101,7 @@ int main(void)
 	RendTexture targets[TARGET_COUNT] = {0};
 	int ok = 0, i;
 
-	demo_peak = peak_init_legacy();
+	demo_peak = peak_init();
 	if (!check(demo_peak != NULL, "Peak initialization"))
 		goto done;
 	renderer = rend_renderer_create_offscreen(WIDTH, HEIGHT, REND_FORMAT_R8G8B8A8_UNORM,

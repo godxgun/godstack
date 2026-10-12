@@ -1,0 +1,39 @@
+{{ $current := . }}
+<nav class="sidebar" id="sidebar" aria-label="Documentation and guides">
+
+
+    {{ $articles := where site.RegularPages "Params.article" true }}
+    {{ if $articles }}
+    <h2 class="nav-label">Guides</h2>
+    <ul class="sidebar-list">
+        {{ range $articles.ByWeight }}
+        {{ partial "sidebar-article.html" (dict "page" . "current" $current) }}
+        {{ end }}
+    </ul>
+    {{ end }}
+
+    {{ with site.GetPage "/docs" }}
+    {{ $documentation := where .RegularPages "Params.article" "ne" true }}
+    {{ range $documentation.GroupByParam "category" "asc" }}
+    {{ if ne .Key "" }}
+    <h2 class="nav-label">{{ .Key }}</h2>
+    {{ else }}
+    <h2 class="nav-label">Libraries</h2>{{ end }}
+    <ul class="sidebar-list">
+        {{ range .Pages.ByWeight }}
+        {{ partial "sidebar-article.html" (dict "page" . "current" $current) }}
+        {{ end }}
+    </ul>
+    {{ end }}
+    {{ end }}
+    <h2 class="nav-label">API references</h2>
+
+    <ul class="sidebar-list">
+        <li>{{ with site.GetPage "/symbols" }}<a href="{{ .RelPermalink }}">Symbols</a>{{ else }}<a href="{{ partial "site-url.html" "/symbols/" }}">Symbols</a>{{ end }}</li>
+    </ul>
+
+    <div class="sidebar-footer">
+        <a href="{{ with site.GetPage "/docs" }}{{ .RelPermalink }}{{ else }}{{ partial "site-url.html" "/docs/" }}{{ end }}">All libraries</a>
+        <a href="{{ with site.GetPage "/ai" }}{{ .RelPermalink }}{{ else }}{{ partial "site-url.html" "/ai/" }}{{ end }}">Coding agent guide</a>
+    </div>
+</nav>

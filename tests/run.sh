@@ -1,5 +1,5 @@
 #!/bin/sh
-# GPL-3.0-only OR a separately negotiated commercial license; see LICENSE.
+# MIT License; see LICENSE.
 # Offline C99 tests. All generated products/corpora stay in tests/.build.
 set -eu
 ulimit -c 0

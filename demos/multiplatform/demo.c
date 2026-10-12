@@ -43,7 +43,7 @@ int main(int argc, char **argv)
 	(void)argc;
 	(void)argv;
 
-	if (!(peak_demo_ctx = peak_init_legacy()))
+	if (!(peak_demo_ctx = peak_init()))
 		return 1;
 
 	PeakWindow win = peak_window_open(peak_demo_ctx, "Demo", 800, 600, 0);

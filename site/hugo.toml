@@ -1,0 +1,70 @@
+# Override baseURL when deploying: hugo --source "$GODSTACK_SITE" --baseURL https://your-domain/
+baseURL = 'https://example.org/'
+locale = 'en'
+title = 'Godstack'
+contentDir = 'articles'
+theme = 'godstack-heaven'
+disableKinds = ['taxonomy', 'term', 'RSS']
+# Keep HTML directory URLs; publish Markdown as /docs/name.md.
+uglyURLs = true
+
+[params]
+  description = 'Single-header C libraries for platform services, graphics, UI, text, and developer tools. Use only the headers your application needs.'
+  github = 'https://github.com/godxgun/godstack'
+
+[module.hugoVersion]
+  min = '0.146.0'
+
+[markup.tableOfContents]
+  startLevel = 2
+  endLevel = 3
+
+[markup.highlight]
+  noClasses = false
+
+[mediaTypes.'text/markdown']
+  suffixes = ['md']
+
+[outputFormats.HTML]
+  noUgly = true
+
+[outputFormats.Markdown]
+  mediaType = 'text/markdown'
+  baseName = 'index'
+  isPlainText = true
+  notAlternative = true
+
+[outputFormats.Search]
+  mediaType = 'application/json'
+  baseName = 'search'
+  isPlainText = true
+  notAlternative = true
+
+[outputFormats.Catalog]
+  mediaType = 'application/json'
+  baseName = 'catalog'
+  isPlainText = true
+  notAlternative = true
+
+[outputFormats.LLMs]
+  mediaType = 'text/plain'
+  baseName = 'llms'
+  isPlainText = true
+  notAlternative = true
+
+[outputFormats.LLMsSmall]
+  mediaType = 'text/plain'
+  baseName = 'llms-small'
+  isPlainText = true
+  notAlternative = true
+
+[outputFormats.LLMsFull]
+  mediaType = 'text/plain'
+  baseName = 'llms-full'
+  isPlainText = true
+  notAlternative = true
+
+[outputs]
+  home = ['HTML', 'Search', 'Catalog', 'LLMs', 'LLMsSmall', 'LLMsFull']
+  section = ['HTML', 'Markdown']
+  page = ['HTML', 'Markdown']

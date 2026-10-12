@@ -19,16 +19,32 @@ jobs:
         run: python3 -m unittest discover -s tools -p 'test_*.py'
       - name: lint demo sources and function complexity
         run: python3 tools/lint_demos.py
+      # The website is an external checkout. A consuming workflow can supply
+      # GODSTACK_SITE; do not assume it is part of actions/checkout above.
+      - name: detect external website checkout
+        id: website
+        run: |
+          if [ -n "${GODSTACK_SITE:-}" ] && [ -f "$GODSTACK_SITE/hugo.toml" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "SKIP external website checks: supply a checkout and GODSTACK_SITE"
+          fi
       - name: check generated symbols vault
+        if: steps.website.outputs.available == 'true'
         run: python3 tools/generate_docs.py --check
       - name: check published WebAssembly demo artifacts
+        if: steps.website.outputs.available == 'true'
         run: python3 tools/build_web_demos.py --check
       - uses: peaceiris/actions-hugo@v3
+        if: steps.website.outputs.available == 'true'
         with:
           hugo-version: '0.165.0'
       - name: build static website
-        run: hugo --source site --destination "$RUNNER_TEMP/godstack-site" --cacheDir "$RUNNER_TEMP/hugo-cache" --noBuildLock
+        if: steps.website.outputs.available == 'true'
+        run: hugo --source "$GODSTACK_SITE" --destination "$RUNNER_TEMP/godstack-site" --cacheDir "$RUNNER_TEMP/hugo-cache" --noBuildLock
       - name: verify public documentation resources and links
+        if: steps.website.outputs.available == 'true'
         run: python3 tools/test_site.py "$RUNNER_TEMP/godstack-site"
 
   snake-web:
@@ -51,6 +67,9 @@ jobs:
         run: |
           source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
           python3 tools/test_rend_web.py
+          if [ ! -f "${GODSTACK_SITE:-$HOME/rsr/src/site}/hugo.toml" ]; then
+            export GODSTACK_SKIP_PUBLISHED=1
+          fi
           python3 tools/test_snake_web.py
 
   linux-package:

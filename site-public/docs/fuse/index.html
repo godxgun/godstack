@@ -1,0 +1,962 @@
+<!doctype html>
+<html lang="en" class="no-js">
+    <head>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+        <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark">
+        <script>document.documentElement.classList.replace('no-js','js');</script>
+        <title>Fuse · Godstack</title><meta name="description" content="Set up caller-backed canvas storage, feed input, and render Fuse commands."><link rel="canonical" href="https://example.org/docs/fuse/">
+        
+        <link rel="stylesheet" href="/css/main.a87a5ada49af1cc103390b31f69448f8f98137dea361366aade0bedb9598ba04.css" integrity="sha256-qHpa2kmvHMEDOQsx9pRI&#43;PmBN96jYTZqreC&#43;25WYugQ=">
+    </head>
+    <body>
+        
+        <div class="heaven-scenery" aria-hidden="true"><img src="/images/ocean-sky_hu_f78afa269ada3c1a.webp" alt="" fetchpriority="high"><canvas hidden></canvas></div>
+        <a class="skip-link" href="#main">Skip to content</a>
+        <header class="topbar">
+            <a class="brand heaven-button" href="/">Godstack</a>
+            
+            <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="sidebar">Menu</button>
+            
+            <nav class="topnav" aria-label="Main navigation">
+                
+                    <a href="/docs/">Docs</a>
+                    
+
+                
+                    <a href="/demos/">Demos</a>
+                    
+
+                
+                    <a href="/symbols/">Symbols</a>
+                    
+
+                <a href="/ai/">AI</a><a href="https://github.com/godxgun/godstack">GitHub</a></nav><div class="top-actions"><button type="button" class="search-open" aria-haspopup="dialog" aria-controls="site-search">Search <kbd>⌘ K</kbd></button><noscript><a class="noscript-search" href="/docs/">Browse docs</a></noscript></div></header>
+        
+        <div class="site-layout">
+            
+<nav class="sidebar" id="sidebar" aria-label="Documentation and guides">
+
+
+    
+    
+    <h2 class="nav-label">Guides</h2>
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/guides/getting-started/">Getting Started</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/guides/getting-started/#peak---platform-layer">Peak - Platform Layer</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/guides/getting-started/#poof---a-build-system">Poof - A Build System</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+
+    
+    
+    
+    
+    <h2 class="nav-label">Build</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/poof/">Poof</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/poof/#running-a-command">Running a Command</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#compiling-a-program">Compiling a Program</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#platform-flags-and-cross-targets">Platform Flags and Cross Targets</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#building-in-parallel">Building in Parallel</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#skipping-up-to-date-work">Skipping Up-to-Date Work</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#rebuilding-the-build-script">Rebuilding the Build Script</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#printing-status">Printing Status</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">Core Libraries</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/peak/">Peak</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/peak/#opening-a-window">Opening a Window</a>
+    <ul>
+
+  
+  <li>
+    <a href="/docs/peak/#a-basic-event-loop">A Basic Event Loop</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#with-the-callback-api">With The Callback API</a>
+    
+  </li>
+  
+
+</ul>
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#using-the-filesystem">Using the Filesystem</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#spawning-a-tty">Spawning a TTY</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#memory-mapped-circular-ring-buffer">Memory Mapped Circular Ring Buffer</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#streaming-audio">Streaming Audio</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/rend/">Rend</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/rend/#creating-a-renderer">Creating a Renderer</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/rend/#creating-your-first-pipeline">Creating your first Pipeline</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/rend/#drawing-a-triangle">Drawing a triangle</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/rend/#drawing-a-mesh">Drawing a Mesh</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details open>
+    <summary><a href="/docs/fuse/" aria-current="page">Fuse</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/fuse/#building-a-frame">Building a Frame</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#drawing-the-commands">Drawing the Commands</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#laying-out-with-classes">Laying Out with Classes</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#identifying-widgets">Identifying Widgets</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#sliders-scrolling-and-text-input">Sliders, Scrolling and Text Input</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#docking-windows">Docking Windows</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#handling-errors">Handling Errors</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/grit/">Grit</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/grit/#allocating-from-an-arena">Allocating from an Arena</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#stack-allocation">Stack Allocation</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#pools-of-equal-sized-objects">Pools of Equal-Sized Objects</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#dynamic-arrays-and-hash-maps">Dynamic Arrays and Hash Maps</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#random-numbers">Random Numbers</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#vectors-and-matrices">Vectors and Matrices</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#drawing-pixels">Drawing Pixels</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/type/">Type</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/type/#creating-a-context">Creating a Context</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#rendering-text">Rendering Text</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#scratch-memory">Scratch Memory</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#uploading-the-atlas">Uploading the Atlas</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#faces-styles-and-fallbacks">Faces, Styles and Fallbacks</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#shaped-text">Shaped Text</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#lower-level-building-blocks">Lower-Level Building Blocks</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">Utilities</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/cast/">Cast</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/cast/#tokenizing-source">Tokenizing Source</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#reading-tokens">Reading Tokens</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#parsing-declarations">Parsing Declarations</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#handling-unparsable-input">Handling Unparsable Input</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#sizing-and-reusing-memory">Sizing and Reusing Memory</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">Web</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/cool/">Cool</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/cool/#writing-text">Writing Text</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#writing-markup">Writing Markup</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#choosing-the-output-stream">Choosing the Output Stream</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#rendering-markdown">Rendering Markdown</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#compiling-templates">Compiling Templates</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/wire/">Wire</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/wire/#serving-a-response">Serving a Response</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#routing-requests">Routing Requests</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#serving-static-files">Serving Static Files</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#partial-responses-for-htmx">Partial Responses for htmx</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#running-your-own-loop">Running Your Own Loop</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#limits">Limits</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">API references</h2>
+
+    <ul class="sidebar-list">
+        <li><a href="/symbols/">Symbols</a></li>
+    </ul>
+
+    <div class="sidebar-footer">
+        <a href="/docs/">All libraries</a>
+        <a href="/ai/">Coding agent guide</a>
+    </div>
+</nav>
+
+            <main id="main" tabindex="-1">
+                
+
+  
+  <div class="reading-layout"><article class="article" data-symbol-vault-url="/symbols/fuse/"><div class="article-meta"><a href="/docs/">Documentation</a><span> / Core Libraries</span><a href="/symbols/fuse/">Symbol reference</a><a class="source-link" href="/docs/fuse.md">View Markdown</a></div>
+  
+  
+  
+  <div class="prose"><h1 id="fuse">Fuse<a class="heading-anchor" href="#fuse" aria-label="Link to Fuse">#</a></h1>
+<p>Fuse is an immediate-mode UI library. Each frame you describe the interface with function calls
+(divs, buttons, sliders, text boxes) and Fuse lays it out, handles pointer and keyboard input,
+and returns a flat list of draw commands: rectangles, lines, triangles, clip regions, images and
+text runs. It does not open windows or draw pixels; your renderer consumes the commands.</p>
+<p>All state lives in one caller-provided buffer. Fuse does not allocate. Define
+<code>FUSE_IMPLEMENTATION</code> in exactly one translation unit before including <code>Fuse.h</code>, compile as C99
+or later, and link with <code>-lm</code>.</p>
+<h2 id="building-a-frame">Building a Frame<a class="heading-anchor" href="#building-a-frame" aria-label="Link to Building a Frame">#</a></h2>
+<p>The first thing to try is a button that reports a click. This program runs headless: it feeds
+three frames of pointer input, as a window&rsquo;s event loop would, and prints what happened:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;stdio.h&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;stdlib.h&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define FUSE_IMPLEMENTATION
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;Fuse.h&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">bool</span> <span class="nf">frame</span><span class="p">(</span><span class="n">FuseCanvas</span> <span class="n">ui</span><span class="p">,</span> <span class="n">FusePointerState</span> <span class="n">pointer</span><span class="p">,</span> <span class="kt">float</span> <span class="n">x</span><span class="p">,</span> <span class="kt">float</span> <span class="n">y</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">static</span> <span class="kt">char</span> <span class="n">label</span><span class="p">[]</span> <span class="o">=</span> <span class="s">&#34;Apply&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">size_t</span> <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nf">fuse_canvas_pointer</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span> <span class="n">pointer</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">fuse_canvas_clear</span><span class="p">(</span><span class="n">ui</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nf">fuse_id</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span> <span class="s">&#34;apply&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">bool</span> <span class="n">clicked</span> <span class="o">=</span> <span class="nf">fuse_button_text</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span> <span class="n">label</span><span class="p">,</span> <span class="mi">20</span><span class="p">,</span> <span class="mi">20</span><span class="p">,</span> <span class="mi">120</span><span class="p">,</span> <span class="mi">36</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                                    <span class="mh">0xFF3A6EA5u</span><span class="p">,</span> <span class="mh">0xFF5A8EC5u</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">FuseCmd</span> <span class="o">*</span><span class="n">commands</span> <span class="o">=</span> <span class="nf">fuse_canvas_draw</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">count</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">commands</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">fprintf</span><span class="p">(</span><span class="n">stderr</span><span class="p">,</span> <span class="s">&#34;fuse error %d</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">,</span> <span class="p">(</span><span class="kt">int</span><span class="p">)</span><span class="nf">fuse_canvas_error</span><span class="p">(</span><span class="n">ui</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="nb">false</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">printf</span><span class="p">(</span><span class="s">&#34;%zu commands, first is a %.0fx%.0f rectangle</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">           <span class="n">count</span><span class="p">,</span> <span class="n">commands</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">rect</span><span class="p">.</span><span class="n">w</span><span class="p">,</span> <span class="n">commands</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">rect</span><span class="p">.</span><span class="n">h</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">clicked</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">FuseParams</span> <span class="n">params</span> <span class="o">=</span> <span class="p">{.</span><span class="n">max_elements</span> <span class="o">=</span> <span class="mi">256</span><span class="p">,</span> <span class="p">.</span><span class="n">max_windows</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="p">.</span><span class="n">max_scopes</span> <span class="o">=</span> <span class="mi">16</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">size_t</span> <span class="n">bytes</span> <span class="o">=</span> <span class="nf">fuse_memory</span><span class="p">(</span><span class="o">&amp;</span><span class="n">params</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">void</span> <span class="o">*</span><span class="n">memory</span> <span class="o">=</span> <span class="nf">malloc</span><span class="p">(</span><span class="n">bytes</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">memory</span><span class="p">)</span> <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">FuseCanvas</span> <span class="n">ui</span> <span class="o">=</span> <span class="nf">fuse_place_in_memory</span><span class="p">(</span><span class="n">memory</span><span class="p">,</span> <span class="n">bytes</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">params</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">ui</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">free</span><span class="p">(</span><span class="n">memory</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">fuse_canvas_resize</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span> <span class="mi">320</span><span class="p">,</span> <span class="mi">200</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nf">frame</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span> <span class="n">FUSE_POINTER_NONE</span><span class="p">,</span> <span class="mi">60</span><span class="p">,</span> <span class="mi">40</span><span class="p">);</span>       <span class="cm">/* pointer moves over the button */</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">frame</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span> <span class="n">FUSE_POINTER_PRESSED</span><span class="p">,</span> <span class="mi">60</span><span class="p">,</span> <span class="mi">40</span><span class="p">);</span>    <span class="cm">/* button pressed */</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="nf">frame</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span> <span class="n">FUSE_POINTER_RELEASED</span><span class="p">,</span> <span class="mi">60</span><span class="p">,</span> <span class="mi">40</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">printf</span><span class="p">(</span><span class="s">&#34;Apply clicked</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nf">free</span><span class="p">(</span><span class="n">memory</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><code>FuseParams</code> sets fixed capacities: <code>max_elements</code> counts every element built in a frame,
+including the implicit root and each run of a text label; <code>max_scopes</code> bounds how deeply divs
+nest; <code>max_windows</code> bounds docking windows. <code>fuse_memory()</code> returns the bytes needed and
+<code>fuse_place_in_memory()</code> places the canvas in your buffer, which must be 8-byte aligned and stay
+alive while the canvas is used. There is nothing to destroy: free the buffer when you are done.</p>
+<p>Every frame follows the same order: report input (<code>fuse_canvas_pointer()</code>, plus wheel, text and
+keys), call <code>fuse_canvas_clear()</code>, build the interface, then call <code>fuse_canvas_draw()</code>. Widgets
+answer input using the boxes laid out in the previous frame, which is why the click arrives on
+the frame where the pointer is released over the button. The returned commands live in the
+canvas buffer until the next clear.</p>
+<h2 id="drawing-the-commands">Drawing the Commands<a class="heading-anchor" href="#drawing-the-commands" aria-label="Link to Drawing the Commands">#</a></h2>
+<p>Each <code>FuseCmd</code> has a <code>type</code> and a matching union member. Coordinates are canvas pixels and colors
+are <code>0xAARRGGBB</code>. Draw the commands in order; <code>z</code> is the layer set with <code>fuse_canvas_layer()</code>, if
+you want to sort by it:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">size_t</span> <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="n">FuseCmd</span> <span class="o">*</span><span class="n">commands</span> <span class="o">=</span> <span class="nf">fuse_canvas_draw</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">count</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="p">(</span><span class="kt">size_t</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">count</span><span class="p">;</span> <span class="o">++</span><span class="n">i</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">const</span> <span class="n">FuseCmd</span> <span class="o">*</span><span class="n">c</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">commands</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+</span></span><span class="line"><span class="cl">    <span class="k">switch</span> <span class="p">(</span><span class="n">c</span><span class="o">-&gt;</span><span class="n">type</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="nl">FUSE_CMD_RECT</span><span class="p">:</span>       <span class="nf">fill_rect</span><span class="p">(</span><span class="n">c</span><span class="o">-&gt;</span><span class="n">rect</span><span class="p">.</span><span class="n">x</span><span class="p">,</span> <span class="n">c</span><span class="o">-&gt;</span><span class="n">rect</span><span class="p">.</span><span class="n">y</span><span class="p">,</span> <span class="n">c</span><span class="o">-&gt;</span><span class="n">rect</span><span class="p">.</span><span class="n">w</span><span class="p">,</span> <span class="n">c</span><span class="o">-&gt;</span><span class="n">rect</span><span class="p">.</span><span class="n">h</span><span class="p">,</span> <span class="n">c</span><span class="o">-&gt;</span><span class="n">rect</span><span class="p">.</span><span class="n">color</span><span class="p">);</span> <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="nl">FUSE_CMD_LINE</span><span class="p">:</span>       <span class="nf">draw_line</span><span class="p">(</span><span class="o">&amp;</span><span class="n">c</span><span class="o">-&gt;</span><span class="n">line</span><span class="p">);</span> <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="nl">FUSE_CMD_TRIANGLE</span><span class="p">:</span>   <span class="nf">fill_triangle</span><span class="p">(</span><span class="o">&amp;</span><span class="n">c</span><span class="o">-&gt;</span><span class="n">triangle</span><span class="p">);</span> <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="nl">FUSE_CMD_CLIP_START</span><span class="p">:</span> <span class="nf">push_clip</span><span class="p">(</span><span class="n">c</span><span class="o">-&gt;</span><span class="n">clip</span><span class="p">.</span><span class="n">x</span><span class="p">,</span> <span class="n">c</span><span class="o">-&gt;</span><span class="n">clip</span><span class="p">.</span><span class="n">y</span><span class="p">,</span> <span class="n">c</span><span class="o">-&gt;</span><span class="n">clip</span><span class="p">.</span><span class="n">w</span><span class="p">,</span> <span class="n">c</span><span class="o">-&gt;</span><span class="n">clip</span><span class="p">.</span><span class="n">h</span><span class="p">);</span> <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="nl">FUSE_CMD_CLIP_END</span><span class="p">:</span>   <span class="nf">pop_clip</span><span class="p">();</span> <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="nl">FUSE_CMD_IMAGE</span><span class="p">:</span>      <span class="nf">draw_image</span><span class="p">(</span><span class="n">c</span><span class="o">-&gt;</span><span class="n">image</span><span class="p">.</span><span class="n">handle</span><span class="p">,</span> <span class="n">c</span><span class="o">-&gt;</span><span class="n">image</span><span class="p">.</span><span class="n">x</span><span class="p">,</span> <span class="n">c</span><span class="o">-&gt;</span><span class="n">image</span><span class="p">.</span><span class="n">y</span><span class="p">,</span> <span class="n">c</span><span class="o">-&gt;</span><span class="n">image</span><span class="p">.</span><span class="n">w</span><span class="p">,</span> <span class="n">c</span><span class="o">-&gt;</span><span class="n">image</span><span class="p">.</span><span class="n">h</span><span class="p">);</span> <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="nl">FUSE_CMD_TEXT</span><span class="p">:</span>       <span class="nf">draw_text_run</span><span class="p">(</span><span class="o">&amp;</span><span class="n">c</span><span class="o">-&gt;</span><span class="n">text</span><span class="p">);</span> <span class="k">break</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>The drawing functions are your renderer&rsquo;s. Clip commands nest; intersect each new clip with the
+current one. <code>FUSE_CMD_IMAGE</code> carries the handle you passed to <code>fuse_image()</code>; Fuse never sees the
+pixels. <code>FUSE_CMD_TEXT</code> comes from text boxes: <code>c-&gt;text.slot</code> indexes the <code>FuseFieldRun</code> array
+returned by <code>fuse_canvas_fields()</code>, which holds the string, size, color and caret position for a
+proportional font.</p>
+<p><code>FuseRend.h</code> is an optional adapter that tessellates these commands for <a href="/docs/rend/">Rend</a>
+ and
+draws text with <a href="/docs/type/">Type</a>
+. It has its own implementation macro,
+<code>FUSE_REND_IMPLEMENTATION</code>.</p>
+<h2 id="laying-out-with-classes">Laying Out with Classes<a class="heading-anchor" href="#laying-out-with-classes" aria-label="Link to Laying Out with Classes">#</a></h2>
+<p>A div is a rectangle that contains other elements. Without a class, children are placed at the
+coordinates you pass, relative to the div. With a <code>FuseClass</code>, the div arranges its children in a
+row or column, with padding and gaps, and the coordinates you pass are ignored:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="k">const</span> <span class="n">FuseClass</span> <span class="n">toolbar</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="p">.</span><span class="n">color</span> <span class="o">=</span> <span class="mh">0xFF202830u</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="p">.</span><span class="n">direction</span> <span class="o">=</span> <span class="n">FUSE_DIRECTION_ROW</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="p">.</span><span class="n">gap</span> <span class="o">=</span> <span class="mi">8</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="p">.</span><span class="n">pad_l</span> <span class="o">=</span> <span class="mi">8</span><span class="p">,</span> <span class="p">.</span><span class="n">pad_r</span> <span class="o">=</span> <span class="mi">8</span><span class="p">,</span> <span class="p">.</span><span class="kt">pad_t</span> <span class="o">=</span> <span class="mi">6</span><span class="p">,</span> <span class="p">.</span><span class="n">pad_b</span> <span class="o">=</span> <span class="mi">6</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="p">.</span><span class="n">align_y</span> <span class="o">=</span> <span class="n">FUSE_ALIGN_CENTER</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">char</span> <span class="n">open_label</span><span class="p">[]</span> <span class="o">=</span> <span class="s">&#34;Open&#34;</span><span class="p">,</span> <span class="n">save_label</span><span class="p">[]</span> <span class="o">=</span> <span class="s">&#34;Save&#34;</span><span class="p">,</span> <span class="n">quit_label</span><span class="p">[]</span> <span class="o">=</span> <span class="s">&#34;Quit&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nf">fuse_div_begin</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">640</span><span class="p">,</span> <span class="mi">48</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">toolbar</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">fuse_id</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span> <span class="s">&#34;open&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">bool</span> <span class="n">open</span> <span class="o">=</span> <span class="nf">fuse_button_text</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span> <span class="n">open_label</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mh">0xFF405060u</span><span class="p">,</span> <span class="mh">0xFF607080u</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">fuse_id</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span> <span class="s">&#34;save&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">bool</span> <span class="n">save</span> <span class="o">=</span> <span class="nf">fuse_button_text</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span> <span class="n">save_label</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mh">0xFF405060u</span><span class="p">,</span> <span class="mh">0xFF607080u</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">fuse_space</span><span class="p">(</span><span class="n">ui</span><span class="p">);</span>   <span class="cm">/* takes the leftover width */</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">fuse_id</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span> <span class="s">&#34;quit&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">bool</span> <span class="n">quit</span> <span class="o">=</span> <span class="nf">fuse_button_text</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span> <span class="n">quit_label</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mh">0xFF804040u</span><span class="p">,</span> <span class="mh">0xFFA06060u</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="nf">fuse_div_end</span><span class="p">(</span><span class="n">ui</span><span class="p">);</span>
+</span></span></code></pre></div><p>A class&rsquo;s <code>width_sizing</code> and <code>height_sizing</code> decide how children are sized on each axis:
+<code>FUSE_SIZING_FIT</code> keeps the size you passed, <code>FUSE_SIZING_FIXED</code> uses the class&rsquo;s <code>width</code> or
+<code>height</code> in pixels, <code>FUSE_SIZING_PERCENT</code> uses them as a fraction of the div&rsquo;s inner size, and
+<code>FUSE_SIZING_GROW</code> shares the leftover space. <code>fuse_sizing()</code> overrides the mode for the next
+element only. <code>min_*</code> and <code>max_*</code> clamp the results; <code>color</code> paints the div&rsquo;s background (zero
+means none).</p>
+<p>For side-by-side columns, <code>fuse_col_begin()</code> splits a width by ratios. Build the first column,
+call <code>fuse_col_switch()</code> for each next column, and finish with <code>fuse_col_end()</code>; the row takes the
+height of its tallest column:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="k">const</span> <span class="kt">float</span> <span class="n">split</span><span class="p">[]</span> <span class="o">=</span> <span class="p">{</span><span class="mf">0.3f</span><span class="p">,</span> <span class="mf">0.7f</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl"><span class="k">static</span> <span class="k">const</span> <span class="n">FuseClass</span> <span class="n">stack</span> <span class="o">=</span> <span class="p">{.</span><span class="n">direction</span> <span class="o">=</span> <span class="n">FUSE_DIRECTION_COLUMN</span><span class="p">,</span> <span class="p">.</span><span class="n">gap</span> <span class="o">=</span> <span class="mi">4</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nf">fuse_col_begin</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">48</span><span class="p">,</span> <span class="mi">640</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">stack</span><span class="p">,</span> <span class="n">split</span><span class="p">,</span> <span class="mi">2</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">fuse_text</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="s">&#34;Layers&#34;</span><span class="p">,</span> <span class="mh">0xFFFFFFFFu</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">fuse_col_switch</span><span class="p">(</span><span class="n">ui</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">fuse_text</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="s">&#34;Preview&#34;</span><span class="p">,</span> <span class="mh">0xFFFFFFFFu</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="nf">fuse_col_end</span><span class="p">(</span><span class="n">ui</span><span class="p">);</span>
+</span></span></code></pre></div><p><code>fuse_text()</code> draws the built-in 5x7 bitmap font, upper case only, scaled by an integer factor.
+Each lit run of pixels becomes a rectangle command, so it needs no font or texture.</p>
+<h2 id="identifying-widgets">Identifying Widgets<a class="heading-anchor" href="#identifying-widgets" aria-label="Link to Identifying Widgets">#</a></h2>
+<p>Every element gets an ID. Without <code>fuse_id()</code>, the ID comes from the parent and the element&rsquo;s
+position among its siblings, so it changes when the tree above it changes shape. Call
+<code>fuse_id(ui, &quot;name&quot;)</code> (or <code>fuse_idi(ui, &quot;row&quot;, i)</code> in loops) before any widget whose interaction
+must survive such changes. Using the same ID twice in one frame fails the frame with
+<code>FUSE_ERR_DUPLICATE_ID</code>.</p>
+<p>Names are global to the canvas by default. After opening a named div, <code>fuse_div_scope()</code> makes the
+names of its children local to it, so two panels can each contain a button called <code>&quot;ok&quot;</code>.
+<code>fuse_element_is_hovered()</code> asks about a named element in the current scope.</p>
+<h2 id="sliders-scrolling-and-text-input">Sliders, Scrolling and Text Input<a class="heading-anchor" href="#sliders-scrolling-and-text-input" aria-label="Link to Sliders, Scrolling and Text Input">#</a></h2>
+<p>Widgets keep no values themselves; they read and write your variables:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">float</span> <span class="n">volume</span> <span class="o">=</span> <span class="mf">0.5f</span><span class="p">,</span> <span class="n">scroll</span> <span class="o">=</span> <span class="mf">0.0f</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">char</span> <span class="n">name</span><span class="p">[</span><span class="mi">64</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#34;&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">int</span> <span class="n">caret</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">static</span> <span class="k">const</span> <span class="n">FuseClass</span> <span class="n">list</span> <span class="o">=</span> <span class="p">{.</span><span class="n">direction</span> <span class="o">=</span> <span class="n">FUSE_DIRECTION_COLUMN</span><span class="p">,</span> <span class="p">.</span><span class="n">gap</span> <span class="o">=</span> <span class="mi">2</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nf">fuse_id</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span> <span class="s">&#34;volume&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="nf">fuse_slider</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span> <span class="mi">20</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="mh">0xFF303A44u</span><span class="p">,</span> <span class="mh">0xFFE0E0E0u</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">volume</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nf">fuse_id</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span> <span class="s">&#34;list&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="nf">fuse_div_begin_scroll</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span> <span class="mi">20</span><span class="p">,</span> <span class="mi">110</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">120</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">list</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">scroll</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="mi">40</span><span class="p">;</span> <span class="o">++</span><span class="n">i</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">fuse_rect</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">18</span><span class="p">,</span> <span class="n">i</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">?</span> <span class="mh">0xFF2A2A2Au</span> <span class="o">:</span> <span class="mh">0xFF333333u</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="nf">fuse_div_end</span><span class="p">(</span><span class="n">ui</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nf">fuse_id</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span> <span class="s">&#34;name&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="nf">fuse_textbox</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span> <span class="mi">240</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">28</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="k">sizeof</span> <span class="n">name</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">caret</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                 <span class="s">&#34;Your name&#34;</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="mh">0xFF1E1E1Eu</span><span class="p">,</span> <span class="mh">0xFF262626u</span><span class="p">,</span> <span class="mh">0xFFFFFFFFu</span><span class="p">,</span> <span class="mh">0xFF808080u</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                 <span class="mi">1</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="cm">/* name changed this frame */</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>The slider keeps its knob position in <code>0..1</code> and follows the pointer while it is held. A
+scrolling div clips its children and stores its offset in <code>scroll</code>; feed wheel motion with
+<code>fuse_canvas_wheel()</code> before building. A text box is focused by clicking it (or with
+<code>fuse_focus()</code>); pass typed UTF-8 with <code>fuse_canvas_text()</code> and editing keys such as
+<code>FUSE_KEY_BACKSPACE</code> with <code>fuse_canvas_key()</code>. The box edits <code>name</code> in place, keeps the
+terminating NUL within <code>sizeof name</code>, and returns <code>true</code> when the text changed. By default it
+accepts bytes 32 to 126; pass an <code>allow</code> callback to change that.</p>
+<p>Other building blocks: <code>fuse_rect()</code> and <code>fuse_image()</code> place plain boxes,
+<code>fuse_radial()</code> draws a ring menu and returns the hovered slice, and
+<code>fuse_canvas_input_enabled()</code> turns off pointer handling for the widgets that follow, for
+example behind a modal panel.</p>
+<h2 id="docking-windows">Docking Windows<a class="heading-anchor" href="#docking-windows" aria-label="Link to Docking Windows">#</a></h2>
+<p>The docking API arranges named panels in tabs and splits that the user can drag, resize and
+float. The dock lives in its own caller buffer, which must be 8-byte aligned:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">uint64_t</span> <span class="n">dock_memory</span><span class="p">[</span><span class="mi">4096</span><span class="p">];</span>
+</span></span><span class="line"><span class="cl"><span class="k">static</span> <span class="k">const</span> <span class="n">FuseClass</span> <span class="n">panel</span> <span class="o">=</span> <span class="p">{.</span><span class="n">color</span> <span class="o">=</span> <span class="mh">0xFF1A1D22u</span><span class="p">,</span> <span class="p">.</span><span class="n">pad_l</span> <span class="o">=</span> <span class="mi">8</span><span class="p">,</span> <span class="p">.</span><span class="kt">pad_t</span> <span class="o">=</span> <span class="mi">8</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="nf">fuse_dock_memory</span><span class="p">()</span> <span class="o">&gt;</span> <span class="k">sizeof</span> <span class="n">dock_memory</span><span class="p">)</span> <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="n">FuseDock</span> <span class="o">*</span><span class="n">dock</span> <span class="o">=</span> <span class="nf">fuse_dock_create</span><span class="p">(</span><span class="n">dock_memory</span><span class="p">,</span> <span class="k">sizeof</span> <span class="n">dock_memory</span><span class="p">,</span> <span class="mi">2</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">dock</span><span class="p">)</span> <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">scene</span> <span class="o">=</span> <span class="nf">fuse_dock_register</span><span class="p">(</span><span class="n">dock</span><span class="p">,</span> <span class="s">&#34;scene&#34;</span><span class="p">,</span> <span class="s">&#34;Scene&#34;</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">120</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">props</span> <span class="o">=</span> <span class="nf">fuse_dock_register</span><span class="p">(</span><span class="n">dock</span><span class="p">,</span> <span class="s">&#34;props&#34;</span><span class="p">,</span> <span class="s">&#34;Properties&#34;</span><span class="p">,</span> <span class="mi">160</span><span class="p">,</span> <span class="mi">120</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="n">scene</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="o">||</span> <span class="n">props</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="o">||</span> <span class="o">!</span><span class="nf">fuse_dock_place</span><span class="p">(</span><span class="n">dock</span><span class="p">,</span> <span class="n">props</span><span class="p">,</span> <span class="n">scene</span><span class="p">,</span> <span class="n">FUSE_DOCK_RIGHT</span><span class="p">))</span> <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="cm">/* Every frame, after fuse_canvas_clear(): */</span>
+</span></span><span class="line"><span class="cl"><span class="n">FuseDockEvent</span> <span class="n">event</span> <span class="o">=</span> <span class="p">{.</span><span class="n">x</span> <span class="o">=</span> <span class="n">mouse_x</span><span class="p">,</span> <span class="p">.</span><span class="n">y</span> <span class="o">=</span> <span class="n">mouse_y</span><span class="p">,</span> <span class="p">.</span><span class="n">press</span> <span class="o">=</span> <span class="n">pressed</span><span class="p">,</span> <span class="p">.</span><span class="n">release</span> <span class="o">=</span> <span class="n">released</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl"><span class="nf">fuse_dock_layout</span><span class="p">(</span><span class="n">dock</span><span class="p">,</span> <span class="p">(</span><span class="n">FuseDockRect</span><span class="p">){</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1280</span><span class="p">,</span> <span class="mi">720</span><span class="p">});</span>
+</span></span><span class="line"><span class="cl"><span class="nf">fuse_dock_event</span><span class="p">(</span><span class="n">dock</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">event</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">window</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="p">(</span><span class="n">window</span> <span class="o">=</span> <span class="nf">fuse_dock_visible</span><span class="p">(</span><span class="n">dock</span><span class="p">,</span> <span class="n">i</span><span class="p">))</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">;</span> <span class="o">++</span><span class="n">i</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">fuse_dock_chrome</span><span class="p">(</span><span class="n">dock</span><span class="p">,</span> <span class="n">ui</span><span class="p">,</span> <span class="n">window</span><span class="p">,</span> <span class="mh">0xFF1A1D22u</span><span class="p">,</span> <span class="mh">0xFF2A2E35u</span><span class="p">,</span> <span class="mh">0xFF3A404Au</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                     <span class="mh">0xFFE0E0E0u</span><span class="p">,</span> <span class="mh">0xFF808080u</span><span class="p">,</span> <span class="mh">0xFF4A90E2u</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="nf">fuse_dock_begin</span><span class="p">(</span><span class="n">dock</span><span class="p">,</span> <span class="n">ui</span><span class="p">,</span> <span class="n">window</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">panel</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="cm">/* build the panel&#39;s widgets here */</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">fuse_dock_end</span><span class="p">(</span><span class="n">ui</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="nf">fuse_dock_feedback</span><span class="p">(</span><span class="n">dock</span><span class="p">,</span> <span class="n">ui</span><span class="p">,</span> <span class="mh">0x804A90E2u</span><span class="p">);</span>
+</span></span></code></pre></div><p><code>mouse_x</code>, <code>pressed</code> and the other event fields come from your platform layer. <code>fuse_dock_event()</code>
+returns nonzero when the dock consumed the input, so you can keep it from the panels.
+<code>fuse_dock_export()</code> and <code>fuse_dock_import()</code> save and restore the arrangement as a plain
+<code>FuseDockLayout</code> value.</p>
+<h2 id="handling-errors">Handling Errors<a class="heading-anchor" href="#handling-errors" aria-label="Link to Handling Errors">#</a></h2>
+<p>If a frame overflows a capacity, reuses an ID, or leaves a div or column open,
+<code>fuse_canvas_draw()</code> returns NULL with a count of zero and cancels that frame&rsquo;s input.
+<code>fuse_canvas_error()</code> reports the reason (<code>FUSE_ERR_OVERFLOW</code>, <code>FUSE_ERR_DUPLICATE_ID</code>,
+<code>FUSE_ERR_UNBALANCED</code>), and the next <code>fuse_canvas_clear()</code> resets it. <code>fuse_canvas_debug(ui, true)</code>
+overlays element boxes and a tree view of the frame.</p>
+<p>See <a href="/symbols/fuse/">Fuse symbols</a>
+ for the generated declarations and header comments.</p>
+</div><nav class="prev-next" aria-label="Page navigation"><a href="/docs/cool/"><small>Previous</small><strong>← Cool</strong></a><a href="/docs/grit/"><small>Next</small><strong>Grit →</strong></a></nav></article><aside class="right-toc" aria-label="On this page"><h2>On this page</h2><nav id="TableOfContents">
+  <ul>
+    <li><a href="#building-a-frame">Building a Frame</a></li>
+    <li><a href="#drawing-the-commands">Drawing the Commands</a></li>
+    <li><a href="#laying-out-with-classes">Laying Out with Classes</a></li>
+    <li><a href="#identifying-widgets">Identifying Widgets</a></li>
+    <li><a href="#sliders-scrolling-and-text-input">Sliders, Scrolling and Text Input</a></li>
+    <li><a href="#docking-windows">Docking Windows</a></li>
+    <li><a href="#handling-errors">Handling Errors</a></li>
+  </ul>
+</nav></aside></div>
+
+</main>
+            </div>
+            
+                <footer class="site-footer"><span>Godstack · MIT License.</span><nav aria-label="Footer"><a href="/docs/">Documentation</a><a href="/demos/">Demos</a><a href="/ai/">AI guide</a><a href="/symbols/">Symbols</a><a href="/llms.txt">llms.txt</a><a href="/catalog.json">Documentation index</a><a href="/agent/SKILL.md">Agent skill</a><a href="https://github.com/godxgun/godstack">GitHub</a><a href="/license/">License</a></nav></footer>
+            <dialog class="search-dialog" id="site-search" aria-labelledby="search-title"><h2 id="search-title">Search</h2><form method="dialog"><label for="search-input">Search documentation</label><input id="search-input" type="search" placeholder="Search libraries, guides, and symbols…" autocomplete="off"><button value="close" aria-label="Close search">×</button></form><p class="search-status" role="status">Search libraries, guides, and symbols.<noscript> Browse the <a href="/docs/">documentation index</a>.</noscript></p><div class="search-results" aria-live="polite"></div></dialog>
+            
+            <script src="/js/site.91617de8440f7e0decb452fb29d31188802484fb967ace6f8d6e2237b3be3ce0.js" integrity="sha256-kWF96EQPfg3stFL7KdMRiIAkhPuWes5vjW4iN7O&#43;POA=" defer></script>
+            <script src="/js/ocean.9e84093c8df56dc7d9d5f8ce9fb81b2abb236ba42cd5ba5af0088399081c1a9b.js" integrity="sha256-noQJPI31bcfZ1fjOn7gbKrsja6Qs1bpa8AiDmQgcGps=" defer></script>
+            <script src="/js/scrollbars.5cd0b9c314b3371d0db03eabe2c5870b013108197b4258c7cda71bd685b60b11.js" integrity="sha256-XNC5wxSzNx0NsD6r4sWHCwExCBl7QljHzacb1oW2CxE=" defer></script>
+    </body></html>

@@ -1,0 +1,858 @@
+<!doctype html>
+<html lang="en" class="no-js">
+    <head>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+        <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark">
+        <script>document.documentElement.classList.replace('no-js','js');</script>
+        <title>Wire · Godstack</title><meta name="description" content="Handle GET requests with Wire on Unix and understand its deliberately narrow HTTP scope."><link rel="canonical" href="https://example.org/docs/wire/">
+        
+        <link rel="stylesheet" href="/css/main.a87a5ada49af1cc103390b31f69448f8f98137dea361366aade0bedb9598ba04.css" integrity="sha256-qHpa2kmvHMEDOQsx9pRI&#43;PmBN96jYTZqreC&#43;25WYugQ=">
+    </head>
+    <body>
+        
+        <div class="heaven-scenery" aria-hidden="true"><img src="/images/ocean-sky_hu_f78afa269ada3c1a.webp" alt="" fetchpriority="high"><canvas hidden></canvas></div>
+        <a class="skip-link" href="#main">Skip to content</a>
+        <header class="topbar">
+            <a class="brand heaven-button" href="/">Godstack</a>
+            
+            <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="sidebar">Menu</button>
+            
+            <nav class="topnav" aria-label="Main navigation">
+                
+                    <a href="/docs/">Docs</a>
+                    
+
+                
+                    <a href="/demos/">Demos</a>
+                    
+
+                
+                    <a href="/symbols/">Symbols</a>
+                    
+
+                <a href="/ai/">AI</a><a href="https://github.com/godxgun/godstack">GitHub</a></nav><div class="top-actions"><button type="button" class="search-open" aria-haspopup="dialog" aria-controls="site-search">Search <kbd>⌘ K</kbd></button><noscript><a class="noscript-search" href="/docs/">Browse docs</a></noscript></div></header>
+        
+        <div class="site-layout">
+            
+<nav class="sidebar" id="sidebar" aria-label="Documentation and guides">
+
+
+    
+    
+    <h2 class="nav-label">Guides</h2>
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/guides/getting-started/">Getting Started</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/guides/getting-started/#peak---platform-layer">Peak - Platform Layer</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/guides/getting-started/#poof---a-build-system">Poof - A Build System</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+
+    
+    
+    
+    
+    <h2 class="nav-label">Build</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/poof/">Poof</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/poof/#running-a-command">Running a Command</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#compiling-a-program">Compiling a Program</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#platform-flags-and-cross-targets">Platform Flags and Cross Targets</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#building-in-parallel">Building in Parallel</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#skipping-up-to-date-work">Skipping Up-to-Date Work</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#rebuilding-the-build-script">Rebuilding the Build Script</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#printing-status">Printing Status</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">Core Libraries</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/peak/">Peak</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/peak/#opening-a-window">Opening a Window</a>
+    <ul>
+
+  
+  <li>
+    <a href="/docs/peak/#a-basic-event-loop">A Basic Event Loop</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#with-the-callback-api">With The Callback API</a>
+    
+  </li>
+  
+
+</ul>
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#using-the-filesystem">Using the Filesystem</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#spawning-a-tty">Spawning a TTY</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#memory-mapped-circular-ring-buffer">Memory Mapped Circular Ring Buffer</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#streaming-audio">Streaming Audio</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/rend/">Rend</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/rend/#creating-a-renderer">Creating a Renderer</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/rend/#creating-your-first-pipeline">Creating your first Pipeline</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/rend/#drawing-a-triangle">Drawing a triangle</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/rend/#drawing-a-mesh">Drawing a Mesh</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/fuse/">Fuse</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/fuse/#building-a-frame">Building a Frame</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#drawing-the-commands">Drawing the Commands</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#laying-out-with-classes">Laying Out with Classes</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#identifying-widgets">Identifying Widgets</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#sliders-scrolling-and-text-input">Sliders, Scrolling and Text Input</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#docking-windows">Docking Windows</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#handling-errors">Handling Errors</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/grit/">Grit</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/grit/#allocating-from-an-arena">Allocating from an Arena</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#stack-allocation">Stack Allocation</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#pools-of-equal-sized-objects">Pools of Equal-Sized Objects</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#dynamic-arrays-and-hash-maps">Dynamic Arrays and Hash Maps</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#random-numbers">Random Numbers</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#vectors-and-matrices">Vectors and Matrices</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#drawing-pixels">Drawing Pixels</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/type/">Type</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/type/#creating-a-context">Creating a Context</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#rendering-text">Rendering Text</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#scratch-memory">Scratch Memory</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#uploading-the-atlas">Uploading the Atlas</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#faces-styles-and-fallbacks">Faces, Styles and Fallbacks</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#shaped-text">Shaped Text</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#lower-level-building-blocks">Lower-Level Building Blocks</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">Utilities</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/cast/">Cast</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/cast/#tokenizing-source">Tokenizing Source</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#reading-tokens">Reading Tokens</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#parsing-declarations">Parsing Declarations</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#handling-unparsable-input">Handling Unparsable Input</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#sizing-and-reusing-memory">Sizing and Reusing Memory</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">Web</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/cool/">Cool</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/cool/#writing-text">Writing Text</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#writing-markup">Writing Markup</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#choosing-the-output-stream">Choosing the Output Stream</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#rendering-markdown">Rendering Markdown</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#compiling-templates">Compiling Templates</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details open>
+    <summary><a href="/docs/wire/" aria-current="page">Wire</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/wire/#serving-a-response">Serving a Response</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#routing-requests">Routing Requests</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#serving-static-files">Serving Static Files</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#partial-responses-for-htmx">Partial Responses for htmx</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#running-your-own-loop">Running Your Own Loop</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#limits">Limits</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">API references</h2>
+
+    <ul class="sidebar-list">
+        <li><a href="/symbols/">Symbols</a></li>
+    </ul>
+
+    <div class="sidebar-footer">
+        <a href="/docs/">All libraries</a>
+        <a href="/ai/">Coding agent guide</a>
+    </div>
+</nav>
+
+            <main id="main" tabindex="-1">
+                
+
+  
+  <div class="reading-layout"><article class="article" data-symbol-vault-url="/symbols/wire/"><div class="article-meta"><a href="/docs/">Documentation</a><span> / Web</span><a href="/symbols/wire/">Symbol reference</a><a class="source-link" href="/docs/wire.md">View Markdown</a></div>
+  
+  
+  
+  <div class="prose"><h1 id="wire">Wire<a class="heading-anchor" href="#wire" aria-label="Link to Wire">#</a></h1>
+<p>Wire is a small blocking HTTP/1.1 server for GET requests. You supply one handler function; Wire
+accepts connections, parses the request line, calls your handler, and closes the connection. It
+also serves files from a <code>static</code> directory. It currently builds on Unix systems with
+<code>sendfile()</code> in <code>&lt;sys/sendfile.h&gt;</code>, such as Linux.</p>
+<p>Define <code>WIRE_IMPLEMENTATION</code> in exactly one translation unit before including <code>Wire.h</code>. Other
+translation units include the header without it. In the implementation file, include <code>Wire.h</code>
+before any system header: the implementation defines <code>_DEFAULT_SOURCE</code> to get POSIX declarations
+such as <code>realpath()</code> and <code>sigaction()</code>, which only works if no system header was read first.
+Alternatively, define <code>_DEFAULT_SOURCE</code> yourself at the top of that file.</p>
+<h2 id="serving-a-response">Serving a Response<a class="heading-anchor" href="#serving-a-response" aria-label="Link to Serving a Response">#</a></h2>
+<p>The first thing to try is a server that answers every request with the same body:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define WIRE_IMPLEMENTATION
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;Wire.h&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">int</span> <span class="nf">on_request</span><span class="p">(</span><span class="kt">int</span> <span class="n">fd</span><span class="p">,</span> <span class="k">const</span> <span class="n">WireHttpRequest</span> <span class="o">*</span><span class="n">req</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">user</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="n">req</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="n">user</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nf">wire_http_write_status</span><span class="p">(</span><span class="n">fd</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="s">&#34;text/plain&#34;</span><span class="p">,</span> <span class="s">&#34;ok</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">,</span> <span class="mi">3</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nf">wire_http_serve</span><span class="p">(</span><span class="mi">8080</span><span class="p">,</span> <span class="n">on_request</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Run it and open <code>http://127.0.0.1:8080/</code>. <code>wire_http_serve()</code> binds <code>0.0.0.0:8080</code>, so the server
+is reachable from other machines unless a firewall prevents it. On success it never returns; it
+returns <code>-1</code> if the handler is NULL or the port cannot be bound. It also ignores <code>SIGPIPE</code>, so a
+client that disconnects early does not kill the process.</p>
+<p>The handler receives the connected socket, the parsed request and the <code>user</code> pointer passed to
+<code>wire_http_serve()</code>. <code>wire_http_write_status()</code> writes a complete response: status line,
+<code>Content-Type</code>, <code>Content-Length</code>, <code>Connection: close</code> and the body. The body may be NULL when the
+length is zero. Wire closes the socket after the handler returns and ignores the return value.</p>
+<h2 id="routing-requests">Routing Requests<a class="heading-anchor" href="#routing-requests" aria-label="Link to Routing Requests">#</a></h2>
+<p><code>req-&gt;path</code> holds the request path with any query string removed (at most
+<code>WIRE_HTTP_MAX_PATH - 1</code> bytes). Requests are handled one at a time, and only GET reaches the
+handler: malformed requests get a <code>400</code> page and other methods a <code>405</code> page before your code
+runs. Branch on the path and write one response per request:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="k">const</span> <span class="kt">char</span> <span class="n">home</span><span class="p">[]</span> <span class="o">=</span> <span class="s">&#34;&lt;!doctype html&gt;&lt;title&gt;Wire&lt;/title&gt;&lt;h1&gt;Hello&lt;/h1&gt;</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">int</span> <span class="nf">route</span><span class="p">(</span><span class="kt">int</span> <span class="n">fd</span><span class="p">,</span> <span class="k">const</span> <span class="n">WireHttpRequest</span> <span class="o">*</span><span class="n">req</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">user</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="n">user</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="nf">strcmp</span><span class="p">(</span><span class="n">req</span><span class="o">-&gt;</span><span class="n">path</span><span class="p">,</span> <span class="s">&#34;/&#34;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="nf">wire_http_write_status</span><span class="p">(</span><span class="n">fd</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="s">&#34;text/html; charset=utf-8&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                                      <span class="n">home</span><span class="p">,</span> <span class="k">sizeof</span> <span class="n">home</span> <span class="o">-</span> <span class="mi">1</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="nf">strcmp</span><span class="p">(</span><span class="n">req</span><span class="o">-&gt;</span><span class="n">path</span><span class="p">,</span> <span class="s">&#34;/health&#34;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="nf">wire_http_write_status</span><span class="p">(</span><span class="n">fd</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="s">&#34;text/plain&#34;</span><span class="p">,</span> <span class="s">&#34;ok</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">,</span> <span class="mi">3</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nf">wire_http_error</span><span class="p">(</span><span class="n">fd</span><span class="p">,</span> <span class="mi">404</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><code>wire_http_error()</code> writes a small HTML page such as <code>&lt;h1&gt;404 Not Found&lt;/h1&gt;</code>. The path comes from
+the client: escape it before echoing it into HTML, for example with
+<a href="/docs/cool/">Cool</a>
+&rsquo;s <code>cool_html_txt()</code>.</p>
+<h2 id="serving-static-files">Serving Static Files<a class="heading-anchor" href="#serving-static-files" aria-label="Link to Serving Static Files">#</a></h2>
+<p><code>wire_http_serve_static()</code> answers <code>/static/...</code> URLs from the <code>static</code> directory under the
+current working directory:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="nf">strncmp</span><span class="p">(</span><span class="n">req</span><span class="o">-&gt;</span><span class="n">path</span><span class="p">,</span> <span class="s">&#34;/static/&#34;</span><span class="p">,</span> <span class="mi">8</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nf">wire_http_serve_static</span><span class="p">(</span><span class="n">fd</span><span class="p">,</span> <span class="n">req</span><span class="o">-&gt;</span><span class="n">path</span><span class="p">);</span>
+</span></span></code></pre></div><p>It writes the whole response, including error pages, and returns the HTTP status it sent. The
+part after <code>/static/</code> may contain only letters, digits, <code>.</code>, <code>_</code>, <code>-</code> and <code>/</code>, must not contain
+<code>..</code>, and must resolve to a regular file inside <code>static</code> after symbolic links are followed.
+Anything else is a <code>404</code>. The content type comes from the extension: <code>.html</code>, <code>.css</code>, <code>.js</code>,
+<code>.svg</code>, <code>.ttf</code> and <code>.gif</code> are recognized, and every other file is sent as
+<code>application/octet-stream</code>.</p>
+<h2 id="partial-responses-for-htmx">Partial Responses for htmx<a class="heading-anchor" href="#partial-responses-for-htmx" aria-label="Link to Partial Responses for htmx">#</a></h2>
+<p><code>req-&gt;hx</code> is nonzero when the request carries the <code>HX-Request: true</code> header that
+<a href="https://htmx.org/">htmx</a>
+ sends. A handler can return just the changed fragment to htmx and a full
+page to everyone else:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">int</span> <span class="nf">counter</span><span class="p">(</span><span class="kt">int</span> <span class="n">fd</span><span class="p">,</span> <span class="k">const</span> <span class="n">WireHttpRequest</span> <span class="o">*</span><span class="n">req</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">user</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="o">*</span><span class="n">count</span> <span class="o">=</span> <span class="n">user</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">char</span> <span class="n">body</span><span class="p">[</span><span class="mi">128</span><span class="p">];</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">n</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="o">++*</span><span class="n">count</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="n">req</span><span class="o">-&gt;</span><span class="n">hx</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="n">n</span> <span class="o">=</span> <span class="nf">snprintf</span><span class="p">(</span><span class="n">body</span><span class="p">,</span> <span class="k">sizeof</span> <span class="n">body</span><span class="p">,</span> <span class="s">&#34;&lt;span id=</span><span class="se">\&#34;</span><span class="s">count</span><span class="se">\&#34;</span><span class="s">&gt;%d&lt;/span&gt;&#34;</span><span class="p">,</span> <span class="o">*</span><span class="n">count</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">else</span>
+</span></span><span class="line"><span class="cl">        <span class="n">n</span> <span class="o">=</span> <span class="nf">snprintf</span><span class="p">(</span><span class="n">body</span><span class="p">,</span> <span class="k">sizeof</span> <span class="n">body</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                     <span class="s">&#34;&lt;!doctype html&gt;&lt;button hx-get=</span><span class="se">\&#34;</span><span class="s">/</span><span class="se">\&#34;</span><span class="s"> hx-target=</span><span class="se">\&#34;</span><span class="s">#count</span><span class="se">\&#34;</span><span class="s">&gt;&#34;</span>
+</span></span><span class="line"><span class="cl">                     <span class="s">&#34;&lt;span id=</span><span class="se">\&#34;</span><span class="s">count</span><span class="se">\&#34;</span><span class="s">&gt;%d&lt;/span&gt;&lt;/button&gt;&#34;</span><span class="p">,</span> <span class="o">*</span><span class="n">count</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="n">n</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="o">||</span> <span class="p">(</span><span class="kt">size_t</span><span class="p">)</span><span class="n">n</span> <span class="o">&gt;=</span> <span class="k">sizeof</span> <span class="n">body</span><span class="p">)</span> <span class="k">return</span> <span class="nf">wire_http_error</span><span class="p">(</span><span class="n">fd</span><span class="p">,</span> <span class="mi">500</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nf">wire_http_write_status</span><span class="p">(</span><span class="n">fd</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="s">&#34;text/html; charset=utf-8&#34;</span><span class="p">,</span> <span class="n">body</span><span class="p">,</span> <span class="p">(</span><span class="kt">size_t</span><span class="p">)</span><span class="n">n</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Pass <code>&amp;count</code> as the <code>user</code> argument of <code>wire_http_serve()</code>. Wire calls the handler from the
+thread that called <code>wire_http_serve()</code>, one request at a time, so <code>user</code> state needs no locking.</p>
+<h2 id="running-your-own-loop">Running Your Own Loop<a class="heading-anchor" href="#running-your-own-loop" aria-label="Link to Running Your Own Loop">#</a></h2>
+<p><code>wire_http_serve()</code> is built from four public calls. Use them directly when you need to log,
+count or stop serving:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">int</span> <span class="n">listener</span> <span class="o">=</span> <span class="nf">wire_http_listen</span><span class="p">(</span><span class="mi">8080</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="n">listener</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">served</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">served</span> <span class="o">&lt;</span> <span class="mi">100</span><span class="p">;</span> <span class="o">++</span><span class="n">served</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">fd</span> <span class="o">=</span> <span class="nf">wire_http_accept</span><span class="p">(</span><span class="n">listener</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="n">fd</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> <span class="k">continue</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">WireHttpRequest</span> <span class="n">req</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">status</span> <span class="o">=</span> <span class="nf">wire_http_read_req</span><span class="p">(</span><span class="n">fd</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">req</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="n">status</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">wire_http_error</span><span class="p">(</span><span class="n">fd</span><span class="p">,</span> <span class="n">status</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">else</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">route</span><span class="p">(</span><span class="n">fd</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">req</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">close</span><span class="p">(</span><span class="n">fd</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="nf">close</span><span class="p">(</span><span class="n">listener</span><span class="p">);</span>
+</span></span></code></pre></div><p><code>wire_http_read_req()</code> returns <code>0</code> for a GET request, or the status to send (<code>400</code> or <code>405</code>). It
+reads at most <code>WIRE_HTTP_MAX_REQ</code> bytes of request header and ignores any body. A custom loop
+must ignore <code>SIGPIPE</code> itself if clients may disconnect early.</p>
+<h2 id="limits">Limits<a class="heading-anchor" href="#limits" aria-label="Link to Limits">#</a></h2>
+<p>Wire handles one connection at a time and has no timeouts, so a slow client delays everyone else.
+There is no keep-alive, TLS, request body, chunked encoding or header access beyond <code>HX-Request</code>.
+Put it behind a reverse proxy, or use a larger server, when you need those.</p>
+<p>See <a href="/symbols/wire/">Wire symbols</a>
+ for the generated declarations.</p>
+</div><nav class="prev-next" aria-label="Page navigation"><a href="/docs/type/"><small>Previous</small><strong>← Type</strong></a></nav></article><aside class="right-toc" aria-label="On this page"><h2>On this page</h2><nav id="TableOfContents">
+  <ul>
+    <li><a href="#serving-a-response">Serving a Response</a></li>
+    <li><a href="#routing-requests">Routing Requests</a></li>
+    <li><a href="#serving-static-files">Serving Static Files</a></li>
+    <li><a href="#partial-responses-for-htmx">Partial Responses for htmx</a></li>
+    <li><a href="#running-your-own-loop">Running Your Own Loop</a></li>
+    <li><a href="#limits">Limits</a></li>
+  </ul>
+</nav></aside></div>
+
+</main>
+            </div>
+            
+                <footer class="site-footer"><span>Godstack · MIT License.</span><nav aria-label="Footer"><a href="/docs/">Documentation</a><a href="/demos/">Demos</a><a href="/ai/">AI guide</a><a href="/symbols/">Symbols</a><a href="/llms.txt">llms.txt</a><a href="/catalog.json">Documentation index</a><a href="/agent/SKILL.md">Agent skill</a><a href="https://github.com/godxgun/godstack">GitHub</a><a href="/license/">License</a></nav></footer>
+            <dialog class="search-dialog" id="site-search" aria-labelledby="search-title"><h2 id="search-title">Search</h2><form method="dialog"><label for="search-input">Search documentation</label><input id="search-input" type="search" placeholder="Search libraries, guides, and symbols…" autocomplete="off"><button value="close" aria-label="Close search">×</button></form><p class="search-status" role="status">Search libraries, guides, and symbols.<noscript> Browse the <a href="/docs/">documentation index</a>.</noscript></p><div class="search-results" aria-live="polite"></div></dialog>
+            
+            <script src="/js/site.91617de8440f7e0decb452fb29d31188802484fb967ace6f8d6e2237b3be3ce0.js" integrity="sha256-kWF96EQPfg3stFL7KdMRiIAkhPuWes5vjW4iN7O&#43;POA=" defer></script>
+            <script src="/js/ocean.9e84093c8df56dc7d9d5f8ce9fb81b2abb236ba42cd5ba5af0088399081c1a9b.js" integrity="sha256-noQJPI31bcfZ1fjOn7gbKrsja6Qs1bpa8AiDmQgcGps=" defer></script>
+            <script src="/js/scrollbars.5cd0b9c314b3371d0db03eabe2c5870b013108197b4258c7cda71bd685b60b11.js" integrity="sha256-XNC5wxSzNx0NsD6r4sWHCwExCBl7QljHzacb1oW2CxE=" defer></script>
+    </body></html>

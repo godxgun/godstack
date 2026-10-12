@@ -1,0 +1,8 @@
+{{- /* Explicit public documentation corpus. Never walk repository files. */ -}}
+{{- $pages := slice -}}
+{{- range site.Pages -}}
+  {{- if partial "is-public-doc.html" . -}}
+    {{- $pages = $pages | append . -}}
+  {{- end -}}
+{{- end -}}
+{{- return (sort $pages "RelPermalink") -}}

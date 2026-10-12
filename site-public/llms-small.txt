@@ -1,0 +1,25 @@
+# Godstack: compact setup
+
+Single-header C libraries for platform services, graphics, UI, text, and developer tools. Use only the headers your application needs.
+
+## Setup
+
+For a minimal CPU-only start, copy Grit.h into your project and define GRIT_IMPLEMENTATION in exactly one C translation unit before including it (`#define GRIT_IMPLEMENTATION` then `#include "Grit.h"`). Compile the complete getting-started program with `cc -std=c99 -Wall -Wextra -I. hello.c -o hello`; it prints `value: 42`. Other libraries have their own setup and dependencies; Poof is static header-only and does not use an implementation macro. To build a repository demo, bootstrap with `cc build.c -o build`, then run `./build demo cast`.
+
+
+## Essential links
+
+- Getting started: https://example.org/guides/getting-started/
+- Documentation index: https://example.org/docs/
+- Symbols: https://example.org/symbols/
+- Demo gallery: https://example.org/demos/
+- Documentation catalog: https://example.org/catalog.json
+- Choose a library: https://example.org/docs/
+- Agent instructions: https://example.org/ai/
+- Project skill: https://example.org/agent/SKILL.md
+- AGENTS.md snippet: https://example.org/agent/AGENTS.md
+- Full public documentation: https://example.org/llms-full.txt
+- Source: https://github.com/godxgun/godstack
+- License: https://example.org/license/
+
+Use the catalog's markdown_url for the relevant document rather than loading the full collection into every prompt. Verify APIs against the matching header. Do not confuse C browser examples with native execution, assume every detected platform is supported, or use ./build cpu (the current build driver accepts ./build demo <name>). Do not introduce dependencies or an MCP backend without approval.

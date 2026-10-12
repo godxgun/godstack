@@ -1,0 +1,881 @@
+<!doctype html>
+<html lang="en" class="no-js">
+    <head>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+        <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark">
+        <script>document.documentElement.classList.replace('no-js','js');</script>
+        <title>Peak · Godstack</title><meta name="description" content="Set up Peak runtime contexts and a platform event loop with target-specific dependencies."><link rel="canonical" href="https://example.org/docs/peak/">
+        
+        <link rel="stylesheet" href="/css/main.a87a5ada49af1cc103390b31f69448f8f98137dea361366aade0bedb9598ba04.css" integrity="sha256-qHpa2kmvHMEDOQsx9pRI&#43;PmBN96jYTZqreC&#43;25WYugQ=">
+    </head>
+    <body>
+        
+        <div class="heaven-scenery" aria-hidden="true"><img src="/images/ocean-sky_hu_f78afa269ada3c1a.webp" alt="" fetchpriority="high"><canvas hidden></canvas></div>
+        <a class="skip-link" href="#main">Skip to content</a>
+        <header class="topbar">
+            <a class="brand heaven-button" href="/">Godstack</a>
+            
+            <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="sidebar">Menu</button>
+            
+            <nav class="topnav" aria-label="Main navigation">
+                
+                    <a href="/docs/">Docs</a>
+                    
+
+                
+                    <a href="/demos/">Demos</a>
+                    
+
+                
+                    <a href="/symbols/">Symbols</a>
+                    
+
+                <a href="/ai/">AI</a><a href="https://github.com/godxgun/godstack">GitHub</a></nav><div class="top-actions"><button type="button" class="search-open" aria-haspopup="dialog" aria-controls="site-search">Search <kbd>⌘ K</kbd></button><noscript><a class="noscript-search" href="/docs/">Browse docs</a></noscript></div></header>
+        
+        <div class="site-layout">
+            
+<nav class="sidebar" id="sidebar" aria-label="Documentation and guides">
+
+
+    
+    
+    <h2 class="nav-label">Guides</h2>
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/guides/getting-started/">Getting Started</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/guides/getting-started/#peak---platform-layer">Peak - Platform Layer</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/guides/getting-started/#poof---a-build-system">Poof - A Build System</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+
+    
+    
+    
+    
+    <h2 class="nav-label">Build</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/poof/">Poof</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/poof/#running-a-command">Running a Command</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#compiling-a-program">Compiling a Program</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#platform-flags-and-cross-targets">Platform Flags and Cross Targets</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#building-in-parallel">Building in Parallel</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#skipping-up-to-date-work">Skipping Up-to-Date Work</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#rebuilding-the-build-script">Rebuilding the Build Script</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#printing-status">Printing Status</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">Core Libraries</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details open>
+    <summary><a href="/docs/peak/" aria-current="page">Peak</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/peak/#opening-a-window">Opening a Window</a>
+    <ul>
+
+  
+  <li>
+    <a href="/docs/peak/#a-basic-event-loop">A Basic Event Loop</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#with-the-callback-api">With The Callback API</a>
+    
+  </li>
+  
+
+</ul>
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#using-the-filesystem">Using the Filesystem</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#spawning-a-tty">Spawning a TTY</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#memory-mapped-circular-ring-buffer">Memory Mapped Circular Ring Buffer</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#streaming-audio">Streaming Audio</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/rend/">Rend</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/rend/#creating-a-renderer">Creating a Renderer</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/rend/#creating-your-first-pipeline">Creating your first Pipeline</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/rend/#drawing-a-triangle">Drawing a triangle</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/rend/#drawing-a-mesh">Drawing a Mesh</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/fuse/">Fuse</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/fuse/#building-a-frame">Building a Frame</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#drawing-the-commands">Drawing the Commands</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#laying-out-with-classes">Laying Out with Classes</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#identifying-widgets">Identifying Widgets</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#sliders-scrolling-and-text-input">Sliders, Scrolling and Text Input</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#docking-windows">Docking Windows</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#handling-errors">Handling Errors</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/grit/">Grit</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/grit/#allocating-from-an-arena">Allocating from an Arena</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#stack-allocation">Stack Allocation</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#pools-of-equal-sized-objects">Pools of Equal-Sized Objects</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#dynamic-arrays-and-hash-maps">Dynamic Arrays and Hash Maps</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#random-numbers">Random Numbers</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#vectors-and-matrices">Vectors and Matrices</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#drawing-pixels">Drawing Pixels</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/type/">Type</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/type/#creating-a-context">Creating a Context</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#rendering-text">Rendering Text</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#scratch-memory">Scratch Memory</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#uploading-the-atlas">Uploading the Atlas</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#faces-styles-and-fallbacks">Faces, Styles and Fallbacks</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#shaped-text">Shaped Text</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#lower-level-building-blocks">Lower-Level Building Blocks</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">Utilities</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/cast/">Cast</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/cast/#tokenizing-source">Tokenizing Source</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#reading-tokens">Reading Tokens</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#parsing-declarations">Parsing Declarations</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#handling-unparsable-input">Handling Unparsable Input</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#sizing-and-reusing-memory">Sizing and Reusing Memory</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">Web</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/cool/">Cool</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/cool/#writing-text">Writing Text</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#writing-markup">Writing Markup</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#choosing-the-output-stream">Choosing the Output Stream</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#rendering-markdown">Rendering Markdown</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#compiling-templates">Compiling Templates</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/wire/">Wire</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/wire/#serving-a-response">Serving a Response</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#routing-requests">Routing Requests</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#serving-static-files">Serving Static Files</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#partial-responses-for-htmx">Partial Responses for htmx</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#running-your-own-loop">Running Your Own Loop</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#limits">Limits</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">API references</h2>
+
+    <ul class="sidebar-list">
+        <li><a href="/symbols/">Symbols</a></li>
+    </ul>
+
+    <div class="sidebar-footer">
+        <a href="/docs/">All libraries</a>
+        <a href="/ai/">Coding agent guide</a>
+    </div>
+</nav>
+
+            <main id="main" tabindex="-1">
+                
+
+  
+  <div class="reading-layout"><article class="article" data-symbol-vault-url="/symbols/peak/"><div class="article-meta"><a href="/docs/">Documentation</a><span> / Core Libraries</span><a href="/symbols/peak/">Symbol reference</a><a class="source-link" href="/docs/peak.md">View Markdown</a></div>
+  
+  
+  
+  <div class="prose"><h1 id="peak">Peak<a class="heading-anchor" href="#peak" aria-label="Link to Peak">#</a></h1>
+<p>Peak is a platform layer that abstracts operating-system windowing and related services behind
+a C API. Platform-specific implementations are selected at compile time; some system libraries
+are loaded at runtime.</p>
+<h2 id="opening-a-window">Opening a Window<a class="heading-anchor" href="#opening-a-window" aria-label="Link to Opening a Window">#</a></h2>
+<p>The first thing to try is opening a window and setting up an event loop. You can poll events with
+<code>peak_window_epoll</code>, or let <code>peak_window_run</code> call a tick callback.</p>
+<h3 id="a-basic-event-loop">A Basic Event Loop<a class="heading-anchor" href="#a-basic-event-loop" aria-label="Link to A Basic Event Loop">#</a></h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define PEAK_IMPLEMENTATION
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;Peak.h&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PeakCtx</span> <span class="o">*</span><span class="n">ctx</span> <span class="o">=</span> <span class="nf">peak_init</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">ctx</span><span class="p">)</span> <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">PeakWindow</span> <span class="n">window</span> <span class="o">=</span> <span class="nf">peak_window_open</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="s">&#34;My Window&#34;</span><span class="p">,</span> <span class="mi">888</span><span class="p">,</span> <span class="mi">333</span><span class="p">,</span> <span class="mi">0</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">window</span><span class="p">.</span><span class="n">ctx</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">peak_quit</span><span class="p">(</span><span class="n">ctx</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">PeakEvent</span> <span class="n">event</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">bool</span> <span class="n">running</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">while</span> <span class="p">(</span><span class="n">running</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">while</span> <span class="p">(</span><span class="nf">peak_window_epoll</span><span class="p">(</span><span class="o">&amp;</span><span class="n">window</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">event</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="k">if</span> <span class="p">(</span><span class="n">event</span><span class="p">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">PEAK_EVENT_WINDOW_CLOSE</span><span class="p">)</span> <span class="n">running</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nf">peak_window_close</span><span class="p">(</span><span class="o">&amp;</span><span class="n">window</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">peak_quit</span><span class="p">(</span><span class="n">ctx</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>The context owns Peak&rsquo;s runtime state and is required when opening a window. Call <code>peak_init()</code>
+to create it and <code>peak_quit(ctx)</code> when done. Peak manages its runtime storage internally.</p>
+<h3 id="with-the-callback-api">With The Callback API<a class="heading-anchor" href="#with-the-callback-api" aria-label="Link to With The Callback API">#</a></h3>
+<p>The callback API helps portability on platforms such as the web, where the browser owns the
+main loop. <code>peak_window_run()</code> repeatedly calls your callback on native platforms and registers
+it with the browser main loop on Web.</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">int</span> <span class="nf">tick</span><span class="p">(</span><span class="n">PeakWindow</span> <span class="o">*</span><span class="n">window</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">userdata</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PeakEvent</span> <span class="n">event</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="n">userdata</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">while</span> <span class="p">(</span><span class="nf">peak_window_epoll</span><span class="p">(</span><span class="n">window</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">event</span><span class="p">))</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="p">(</span><span class="n">event</span><span class="p">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">PEAK_EVENT_WINDOW_CLOSE</span><span class="p">)</span> <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PeakCtx</span> <span class="o">*</span><span class="n">ctx</span> <span class="o">=</span> <span class="nf">peak_init</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">ctx</span><span class="p">)</span> <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">PeakWindow</span> <span class="n">window</span> <span class="o">=</span> <span class="nf">peak_window_open</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="s">&#34;My Window&#34;</span><span class="p">,</span> <span class="mi">888</span><span class="p">,</span> <span class="mi">333</span><span class="p">,</span> <span class="mi">0</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="n">window</span><span class="p">.</span><span class="n">ctx</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">peak_window_run</span><span class="p">(</span><span class="o">&amp;</span><span class="n">window</span><span class="p">,</span> <span class="n">tick</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">peak_window_close</span><span class="p">(</span><span class="o">&amp;</span><span class="n">window</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">peak_quit</span><span class="p">(</span><span class="n">ctx</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><h2 id="using-the-filesystem">Using the Filesystem<a class="heading-anchor" href="#using-the-filesystem" aria-label="Link to Using the Filesystem">#</a></h2>
+<p>The basic file helpers use paths from the process working directory. <code>peak_file_alloc()</code> returns
+a heap buffer; release it with <code>free()</code>. The filesystem helpers return nonzero on success.</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">const</span> <span class="kt">char</span> <span class="n">message</span><span class="p">[]</span> <span class="o">=</span> <span class="s">&#34;hello from Peak</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">path</span> <span class="o">=</span> <span class="s">&#34;peak-note.txt&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nf">peak_file_write</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">message</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span> <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">unsigned</span> <span class="kt">long</span> <span class="n">size</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kt">char</span> <span class="o">*</span><span class="n">contents</span> <span class="o">=</span> <span class="nf">peak_file_alloc</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">size</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">contents</span><span class="p">)</span> <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="nf">fwrite</span><span class="p">(</span><span class="n">contents</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="n">stdout</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="nf">free</span><span class="p">(</span><span class="n">contents</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nf">peak_filesystem_rename</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s">&#34;peak-note-copy.txt&#34;</span><span class="p">))</span> <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nf">peak_filesystem_rm</span><span class="p">(</span><span class="s">&#34;peak-note-copy.txt&#34;</span><span class="p">))</span> <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
+</span></span></code></pre></div><p>Use <code>peak_filesystem_cwd()</code> and <code>peak_filesystem_chdir()</code> to inspect or change the working
+directory. <code>peak_filesystem_mkdir()</code> creates one directory level, and <code>peak_filesystem_list()</code>
+calls your callback for each entry. For bounded, directory-handle-based I/O on supported Linux
+systems, see the <code>peak_io_*</code> API in the <a href="/symbols/peak/">symbol reference</a>
+.</p>
+<h2 id="spawning-a-tty">Spawning a TTY<a class="heading-anchor" href="#spawning-a-tty" aria-label="Link to Spawning a TTY">#</a></h2>
+<p><code>peak_pty_spawn()</code> starts a child attached to a pseudoterminal and returns its nonblocking file
+handle and process ID. Pass the executable and a NULL-terminated argument vector. This example
+uses the POSIX shell; choose a host-appropriate executable and arguments for other systems.</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">argv</span><span class="p">[]</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#34;/bin/sh&#34;</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl"><span class="n">PeakProc</span> <span class="n">tty</span> <span class="o">=</span> <span class="nf">peak_pty_spawn</span><span class="p">(</span><span class="s">&#34;/bin/sh&#34;</span><span class="p">,</span> <span class="n">argv</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">24</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="n">tty</span><span class="p">.</span><span class="n">fd</span> <span class="o">==</span> <span class="n">PEAK_HANDLE_INVALID</span><span class="p">)</span> <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">const</span> <span class="kt">char</span> <span class="n">command</span><span class="p">[]</span> <span class="o">=</span> <span class="s">&#34;printf &#39;hello from the child</span><span class="se">\\</span><span class="s">n&#39;; exit</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="nf">peak_fd_write</span><span class="p">(</span><span class="n">tty</span><span class="p">.</span><span class="n">fd</span><span class="p">,</span> <span class="n">command</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">command</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">peak_pty_close</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tty</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">char</span> <span class="n">output</span><span class="p">[</span><span class="mi">256</span><span class="p">];</span>
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="p">(;;)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">n</span> <span class="o">=</span> <span class="nf">peak_fd_read</span><span class="p">(</span><span class="n">tty</span><span class="p">.</span><span class="n">fd</span><span class="p">,</span> <span class="n">output</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">output</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="n">n</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span> <span class="nf">fwrite</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="p">(</span><span class="kt">size_t</span><span class="p">)</span><span class="n">n</span><span class="p">,</span> <span class="n">stdout</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">else</span> <span class="nf">if</span> <span class="p">(</span><span class="n">n</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="k">break</span><span class="p">;</span> <span class="cm">/* child closed the terminal */</span>
+</span></span><span class="line"><span class="cl">    <span class="k">else</span> <span class="nf">if</span> <span class="p">(</span><span class="nf">peak_pty_reap</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tty</span><span class="p">))</span> <span class="k">break</span><span class="p">;</span> <span class="cm">/* no data and child has exited */</span>
+</span></span><span class="line"><span class="cl">    <span class="k">else</span> <span class="nf">peak_sleep_ns</span><span class="p">(</span><span class="mi">1000000</span><span class="p">);</span> <span class="cm">/* -1: no data available yet */</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="k">while</span> <span class="p">(</span><span class="o">!</span><span class="nf">peak_pty_reap</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tty</span><span class="p">))</span> <span class="nf">peak_sleep_ns</span><span class="p">(</span><span class="mi">1000000</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="nf">peak_pty_close</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tty</span><span class="p">);</span>
+</span></span></code></pre></div><p>Use <code>peak_pty_resize()</code> when the terminal dimensions change. <code>peak_pty_reap()</code> reports when the
+child exits; <code>peak_pty_close()</code> releases the PTY and any remaining process resources.</p>
+<h2 id="memory-mapped-circular-ring-buffer">Memory Mapped Circular Ring Buffer<a class="heading-anchor" href="#memory-mapped-circular-ring-buffer" aria-label="Link to Memory Mapped Circular Ring Buffer">#</a></h2>
+<p><code>peak_mirror_map()</code> maps the same storage twice in adjacent address ranges. The requested size
+must be a multiple of <code>peak_page_size()</code>. The returned pointer can be indexed across the wrap
+boundary without splitting a copy; the valid mapped range is <code>size * 2</code> bytes.</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">size_t</span> <span class="n">size</span> <span class="o">=</span> <span class="nf">peak_page_size</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl"><span class="kt">unsigned</span> <span class="kt">char</span> <span class="o">*</span><span class="n">ring</span> <span class="o">=</span> <span class="nf">peak_mirror_map</span><span class="p">(</span><span class="n">size</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">ring</span><span class="p">)</span> <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="cm">/* This contiguous write crosses the ring boundary at `size`. */</span>
+</span></span><span class="line"><span class="cl"><span class="nf">memcpy</span><span class="p">(</span><span class="n">ring</span> <span class="o">+</span> <span class="n">size</span> <span class="o">-</span> <span class="mi">3</span><span class="p">,</span> <span class="s">&#34;abcdef&#34;</span><span class="p">,</span> <span class="mi">6</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="cm">/* The bytes are also visible at ring[0..2] through the second mapping. */</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nf">peak_mirror_unmap</span><span class="p">(</span><span class="n">ring</span><span class="p">,</span> <span class="n">size</span><span class="p">);</span>
+</span></span></code></pre></div><p>Keep the original <code>size</code> for <code>peak_mirror_unmap()</code> and do not access the mapping after unmapping.</p>
+<h2 id="streaming-audio">Streaming Audio<a class="heading-anchor" href="#streaming-audio" aria-label="Link to Streaming Audio">#</a></h2>
+<p><code>peak_audio_start()</code> asks the audio device to pull interleaved signed 16-bit samples. The callback
+receives a frame count, so write <code>frames * channels</code> samples. Keep it real-time safe: avoid
+blocking, file I/O, and allocation in the callback. It returns nonzero when the stream starts;
+call <code>peak_audio_stop()</code> to stop it. With <code>PEAK_NO_AUDIO</code>, starting audio returns zero.</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">void</span> <span class="nf">fill_audio</span><span class="p">(</span><span class="kt">int16_t</span> <span class="o">*</span><span class="n">out</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">frames</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">userdata</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">uint32_t</span> <span class="o">*</span><span class="n">phase</span> <span class="o">=</span> <span class="n">userdata</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="p">(</span><span class="kt">size_t</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">frames</span><span class="p">;</span> <span class="o">++</span><span class="n">i</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="o">*</span><span class="n">phase</span> <span class="o">=</span> <span class="p">(</span><span class="o">*</span><span class="n">phase</span> <span class="o">+</span> <span class="mi">440</span><span class="p">)</span> <span class="o">%</span> <span class="mi">48000</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="o">*</span><span class="n">phase</span> <span class="o">%</span> <span class="mi">48000</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">24000</span> <span class="o">?</span> <span class="mi">8000</span> <span class="o">:</span> <span class="o">-</span><span class="mi">8000</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">uint32_t</span> <span class="n">phase</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nf">peak_audio_start</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">48000</span><span class="p">,</span> <span class="n">fill_audio</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">phase</span><span class="p">))</span> <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="cm">/* ... play ... */</span>
+</span></span><span class="line"><span class="cl"><span class="nf">peak_audio_stop</span><span class="p">();</span>
+</span></span></code></pre></div></div><nav class="prev-next" aria-label="Page navigation"><a href="/docs/rend/"><small>Next</small><strong>Rend →</strong></a></nav></article><aside class="right-toc" aria-label="On this page"><h2>On this page</h2><nav id="TableOfContents">
+  <ul>
+    <li><a href="#opening-a-window">Opening a Window</a>
+      <ul>
+        <li><a href="#a-basic-event-loop">A Basic Event Loop</a></li>
+        <li><a href="#with-the-callback-api">With The Callback API</a></li>
+      </ul>
+    </li>
+    <li><a href="#using-the-filesystem">Using the Filesystem</a></li>
+    <li><a href="#spawning-a-tty">Spawning a TTY</a></li>
+    <li><a href="#memory-mapped-circular-ring-buffer">Memory Mapped Circular Ring Buffer</a></li>
+    <li><a href="#streaming-audio">Streaming Audio</a></li>
+  </ul>
+</nav></aside></div>
+
+</main>
+            </div>
+            
+                <footer class="site-footer"><span>Godstack · MIT License.</span><nav aria-label="Footer"><a href="/docs/">Documentation</a><a href="/demos/">Demos</a><a href="/ai/">AI guide</a><a href="/symbols/">Symbols</a><a href="/llms.txt">llms.txt</a><a href="/catalog.json">Documentation index</a><a href="/agent/SKILL.md">Agent skill</a><a href="https://github.com/godxgun/godstack">GitHub</a><a href="/license/">License</a></nav></footer>
+            <dialog class="search-dialog" id="site-search" aria-labelledby="search-title"><h2 id="search-title">Search</h2><form method="dialog"><label for="search-input">Search documentation</label><input id="search-input" type="search" placeholder="Search libraries, guides, and symbols…" autocomplete="off"><button value="close" aria-label="Close search">×</button></form><p class="search-status" role="status">Search libraries, guides, and symbols.<noscript> Browse the <a href="/docs/">documentation index</a>.</noscript></p><div class="search-results" aria-live="polite"></div></dialog>
+            
+            <script src="/js/site.91617de8440f7e0decb452fb29d31188802484fb967ace6f8d6e2237b3be3ce0.js" integrity="sha256-kWF96EQPfg3stFL7KdMRiIAkhPuWes5vjW4iN7O&#43;POA=" defer></script>
+            <script src="/js/ocean.9e84093c8df56dc7d9d5f8ce9fb81b2abb236ba42cd5ba5af0088399081c1a9b.js" integrity="sha256-noQJPI31bcfZ1fjOn7gbKrsja6Qs1bpa8AiDmQgcGps=" defer></script>
+            <script src="/js/scrollbars.5cd0b9c314b3371d0db03eabe2c5870b013108197b4258c7cda71bd685b60b11.js" integrity="sha256-XNC5wxSzNx0NsD6r4sWHCwExCBl7QljHzacb1oW2CxE=" defer></script>
+    </body></html>

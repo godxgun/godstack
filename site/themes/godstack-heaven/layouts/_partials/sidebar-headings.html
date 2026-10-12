@@ -1,0 +1,11 @@
+{{ $page := .page }}
+{{ range .headings }}
+  {{ if ge .Level 2 }}
+  <li>
+    <a href="{{ $page.RelPermalink }}#{{ .ID }}">{{ .Title }}</a>
+    {{ with .Headings }}<ul>{{ partial "sidebar-headings.html" (dict "headings" . "page" $page) }}</ul>{{ end }}
+  </li>
+  {{ else }}
+    {{ with .Headings }}{{ partial "sidebar-headings.html" (dict "headings" . "page" $page) }}{{ end }}
+  {{ end }}
+{{ end }}

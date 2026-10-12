@@ -1,0 +1,1056 @@
+<!doctype html>
+<html lang="en" class="no-js">
+    <head>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+        <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark">
+        <script>document.documentElement.classList.replace('no-js','js');</script>
+        <title>Grit symbols · Godstack</title><meta name="description" content="Types, macros, and functions declared by Grit.h."><link rel="canonical" href="https://example.org/symbols/grit/">
+        
+        <link rel="stylesheet" href="/css/main.a87a5ada49af1cc103390b31f69448f8f98137dea361366aade0bedb9598ba04.css" integrity="sha256-qHpa2kmvHMEDOQsx9pRI&#43;PmBN96jYTZqreC&#43;25WYugQ=">
+    </head>
+    <body>
+        
+        <div class="heaven-scenery" aria-hidden="true"><img src="/images/ocean-sky_hu_f78afa269ada3c1a.webp" alt="" fetchpriority="high"><canvas hidden></canvas></div>
+        <a class="skip-link" href="#main">Skip to content</a>
+        <header class="topbar">
+            <a class="brand heaven-button" href="/">Godstack</a>
+            
+            <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="sidebar">Menu</button>
+            
+            <nav class="topnav" aria-label="Main navigation">
+                
+                    <a href="/docs/">Docs</a>
+                    
+
+                
+                    <a href="/demos/">Demos</a>
+                    
+
+                
+                    <a href="/symbols/">Symbols</a>
+                    
+
+                <a href="/ai/">AI</a><a href="https://github.com/godxgun/godstack">GitHub</a></nav><div class="top-actions"><button type="button" class="search-open" aria-haspopup="dialog" aria-controls="site-search">Search <kbd>⌘ K</kbd></button><noscript><a class="noscript-search" href="/docs/">Browse docs</a></noscript></div></header>
+        
+        <div class="site-layout">
+            
+<nav class="sidebar" id="sidebar" aria-label="Documentation and guides">
+
+
+    
+    
+    <h2 class="nav-label">Guides</h2>
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/guides/getting-started/">Getting Started</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/guides/getting-started/#peak---platform-layer">Peak - Platform Layer</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/guides/getting-started/#poof---a-build-system">Poof - A Build System</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+
+    
+    
+    
+    
+    <h2 class="nav-label">Build</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/poof/">Poof</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/poof/#running-a-command">Running a Command</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#compiling-a-program">Compiling a Program</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#platform-flags-and-cross-targets">Platform Flags and Cross Targets</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#building-in-parallel">Building in Parallel</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#skipping-up-to-date-work">Skipping Up-to-Date Work</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#rebuilding-the-build-script">Rebuilding the Build Script</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#printing-status">Printing Status</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">Core Libraries</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/peak/">Peak</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/peak/#opening-a-window">Opening a Window</a>
+    <ul>
+
+  
+  <li>
+    <a href="/docs/peak/#a-basic-event-loop">A Basic Event Loop</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#with-the-callback-api">With The Callback API</a>
+    
+  </li>
+  
+
+</ul>
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#using-the-filesystem">Using the Filesystem</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#spawning-a-tty">Spawning a TTY</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#memory-mapped-circular-ring-buffer">Memory Mapped Circular Ring Buffer</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#streaming-audio">Streaming Audio</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/rend/">Rend</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/rend/#creating-a-renderer">Creating a Renderer</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/rend/#creating-your-first-pipeline">Creating your first Pipeline</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/rend/#drawing-a-triangle">Drawing a triangle</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/rend/#drawing-a-mesh">Drawing a Mesh</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/fuse/">Fuse</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/fuse/#building-a-frame">Building a Frame</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#drawing-the-commands">Drawing the Commands</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#laying-out-with-classes">Laying Out with Classes</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#identifying-widgets">Identifying Widgets</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#sliders-scrolling-and-text-input">Sliders, Scrolling and Text Input</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#docking-windows">Docking Windows</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#handling-errors">Handling Errors</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/grit/">Grit</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/grit/#allocating-from-an-arena">Allocating from an Arena</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#stack-allocation">Stack Allocation</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#pools-of-equal-sized-objects">Pools of Equal-Sized Objects</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#dynamic-arrays-and-hash-maps">Dynamic Arrays and Hash Maps</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#random-numbers">Random Numbers</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#vectors-and-matrices">Vectors and Matrices</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#drawing-pixels">Drawing Pixels</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/type/">Type</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/type/#creating-a-context">Creating a Context</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#rendering-text">Rendering Text</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#scratch-memory">Scratch Memory</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#uploading-the-atlas">Uploading the Atlas</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#faces-styles-and-fallbacks">Faces, Styles and Fallbacks</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#shaped-text">Shaped Text</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#lower-level-building-blocks">Lower-Level Building Blocks</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">Utilities</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/cast/">Cast</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/cast/#tokenizing-source">Tokenizing Source</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#reading-tokens">Reading Tokens</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#parsing-declarations">Parsing Declarations</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#handling-unparsable-input">Handling Unparsable Input</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#sizing-and-reusing-memory">Sizing and Reusing Memory</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">Web</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/cool/">Cool</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/cool/#writing-text">Writing Text</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#writing-markup">Writing Markup</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#choosing-the-output-stream">Choosing the Output Stream</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#rendering-markdown">Rendering Markdown</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#compiling-templates">Compiling Templates</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/wire/">Wire</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/wire/#serving-a-response">Serving a Response</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#routing-requests">Routing Requests</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#serving-static-files">Serving Static Files</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#partial-responses-for-htmx">Partial Responses for htmx</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#running-your-own-loop">Running Your Own Loop</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#limits">Limits</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">API references</h2>
+
+    <ul class="sidebar-list">
+        <li><a href="/symbols/">Symbols</a></li>
+    </ul>
+
+    <div class="sidebar-footer">
+        <a href="/docs/">All libraries</a>
+        <a href="/ai/">Coding agent guide</a>
+    </div>
+</nav>
+
+            <main id="main" tabindex="-1">
+                
+
+  
+  <div class="reading-layout"><article class="article symbol-reference"><div class="article-meta"><a href="/symbols/">Symbols</a><span> / Symbols</span><a class="source-link" href="/symbols/grit.md">View Markdown</a></div>
+  
+  
+  <aside class="notice symbol-guide-hint"><strong>Symbols</strong> — per-function reference. For usage and setup, see the <a href="/docs/grit/">Grit library guide</a>.</aside>
+  <div class="prose"><h1 id="grit-symbols">Grit symbols<a class="heading-anchor" href="#grit-symbols" aria-label="Link to Grit symbols">#</a></h1>
+<p>For setup and API workflows, read the <a href="/docs/grit/">Grit guide</a>
+. This vault lists individual declarations; it is not a tutorial.</p>
+<h2 id="api-reference">API reference<a class="heading-anchor" href="#api-reference" aria-label="Link to API reference">#</a></h2>
+<p>Generated from <code>Grit.h</code> by <code>tools/generate_docs.py</code>. Edit the header comments, not this section.</p>
+<p>Declarations from all platform branches are listed; this is not a preprocessed API.</p>
+<h3 id="types">Types<a class="heading-anchor" href="#types" aria-label="Link to Types">#</a></h3>
+<section class="symbol-card"><h4 id="gritarena">GritArena<a class="heading-anchor" href="#gritarena" aria-label="Link to GritArena">#</a></h4>
+<p>Source: <code>Grit.h:80</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">GritArena</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">unsigned</span> <span class="kt">char</span> <span class="o">*</span><span class="n">buf</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">size_t</span> <span class="n">buf_len</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">size_t</span> <span class="n">curr_offset</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">size_t</span> <span class="n">prev_offset</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">GritArena</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="gritstackheader">GritStackHeader<a class="heading-anchor" href="#gritstackheader" aria-label="Link to GritStackHeader">#</a></h4>
+<p>Source: <code>Grit.h:87</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">GritStackHeader</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">uint8_t</span> <span class="n">padding</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">GritStackHeader</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="gritstack">GritStack<a class="heading-anchor" href="#gritstack" aria-label="Link to GritStack">#</a></h4>
+<p>Source: <code>Grit.h:91</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">GritStack</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">unsigned</span> <span class="kt">char</span> <span class="o">*</span><span class="n">buf</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">size_t</span> <span class="n">buf_len</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">size_t</span> <span class="n">offset</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">GritStack</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="gritpoolnode">GritPoolNode<a class="heading-anchor" href="#gritpoolnode" aria-label="Link to GritPoolNode">#</a></h4>
+<p>Source: <code>Grit.h:97</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">GritPoolNode</span> <span class="n">GritPoolNode</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="gritpool">GritPool<a class="heading-anchor" href="#gritpool" aria-label="Link to GritPool">#</a></h4>
+<p>Source: <code>Grit.h:99</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">GritPool</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">unsigned</span> <span class="kt">char</span> <span class="o">*</span><span class="n">buf</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">size_t</span> <span class="n">chunk_size</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">size_t</span> <span class="n">pool_size</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">GritPoolNode</span> <span class="o">*</span><span class="n">head</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">GritPool</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="gritpoolnode-1">GritPoolNode<a class="heading-anchor" href="#gritpoolnode-1" aria-label="Link to GritPoolNode">#</a></h4>
+<p>Source: <code>Grit.h:106</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">struct</span> <span class="n">GritPoolNode</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">struct</span> <span class="n">GritPoolNode</span> <span class="o">*</span><span class="n">next</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="gritdarray">GritDArray<a class="heading-anchor" href="#gritdarray" aria-label="Link to GritDArray">#</a></h4>
+<p>Source: <code>Grit.h:110</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">GritDArray</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">void</span> <span class="o">*</span><span class="n">data</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">size_t</span> <span class="n">len</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">size_t</span> <span class="n">cap</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">size_t</span> <span class="n">elem_size</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">GritDArray</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grithashmap">GritHashMap<a class="heading-anchor" href="#grithashmap" aria-label="Link to GritHashMap">#</a></h4>
+<p>Source: <code>Grit.h:117</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">GritHashMap</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">void</span> <span class="o">*</span><span class="n">keys</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">void</span> <span class="o">*</span><span class="n">vals</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">uint8_t</span> <span class="o">*</span><span class="n">state</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">size_t</span> <span class="n">len</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">size_t</span> <span class="n">cap</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">size_t</span> <span class="n">tombed</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">size_t</span> <span class="n">key_size</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">size_t</span> <span class="n">val_size</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">GritHashMap</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="gritdraw">GritDraw<a class="heading-anchor" href="#gritdraw" aria-label="Link to GritDraw">#</a></h4>
+<p>Source: <code>Grit.h:128</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">GritDraw</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">uint32_t</span> <span class="o">*</span><span class="n">px</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">w</span><span class="p">,</span> <span class="n">h</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">int</span> <span class="n">cx</span><span class="p">,</span> <span class="n">cy</span><span class="p">,</span> <span class="n">cw</span><span class="p">,</span> <span class="n">ch</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">GritDraw</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="gritrng">GritRng<a class="heading-anchor" href="#gritrng" aria-label="Link to GritRng">#</a></h4>
+<p>Source: <code>Grit.h:134</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">GritRng</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">uint64_t</span> <span class="n">state</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">GritRng</span><span class="p">;</span>
+</span></span></code></pre></div></section><h3 id="macros">Macros<a class="heading-anchor" href="#macros" aria-label="Link to Macros">#</a></h3>
+<section class="symbol-card"><h4 id="grit_min">GRIT_MIN<a class="heading-anchor" href="#grit_min" aria-label="Link to GRIT_MIN">#</a></h4>
+<p>Source: <code>Grit.h:77</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define GRIT_MIN(a, b) ((a) &lt; (b) ? (a) : (b))
+</span></span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_max">GRIT_MAX<a class="heading-anchor" href="#grit_max" aria-label="Link to GRIT_MAX">#</a></h4>
+<p>Source: <code>Grit.h:78</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define GRIT_MAX(a, b) ((a) &gt; (b) ? (a) : (b))
+</span></span></span></code></pre></div></section><h3 id="functions">Functions<a class="heading-anchor" href="#functions" aria-label="Link to Functions">#</a></h3>
+<section class="symbol-card"><h4 id="grit_arena_init">grit_arena_init<a class="heading-anchor" href="#grit_arena_init" aria-label="Link to grit_arena_init">#</a></h4>
+<p>Source: <code>Grit.h:138</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_arena_init</span><span class="p">(</span><span class="n">GritArena</span> <span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">buf</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">len</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_arena_alloc_align">grit_arena_alloc_align<a class="heading-anchor" href="#grit_arena_alloc_align" aria-label="Link to grit_arena_alloc_align">#</a></h4>
+<p>Source: <code>Grit.h:139</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="o">*</span><span class="nf">grit_arena_alloc_align</span><span class="p">(</span><span class="n">GritArena</span> <span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">size</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">align</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_arena_alloc">grit_arena_alloc<a class="heading-anchor" href="#grit_arena_alloc" aria-label="Link to grit_arena_alloc">#</a></h4>
+<p>Source: <code>Grit.h:140</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="o">*</span><span class="nf">grit_arena_alloc</span><span class="p">(</span><span class="n">GritArena</span> <span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">size</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_arena_resize_align">grit_arena_resize_align<a class="heading-anchor" href="#grit_arena_resize_align" aria-label="Link to grit_arena_resize_align">#</a></h4>
+<p>Source: <code>Grit.h:141</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="o">*</span><span class="nf">grit_arena_resize_align</span><span class="p">(</span><span class="n">GritArena</span> <span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">old</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">old_size</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">new_size</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">align</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_arena_resize">grit_arena_resize<a class="heading-anchor" href="#grit_arena_resize" aria-label="Link to grit_arena_resize">#</a></h4>
+<p>Source: <code>Grit.h:142</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="o">*</span><span class="nf">grit_arena_resize</span><span class="p">(</span><span class="n">GritArena</span> <span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">old</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">old_size</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">new_size</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_arena_free_all">grit_arena_free_all<a class="heading-anchor" href="#grit_arena_free_all" aria-label="Link to grit_arena_free_all">#</a></h4>
+<p>Source: <code>Grit.h:143</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_arena_free_all</span><span class="p">(</span><span class="n">GritArena</span> <span class="o">*</span><span class="n">a</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_arena_destroy">grit_arena_destroy<a class="heading-anchor" href="#grit_arena_destroy" aria-label="Link to grit_arena_destroy">#</a></h4>
+<p>Source: <code>Grit.h:144</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_arena_destroy</span><span class="p">(</span><span class="n">GritArena</span> <span class="o">*</span><span class="n">a</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_stack_init">grit_stack_init<a class="heading-anchor" href="#grit_stack_init" aria-label="Link to grit_stack_init">#</a></h4>
+<p>Source: <code>Grit.h:146</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_stack_init</span><span class="p">(</span><span class="n">GritStack</span> <span class="o">*</span><span class="n">s</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">buf</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">len</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_stack_alloc">grit_stack_alloc<a class="heading-anchor" href="#grit_stack_alloc" aria-label="Link to grit_stack_alloc">#</a></h4>
+<p>Source: <code>Grit.h:147</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="o">*</span><span class="nf">grit_stack_alloc</span><span class="p">(</span><span class="n">GritStack</span> <span class="o">*</span><span class="n">s</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">len</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">alignment</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_stack_free">grit_stack_free<a class="heading-anchor" href="#grit_stack_free" aria-label="Link to grit_stack_free">#</a></h4>
+<p>Source: <code>Grit.h:148</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_stack_free</span><span class="p">(</span><span class="n">GritStack</span> <span class="o">*</span><span class="n">s</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">ptr</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_stack_free_all">grit_stack_free_all<a class="heading-anchor" href="#grit_stack_free_all" aria-label="Link to grit_stack_free_all">#</a></h4>
+<p>Source: <code>Grit.h:149</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_stack_free_all</span><span class="p">(</span><span class="n">GritStack</span> <span class="o">*</span><span class="n">s</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_stack_destroy">grit_stack_destroy<a class="heading-anchor" href="#grit_stack_destroy" aria-label="Link to grit_stack_destroy">#</a></h4>
+<p>Source: <code>Grit.h:150</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_stack_destroy</span><span class="p">(</span><span class="n">GritStack</span> <span class="o">*</span><span class="n">s</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_pool_init">grit_pool_init<a class="heading-anchor" href="#grit_pool_init" aria-label="Link to grit_pool_init">#</a></h4>
+<p>Source: <code>Grit.h:152</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_pool_init</span><span class="p">(</span><span class="n">GritPool</span> <span class="o">*</span><span class="n">p</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">buf</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">buf_len</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">chunk_size</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">chunk_align</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_pool_alloc">grit_pool_alloc<a class="heading-anchor" href="#grit_pool_alloc" aria-label="Link to grit_pool_alloc">#</a></h4>
+<p>Source: <code>Grit.h:153</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="o">*</span><span class="nf">grit_pool_alloc</span><span class="p">(</span><span class="n">GritPool</span> <span class="o">*</span><span class="n">p</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_pool_free">grit_pool_free<a class="heading-anchor" href="#grit_pool_free" aria-label="Link to grit_pool_free">#</a></h4>
+<p>Source: <code>Grit.h:154</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_pool_free</span><span class="p">(</span><span class="n">GritPool</span> <span class="o">*</span><span class="n">p</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">ptr</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_pool_free_all">grit_pool_free_all<a class="heading-anchor" href="#grit_pool_free_all" aria-label="Link to grit_pool_free_all">#</a></h4>
+<p>Source: <code>Grit.h:155</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_pool_free_all</span><span class="p">(</span><span class="n">GritPool</span> <span class="o">*</span><span class="n">p</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_pool_destroy">grit_pool_destroy<a class="heading-anchor" href="#grit_pool_destroy" aria-label="Link to grit_pool_destroy">#</a></h4>
+<p>Source: <code>Grit.h:156</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_pool_destroy</span><span class="p">(</span><span class="n">GritPool</span> <span class="o">*</span><span class="n">p</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_darray_create">grit_darray_create<a class="heading-anchor" href="#grit_darray_create" aria-label="Link to grit_darray_create">#</a></h4>
+<p>Source: <code>Grit.h:158</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">GritDArray</span> <span class="nf">grit_darray_create</span><span class="p">(</span><span class="kt">size_t</span> <span class="n">init_capacity</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">elem_size</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_darray_destroy">grit_darray_destroy<a class="heading-anchor" href="#grit_darray_destroy" aria-label="Link to grit_darray_destroy">#</a></h4>
+<p>Source: <code>Grit.h:159</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_darray_destroy</span><span class="p">(</span><span class="n">GritDArray</span> <span class="o">*</span><span class="n">a</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_darray_push">grit_darray_push<a class="heading-anchor" href="#grit_darray_push" aria-label="Link to grit_darray_push">#</a></h4>
+<p>Source: <code>Grit.h:160</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_darray_push</span><span class="p">(</span><span class="n">GritDArray</span> <span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">elem</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_darray_get">grit_darray_get<a class="heading-anchor" href="#grit_darray_get" aria-label="Link to grit_darray_get">#</a></h4>
+<p>Source: <code>Grit.h:161</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="o">*</span><span class="nf">grit_darray_get</span><span class="p">(</span><span class="n">GritDArray</span> <span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">i</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_darray_pop">grit_darray_pop<a class="heading-anchor" href="#grit_darray_pop" aria-label="Link to grit_darray_pop">#</a></h4>
+<p>Source: <code>Grit.h:162</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_darray_pop</span><span class="p">(</span><span class="n">GritDArray</span> <span class="o">*</span><span class="n">a</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_hashmap_create">grit_hashmap_create<a class="heading-anchor" href="#grit_hashmap_create" aria-label="Link to grit_hashmap_create">#</a></h4>
+<p>Source: <code>Grit.h:164</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">GritHashMap</span> <span class="nf">grit_hashmap_create</span><span class="p">(</span><span class="kt">size_t</span> <span class="n">init_capacity</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">key_size</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">val_size</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_hashmap_destroy">grit_hashmap_destroy<a class="heading-anchor" href="#grit_hashmap_destroy" aria-label="Link to grit_hashmap_destroy">#</a></h4>
+<p>Source: <code>Grit.h:165</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_hashmap_destroy</span><span class="p">(</span><span class="n">GritHashMap</span> <span class="o">*</span><span class="n">m</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_hashmap_put">grit_hashmap_put<a class="heading-anchor" href="#grit_hashmap_put" aria-label="Link to grit_hashmap_put">#</a></h4>
+<p>Source: <code>Grit.h:166</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_hashmap_put</span><span class="p">(</span><span class="n">GritHashMap</span> <span class="o">*</span><span class="n">m</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">key</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">val</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_hashmap_get">grit_hashmap_get<a class="heading-anchor" href="#grit_hashmap_get" aria-label="Link to grit_hashmap_get">#</a></h4>
+<p>Source: <code>Grit.h:167</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="o">*</span><span class="nf">grit_hashmap_get</span><span class="p">(</span><span class="n">GritHashMap</span> <span class="o">*</span><span class="n">m</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">key</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_hashmap_del">grit_hashmap_del<a class="heading-anchor" href="#grit_hashmap_del" aria-label="Link to grit_hashmap_del">#</a></h4>
+<p>Source: <code>Grit.h:168</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_hashmap_del</span><span class="p">(</span><span class="n">GritHashMap</span> <span class="o">*</span><span class="n">m</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">key</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_ceil">grit_ceil<a class="heading-anchor" href="#grit_ceil" aria-label="Link to grit_ceil">#</a></h4>
+<p>Source: <code>Grit.h:170</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_ceil</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">x</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_sinf">grit_sinf<a class="heading-anchor" href="#grit_sinf" aria-label="Link to grit_sinf">#</a></h4>
+<p>Source: <code>Grit.h:171</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_sinf</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">x</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_cosf">grit_cosf<a class="heading-anchor" href="#grit_cosf" aria-label="Link to grit_cosf">#</a></h4>
+<p>Source: <code>Grit.h:172</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_cosf</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">x</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_atan2f">grit_atan2f<a class="heading-anchor" href="#grit_atan2f" aria-label="Link to grit_atan2f">#</a></h4>
+<p>Source: <code>Grit.h:173</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_atan2f</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">y</span><span class="p">,</span> <span class="kt">float</span> <span class="n">x</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_lerpf">grit_lerpf<a class="heading-anchor" href="#grit_lerpf" aria-label="Link to grit_lerpf">#</a></h4>
+<p>Source: <code>Grit.h:174</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_lerpf</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="kt">float</span> <span class="n">b</span><span class="p">,</span> <span class="kt">float</span> <span class="n">t</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_vec2f">grit_vec2f<a class="heading-anchor" href="#grit_vec2f" aria-label="Link to grit_vec2f">#</a></h4>
+<p>Source: <code>Grit.h:176</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_vec2f</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">v</span><span class="p">,</span> <span class="kt">float</span> <span class="n">x</span><span class="p">,</span> <span class="kt">float</span> <span class="n">y</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_vec2f_add">grit_vec2f_add<a class="heading-anchor" href="#grit_vec2f_add" aria-label="Link to grit_vec2f_add">#</a></h4>
+<p>Source: <code>Grit.h:177</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_vec2f_add</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="k">const</span> <span class="kt">float</span> <span class="o">*</span><span class="n">b</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_vec2f_sub">grit_vec2f_sub<a class="heading-anchor" href="#grit_vec2f_sub" aria-label="Link to grit_vec2f_sub">#</a></h4>
+<p>Source: <code>Grit.h:178</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_vec2f_sub</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="k">const</span> <span class="kt">float</span> <span class="o">*</span><span class="n">b</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_vec2f_mult">grit_vec2f_mult<a class="heading-anchor" href="#grit_vec2f_mult" aria-label="Link to grit_vec2f_mult">#</a></h4>
+<p>Source: <code>Grit.h:179</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_vec2f_mult</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="kt">float</span> <span class="n">s</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_vec2f_dot">grit_vec2f_dot<a class="heading-anchor" href="#grit_vec2f_dot" aria-label="Link to grit_vec2f_dot">#</a></h4>
+<p>Source: <code>Grit.h:180</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_vec2f_dot</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">out</span><span class="p">,</span> <span class="k">const</span> <span class="kt">float</span> <span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="k">const</span> <span class="kt">float</span> <span class="o">*</span><span class="n">b</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_vec2f_cross">grit_vec2f_cross<a class="heading-anchor" href="#grit_vec2f_cross" aria-label="Link to grit_vec2f_cross">#</a></h4>
+<p>Source: <code>Grit.h:181</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_vec2f_cross</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">out</span><span class="p">,</span> <span class="k">const</span> <span class="kt">float</span> <span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="k">const</span> <span class="kt">float</span> <span class="o">*</span><span class="n">b</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_vec2f_len">grit_vec2f_len<a class="heading-anchor" href="#grit_vec2f_len" aria-label="Link to grit_vec2f_len">#</a></h4>
+<p>Source: <code>Grit.h:182</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_vec2f_len</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">out</span><span class="p">,</span> <span class="k">const</span> <span class="kt">float</span> <span class="o">*</span><span class="n">a</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_vec2f_norm">grit_vec2f_norm<a class="heading-anchor" href="#grit_vec2f_norm" aria-label="Link to grit_vec2f_norm">#</a></h4>
+<p>Source: <code>Grit.h:183</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_vec2f_norm</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">a</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_vec2f_lerp">grit_vec2f_lerp<a class="heading-anchor" href="#grit_vec2f_lerp" aria-label="Link to grit_vec2f_lerp">#</a></h4>
+<p>Source: <code>Grit.h:184</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_vec2f_lerp</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="k">const</span> <span class="kt">float</span> <span class="o">*</span><span class="n">b</span><span class="p">,</span> <span class="kt">float</span> <span class="n">t</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_vec3f">grit_vec3f<a class="heading-anchor" href="#grit_vec3f" aria-label="Link to grit_vec3f">#</a></h4>
+<p>Source: <code>Grit.h:186</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_vec3f</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">v</span><span class="p">,</span> <span class="kt">float</span> <span class="n">x</span><span class="p">,</span> <span class="kt">float</span> <span class="n">y</span><span class="p">,</span> <span class="kt">float</span> <span class="n">z</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_vec3f_add">grit_vec3f_add<a class="heading-anchor" href="#grit_vec3f_add" aria-label="Link to grit_vec3f_add">#</a></h4>
+<p>Source: <code>Grit.h:187</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_vec3f_add</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="k">const</span> <span class="kt">float</span> <span class="o">*</span><span class="n">b</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_vec3f_sub">grit_vec3f_sub<a class="heading-anchor" href="#grit_vec3f_sub" aria-label="Link to grit_vec3f_sub">#</a></h4>
+<p>Source: <code>Grit.h:188</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_vec3f_sub</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="k">const</span> <span class="kt">float</span> <span class="o">*</span><span class="n">b</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_vec3f_mult">grit_vec3f_mult<a class="heading-anchor" href="#grit_vec3f_mult" aria-label="Link to grit_vec3f_mult">#</a></h4>
+<p>Source: <code>Grit.h:189</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_vec3f_mult</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="kt">float</span> <span class="n">s</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_vec3f_dot">grit_vec3f_dot<a class="heading-anchor" href="#grit_vec3f_dot" aria-label="Link to grit_vec3f_dot">#</a></h4>
+<p>Source: <code>Grit.h:190</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_vec3f_dot</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">out</span><span class="p">,</span> <span class="k">const</span> <span class="kt">float</span> <span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="k">const</span> <span class="kt">float</span> <span class="o">*</span><span class="n">b</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_vec3f_cross">grit_vec3f_cross<a class="heading-anchor" href="#grit_vec3f_cross" aria-label="Link to grit_vec3f_cross">#</a></h4>
+<p>Source: <code>Grit.h:191</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_vec3f_cross</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="k">const</span> <span class="kt">float</span> <span class="o">*</span><span class="n">b</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_vec3f_len">grit_vec3f_len<a class="heading-anchor" href="#grit_vec3f_len" aria-label="Link to grit_vec3f_len">#</a></h4>
+<p>Source: <code>Grit.h:192</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_vec3f_len</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">out</span><span class="p">,</span> <span class="k">const</span> <span class="kt">float</span> <span class="o">*</span><span class="n">a</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_vec3f_norm">grit_vec3f_norm<a class="heading-anchor" href="#grit_vec3f_norm" aria-label="Link to grit_vec3f_norm">#</a></h4>
+<p>Source: <code>Grit.h:193</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_vec3f_norm</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">a</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_vec3f_lerp">grit_vec3f_lerp<a class="heading-anchor" href="#grit_vec3f_lerp" aria-label="Link to grit_vec3f_lerp">#</a></h4>
+<p>Source: <code>Grit.h:194</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_vec3f_lerp</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="k">const</span> <span class="kt">float</span> <span class="o">*</span><span class="n">b</span><span class="p">,</span> <span class="kt">float</span> <span class="n">t</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_mat4_identity">grit_mat4_identity<a class="heading-anchor" href="#grit_mat4_identity" aria-label="Link to grit_mat4_identity">#</a></h4>
+<p>Source: <code>Grit.h:196</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_mat4_identity</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">m</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_mat4_mul">grit_mat4_mul<a class="heading-anchor" href="#grit_mat4_mul" aria-label="Link to grit_mat4_mul">#</a></h4>
+<p>Source: <code>Grit.h:197</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_mat4_mul</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="k">const</span> <span class="kt">float</span> <span class="o">*</span><span class="n">b</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_mat4_translate">grit_mat4_translate<a class="heading-anchor" href="#grit_mat4_translate" aria-label="Link to grit_mat4_translate">#</a></h4>
+<p>Source: <code>Grit.h:198</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_mat4_translate</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">m</span><span class="p">,</span> <span class="k">const</span> <span class="kt">float</span> <span class="o">*</span><span class="n">v</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_mat4_translate_by">grit_mat4_translate_by<a class="heading-anchor" href="#grit_mat4_translate_by" aria-label="Link to grit_mat4_translate_by">#</a></h4>
+<p>Source: <code>Grit.h:199</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_mat4_translate_by</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">m</span><span class="p">,</span> <span class="k">const</span> <span class="kt">float</span> <span class="o">*</span><span class="n">v</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_mat4_rotate_x">grit_mat4_rotate_x<a class="heading-anchor" href="#grit_mat4_rotate_x" aria-label="Link to grit_mat4_rotate_x">#</a></h4>
+<p>Source: <code>Grit.h:200</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_mat4_rotate_x</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">m</span><span class="p">,</span> <span class="kt">float</span> <span class="n">rad</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_mat4_rotate_x_by">grit_mat4_rotate_x_by<a class="heading-anchor" href="#grit_mat4_rotate_x_by" aria-label="Link to grit_mat4_rotate_x_by">#</a></h4>
+<p>Source: <code>Grit.h:201</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_mat4_rotate_x_by</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">m</span><span class="p">,</span> <span class="kt">float</span> <span class="n">rad</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_mat4_rotate_y">grit_mat4_rotate_y<a class="heading-anchor" href="#grit_mat4_rotate_y" aria-label="Link to grit_mat4_rotate_y">#</a></h4>
+<p>Source: <code>Grit.h:202</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_mat4_rotate_y</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">m</span><span class="p">,</span> <span class="kt">float</span> <span class="n">rad</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_mat4_rotate_y_by">grit_mat4_rotate_y_by<a class="heading-anchor" href="#grit_mat4_rotate_y_by" aria-label="Link to grit_mat4_rotate_y_by">#</a></h4>
+<p>Source: <code>Grit.h:203</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_mat4_rotate_y_by</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">m</span><span class="p">,</span> <span class="kt">float</span> <span class="n">rad</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_mat4_rotate_z">grit_mat4_rotate_z<a class="heading-anchor" href="#grit_mat4_rotate_z" aria-label="Link to grit_mat4_rotate_z">#</a></h4>
+<p>Source: <code>Grit.h:204</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_mat4_rotate_z</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">m</span><span class="p">,</span> <span class="kt">float</span> <span class="n">rad</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_mat4_perspective">grit_mat4_perspective<a class="heading-anchor" href="#grit_mat4_perspective" aria-label="Link to grit_mat4_perspective">#</a></h4>
+<p>Source: <code>Grit.h:205</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_mat4_perspective</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">m</span><span class="p">,</span> <span class="kt">float</span> <span class="n">fov_rad</span><span class="p">,</span> <span class="kt">float</span> <span class="n">aspect</span><span class="p">,</span> <span class="kt">float</span> <span class="n">near_z</span><span class="p">,</span> <span class="kt">float</span> <span class="n">far_z</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_mat4_ortho">grit_mat4_ortho<a class="heading-anchor" href="#grit_mat4_ortho" aria-label="Link to grit_mat4_ortho">#</a></h4>
+<p>Source: <code>Grit.h:206</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_mat4_ortho</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">m</span><span class="p">,</span> <span class="kt">float</span> <span class="n">left</span><span class="p">,</span> <span class="kt">float</span> <span class="n">right</span><span class="p">,</span> <span class="kt">float</span> <span class="n">bottom</span><span class="p">,</span> <span class="kt">float</span> <span class="n">top</span><span class="p">,</span> <span class="kt">float</span> <span class="n">near_z</span><span class="p">,</span> <span class="kt">float</span> <span class="n">far_z</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_mat4_lookat">grit_mat4_lookat<a class="heading-anchor" href="#grit_mat4_lookat" aria-label="Link to grit_mat4_lookat">#</a></h4>
+<p>Source: <code>Grit.h:207</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_mat4_lookat</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">m</span><span class="p">,</span> <span class="k">const</span> <span class="kt">float</span> <span class="o">*</span><span class="n">eye</span><span class="p">,</span> <span class="k">const</span> <span class="kt">float</span> <span class="o">*</span><span class="n">center</span><span class="p">,</span> <span class="k">const</span> <span class="kt">float</span> <span class="o">*</span><span class="n">up</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_rng_seed">grit_rng_seed<a class="heading-anchor" href="#grit_rng_seed" aria-label="Link to grit_rng_seed">#</a></h4>
+<p>Source: <code>Grit.h:209</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_rng_seed</span><span class="p">(</span><span class="n">GritRng</span> <span class="o">*</span><span class="n">r</span><span class="p">,</span> <span class="kt">uint64_t</span> <span class="n">seed</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_rng_u64">grit_rng_u64<a class="heading-anchor" href="#grit_rng_u64" aria-label="Link to grit_rng_u64">#</a></h4>
+<p>Source: <code>Grit.h:210</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">uint64_t</span> <span class="nf">grit_rng_u64</span><span class="p">(</span><span class="n">GritRng</span> <span class="o">*</span><span class="n">r</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_rng_u32">grit_rng_u32<a class="heading-anchor" href="#grit_rng_u32" aria-label="Link to grit_rng_u32">#</a></h4>
+<p>Source: <code>Grit.h:211</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">uint32_t</span> <span class="nf">grit_rng_u32</span><span class="p">(</span><span class="n">GritRng</span> <span class="o">*</span><span class="n">r</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_rng_f32">grit_rng_f32<a class="heading-anchor" href="#grit_rng_f32" aria-label="Link to grit_rng_f32">#</a></h4>
+<p>Source: <code>Grit.h:212</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_rng_f32</span><span class="p">(</span><span class="n">GritRng</span> <span class="o">*</span><span class="n">r</span><span class="p">,</span> <span class="kt">float</span> <span class="o">*</span><span class="n">out</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_draw_begin">grit_draw_begin<a class="heading-anchor" href="#grit_draw_begin" aria-label="Link to grit_draw_begin">#</a></h4>
+<p>Source: <code>Grit.h:214</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_draw_begin</span><span class="p">(</span><span class="n">GritDraw</span> <span class="o">*</span><span class="n">d</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="o">*</span><span class="n">px</span><span class="p">,</span> <span class="kt">int</span> <span class="n">w</span><span class="p">,</span> <span class="kt">int</span> <span class="n">h</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_draw_clip">grit_draw_clip<a class="heading-anchor" href="#grit_draw_clip" aria-label="Link to grit_draw_clip">#</a></h4>
+<p>Source: <code>Grit.h:215</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_draw_clip</span><span class="p">(</span><span class="n">GritDraw</span> <span class="o">*</span><span class="n">d</span><span class="p">,</span> <span class="kt">int</span> <span class="n">x</span><span class="p">,</span> <span class="kt">int</span> <span class="n">y</span><span class="p">,</span> <span class="kt">int</span> <span class="n">w</span><span class="p">,</span> <span class="kt">int</span> <span class="n">h</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_draw_clip_reset">grit_draw_clip_reset<a class="heading-anchor" href="#grit_draw_clip_reset" aria-label="Link to grit_draw_clip_reset">#</a></h4>
+<p>Source: <code>Grit.h:216</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_draw_clip_reset</span><span class="p">(</span><span class="n">GritDraw</span> <span class="o">*</span><span class="n">d</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_draw_clear">grit_draw_clear<a class="heading-anchor" href="#grit_draw_clear" aria-label="Link to grit_draw_clear">#</a></h4>
+<p>Source: <code>Grit.h:217</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_draw_clear</span><span class="p">(</span><span class="n">GritDraw</span> <span class="o">*</span><span class="n">d</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">color</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_draw_pixel">grit_draw_pixel<a class="heading-anchor" href="#grit_draw_pixel" aria-label="Link to grit_draw_pixel">#</a></h4>
+<p>Source: <code>Grit.h:218</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_draw_pixel</span><span class="p">(</span><span class="n">GritDraw</span> <span class="o">*</span><span class="n">d</span><span class="p">,</span> <span class="kt">int</span> <span class="n">x</span><span class="p">,</span> <span class="kt">int</span> <span class="n">y</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">color</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_draw_blit">grit_draw_blit<a class="heading-anchor" href="#grit_draw_blit" aria-label="Link to grit_draw_blit">#</a></h4>
+<p>Source: <code>Grit.h:219</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_draw_blit</span><span class="p">(</span><span class="n">GritDraw</span> <span class="o">*</span><span class="n">d</span><span class="p">,</span> <span class="kt">int</span> <span class="n">x</span><span class="p">,</span> <span class="kt">int</span> <span class="n">y</span><span class="p">,</span> <span class="k">const</span> <span class="kt">uint32_t</span> <span class="o">*</span><span class="n">src</span><span class="p">,</span> <span class="kt">int</span> <span class="n">sw</span><span class="p">,</span> <span class="kt">int</span> <span class="n">sh</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_draw_rect">grit_draw_rect<a class="heading-anchor" href="#grit_draw_rect" aria-label="Link to grit_draw_rect">#</a></h4>
+<p>Source: <code>Grit.h:220</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_draw_rect</span><span class="p">(</span><span class="n">GritDraw</span> <span class="o">*</span><span class="n">d</span><span class="p">,</span> <span class="kt">int</span> <span class="n">x</span><span class="p">,</span> <span class="kt">int</span> <span class="n">y</span><span class="p">,</span> <span class="kt">int</span> <span class="n">w</span><span class="p">,</span> <span class="kt">int</span> <span class="n">h</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">color</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_draw_rect_gradient">grit_draw_rect_gradient<a class="heading-anchor" href="#grit_draw_rect_gradient" aria-label="Link to grit_draw_rect_gradient">#</a></h4>
+<p>Source: <code>Grit.h:221</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_draw_rect_gradient</span><span class="p">(</span><span class="n">GritDraw</span> <span class="o">*</span><span class="n">d</span><span class="p">,</span> <span class="kt">int</span> <span class="n">x</span><span class="p">,</span> <span class="kt">int</span> <span class="n">y</span><span class="p">,</span> <span class="kt">int</span> <span class="n">w</span><span class="p">,</span> <span class="kt">int</span> <span class="n">h</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">c0</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">c1</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">c2</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">c3</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_draw_tri">grit_draw_tri<a class="heading-anchor" href="#grit_draw_tri" aria-label="Link to grit_draw_tri">#</a></h4>
+<p>Source: <code>Grit.h:222</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_draw_tri</span><span class="p">(</span><span class="n">GritDraw</span> <span class="o">*</span><span class="n">d</span><span class="p">,</span> <span class="kt">int</span> <span class="n">x0</span><span class="p">,</span> <span class="kt">int</span> <span class="n">y0</span><span class="p">,</span> <span class="kt">int</span> <span class="n">x1</span><span class="p">,</span> <span class="kt">int</span> <span class="n">y1</span><span class="p">,</span> <span class="kt">int</span> <span class="n">x2</span><span class="p">,</span> <span class="kt">int</span> <span class="n">y2</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">c0</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">c1</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">c2</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_draw_line">grit_draw_line<a class="heading-anchor" href="#grit_draw_line" aria-label="Link to grit_draw_line">#</a></h4>
+<p>Source: <code>Grit.h:223</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_draw_line</span><span class="p">(</span><span class="n">GritDraw</span> <span class="o">*</span><span class="n">d</span><span class="p">,</span> <span class="kt">int</span> <span class="n">x0</span><span class="p">,</span> <span class="kt">int</span> <span class="n">y0</span><span class="p">,</span> <span class="kt">int</span> <span class="n">x1</span><span class="p">,</span> <span class="kt">int</span> <span class="n">y1</span><span class="p">,</span> <span class="kt">int</span> <span class="n">width</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">c0</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">c1</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="grit_draw_circle">grit_draw_circle<a class="heading-anchor" href="#grit_draw_circle" aria-label="Link to grit_draw_circle">#</a></h4>
+<p>Source: <code>Grit.h:224</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">grit_draw_circle</span><span class="p">(</span><span class="n">GritDraw</span> <span class="o">*</span><span class="n">d</span><span class="p">,</span> <span class="kt">int</span> <span class="n">cx</span><span class="p">,</span> <span class="kt">int</span> <span class="n">cy</span><span class="p">,</span> <span class="kt">int</span> <span class="n">radius</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">color</span><span class="p">);</span>
+</span></span></code></pre></div></section></div><nav class="prev-next" aria-label="Page navigation"><a href="/symbols/fuse/"><small>Previous</small><strong>← Fuse symbols</strong></a><a href="/symbols/peak/"><small>Next</small><strong>Peak symbols →</strong></a></nav></article><aside class="right-toc" aria-label="On this page"><h2>On this page</h2><nav id="TableOfContents">
+  <ul>
+    <li><a href="#api-reference">API reference</a>
+      <ul>
+        <li><a href="#types">Types</a></li>
+        <li><a href="#macros">Macros</a></li>
+        <li><a href="#functions">Functions</a></li>
+      </ul>
+    </li>
+  </ul>
+</nav></aside></div>
+
+</main>
+            </div>
+            
+                <footer class="site-footer"><span>Godstack · MIT License.</span><nav aria-label="Footer"><a href="/docs/">Documentation</a><a href="/demos/">Demos</a><a href="/ai/">AI guide</a><a href="/symbols/">Symbols</a><a href="/llms.txt">llms.txt</a><a href="/catalog.json">Documentation index</a><a href="/agent/SKILL.md">Agent skill</a><a href="https://github.com/godxgun/godstack">GitHub</a><a href="/license/">License</a></nav></footer>
+            <dialog class="search-dialog" id="site-search" aria-labelledby="search-title"><h2 id="search-title">Search</h2><form method="dialog"><label for="search-input">Search documentation</label><input id="search-input" type="search" placeholder="Search libraries, guides, and symbols…" autocomplete="off"><button value="close" aria-label="Close search">×</button></form><p class="search-status" role="status">Search libraries, guides, and symbols.<noscript> Browse the <a href="/docs/">documentation index</a>.</noscript></p><div class="search-results" aria-live="polite"></div></dialog>
+            
+            <script src="/js/site.91617de8440f7e0decb452fb29d31188802484fb967ace6f8d6e2237b3be3ce0.js" integrity="sha256-kWF96EQPfg3stFL7KdMRiIAkhPuWes5vjW4iN7O&#43;POA=" defer></script>
+            <script src="/js/ocean.9e84093c8df56dc7d9d5f8ce9fb81b2abb236ba42cd5ba5af0088399081c1a9b.js" integrity="sha256-noQJPI31bcfZ1fjOn7gbKrsja6Qs1bpa8AiDmQgcGps=" defer></script>
+            <script src="/js/scrollbars.5cd0b9c314b3371d0db03eabe2c5870b013108197b4258c7cda71bd685b60b11.js" integrity="sha256-XNC5wxSzNx0NsD6r4sWHCwExCBl7QljHzacb1oW2CxE=" defer></script>
+    </body></html>

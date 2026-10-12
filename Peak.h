@@ -219,24 +219,11 @@ typedef int PEAK_HANDLE;
 // █ █ █ █  █
 // █ █ █ █  ██
 
-typedef struct PeakParams {
-    size_t max_windows;
-    size_t clipboard_capacity;
-    size_t transfer_capacity;
-} PeakParams;
-
 typedef struct PeakCtx PeakCtx;
 
-/* Linux Vulkan borrowed backing: 16-byte aligned, retained through quit.
- * max_windows: 1..8; explicit byte capacities must be positive (NULL params:
- * one window and 1 MiB defaults). Positive capacities are real limits; impossible
- * sizing/conversion profiles return zero/NULL. One active runtime, lazy display.
- * Failed initialization may modify backing. Quit(NULL), repeated/stale quit
- * are harmless. A context pointer expires at quit; do not use it after reuse.
- * Other hosts use explicit legacy initialization (not caller-backed). */
-PEAK size_t     peak_memory(const PeakParams *params);
-PEAK PeakCtx   *peak_place_in_memory_and_init(void *buf, size_t size, const PeakParams *params);
-PEAK PeakCtx   *peak_init_legacy(void);
+/* One active runtime. Initialization is lazy with respect to the display.
+ * Quit(NULL), repeated/stale quit are harmless. A context expires at quit. */
+PEAK PeakCtx   *peak_init(void);
 PEAK void       peak_quit(PeakCtx *ctx);
 
 //                  █
@@ -13357,84 +13344,6 @@ peak_debug_memory_report(void)
 	return peak_memory_counters[PEAK_MEMORY_NON_DRIVER].allocation_requests;
 }
 
-static size_t
-peak_host_window_size(void)
-{
-#if defined(PEAK_LINUX) && defined(PEAK_VULKAN)
-    size_t n = sizeof(struct peak_linux_win);
-    if (n < sizeof(struct peak_wayland_win))
-        n = sizeof(struct peak_wayland_win);
-    return (n + PEAK_HOST_ALIGN - 1) & ~(size_t)(PEAK_HOST_ALIGN - 1);
-#else
-    return 0;
-#endif
-}
-
-static const PeakParams peak_defaults = {1, PEAK_CLIP_MAX, PEAK_CLIP_MAX};
-
-static size_t
-peak_store_bytes(const PeakParams *params, size_t i)
-{
-    size_t cap = i < PEAK_STORE_PASTE ? params->clipboard_capacity : params->transfer_capacity;
-    if (i == PEAK_STORE_CONVERT) cap *= 2;
-    return (cap + PEAK_HOST_ALIGN) & ~(size_t)(PEAK_HOST_ALIGN - 1);
-}
-
-size_t
-peak_memory(const PeakParams *params)
-{
-    size_t stride = peak_host_window_size(), total, bytes, i;
-    if (!params) params = &peak_defaults;
-    /* X11 byte counts and conversion lengths use signed int. */
-    if (!stride || !params->max_windows || params->max_windows > 8 ||
-        !params->clipboard_capacity || !params->transfer_capacity ||
-        params->clipboard_capacity > INT_MAX || params->transfer_capacity > INT_MAX / 2)
-        return 0;
-    total = (sizeof(PeakCtx) + PEAK_HOST_ALIGN - 1) & ~(size_t)(PEAK_HOST_ALIGN - 1);
-    bytes = params->max_windows * (stride + PEAK_HOST_ALIGN);
-    if (total > SIZE_MAX - bytes) return 0;
-    total += bytes;
-    for (i = 0; i < PEAK_STORE_COUNT; i++) {
-        bytes = peak_store_bytes(params, i);
-        if (total > SIZE_MAX - bytes) return 0;
-        total += bytes;
-    }
-    return total;
-}
-
-PeakCtx *
-peak_place_in_memory_and_init(void *buf, size_t size, const PeakParams *params)
-{
-    PeakParams profile = params ? *params : peak_defaults;
-    size_t need = peak_memory(&profile), i;
-    unsigned char *p;
-    if (!need || !buf || (uintptr_t)buf % PEAK_HOST_ALIGN || size < need || peak_active)
-        return NULL;
-    /* Preserve parameters even when the caller stores them in the backing. */
-    params = &profile;
-    memset(buf, 0, need);
-    peak_active = buf;
-    peak_host.base = buf;
-    peak_host.size = need;
-    peak_host.max_windows = params->max_windows;
-    peak_host.clipboard_capacity = params->clipboard_capacity;
-    peak_host.transfer_capacity = params->transfer_capacity;
-    peak_host.stride = peak_host_window_size() + PEAK_HOST_ALIGN;
-    peak_host.windows = (unsigned char *)buf + ((sizeof(PeakCtx) + PEAK_HOST_ALIGN - 1) & ~(size_t)(PEAK_HOST_ALIGN - 1));
-    p = peak_host.windows + peak_host.stride * params->max_windows;
-    for (i = 0; i < PEAK_STORE_COUNT; i++) {
-        peak_host.store[i] = (char *)p;
-        p += peak_store_bytes(params, i);
-    }
-    assert((size_t)(p - peak_host.base) == need);
-    peak_clip.own[0] = peak_host.store[PEAK_STORE_OWN0];
-    peak_clip.own[1] = peak_host.store[PEAK_STORE_OWN1];
-    peak_clip.paste = peak_host.store[PEAK_STORE_PASTE];
-    peak_xfer.text = peak_host.store[PEAK_STORE_TEXT];
-    peak_xfer.drop = peak_host.store[PEAK_STORE_DROP];
-    return peak_active;
-}
-
 static int
 peak_window_valid(PeakWindow *win)
 {
@@ -13554,7 +13463,7 @@ peak_window_sync(PeakWindow *win, size_t *width, size_t *height)
 }
 
 PeakCtx *
-peak_init_legacy(void)
+peak_init(void)
 {
     if (peak_active) return NULL;
     memset(&peak_legacy, 0, sizeof peak_legacy);

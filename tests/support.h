@@ -1,4 +1,4 @@
-/* GPL-3.0-only OR a separately negotiated commercial license; see LICENSE. */
+/* MIT License; see LICENSE. */
 #ifndef TYPE_TEST_SUPPORT_H
 #define TYPE_TEST_SUPPORT_H
 #include <assert.h>

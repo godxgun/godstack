@@ -68,7 +68,7 @@ int main(void)
 {
 	data.msg = "Hello World";
 
-	if (!(peak_demo_ctx = peak_init_legacy())) {
+	if (!(peak_demo_ctx = peak_init())) {
 		return 1;
 	}
 

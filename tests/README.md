@@ -43,6 +43,6 @@ The six Noto faces retain the notices in NOTO-FONTS-LICENSE.txt,
 NOTO-HEBREW-LICENSE.txt and NOTO-ARABIC-LICENSE.txt. Liberation Sans retains
 LIBERATION-FONTS-LICENSE.txt. The two small synthetic OTF files are original data
 emitted by synthetic.h; they have the same licence as the original test code.
-All original tests, scripts and synthetic fixtures are GPL-3.0-only OR a separately
-negotiated commercial license under the repository's licensing terms. Font licences
+All original tests, scripts and synthetic fixtures are under the repository's
+MIT License. Font licences
 remain separate. See report.md for the completed verification results.

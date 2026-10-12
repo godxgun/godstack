@@ -8,8 +8,10 @@ from pathlib import Path
 import re
 import sys
 
+from site_paths import SITE
+
 ROOT = Path(__file__).resolve().parents[1]
-# Rend2 is WIP: exclude it from published documentation until its API settles.
+# Rend2 belongs to the separate godstack-pro repository.
 LIBRARIES = ("Cast", "Cool", "Fuse", "Grit", "Peak", "Poof", "Rend", "Type", "Wire")
 BEGIN = "<!-- BEGIN GENERATED API -->"
 END = "<!-- END GENERATED API -->"
@@ -192,7 +194,12 @@ def update_page(existing, library, section):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="report stale pages without writing")
+    parser.add_argument("--site", type=Path, default=SITE, help="website checkout (or GODSTACK_SITE)")
     args = parser.parse_args()
+    site = args.site.expanduser().resolve()
+    if not site.is_dir():
+        print(f"generate_docs: website checkout not found: {site}; set GODSTACK_SITE or --site", file=sys.stderr)
+        return 1
     stale = []
     try:
         # Prepare everything before writing so malformed pages do not cause partial updates.
@@ -200,20 +207,20 @@ def main():
         symbols = []
         for library in LIBRARIES:
             header = ROOT / f"{library}.h"
-            page = ROOT / "site/articles/symbols" / f"{library.lower()}.md"
+            page = site / "articles/symbols" / f"{library.lower()}.md"
             existing = page.read_text(encoding="utf-8") if page.exists() else ""
             entries = extract(header.read_text(encoding="utf-8"), library)
             section = generated_section(library, entries)
             symbols.extend(symbol_records(library, entries))
             updated = update_page(existing, library, section)
             if updated != existing:
-                stale.append(str(page.relative_to(ROOT)))
+                stale.append(str(page.relative_to(site)))
                 updates.append((page, updated))
-        index = ROOT / "site/data/symbols.json"
+        index = site / "data/symbols.json"
         updated_index = json.dumps(symbols, ensure_ascii=False, indent=2) + "\n"
         existing_index = index.read_text(encoding="utf-8") if index.exists() else ""
         if updated_index != existing_index:
-            stale.append(str(index.relative_to(ROOT)))
+            stale.append(str(index.relative_to(site)))
             updates.append((index, updated_index))
         if not args.check:
             for page, updated in updates:

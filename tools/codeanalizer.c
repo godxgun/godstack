@@ -1186,8 +1186,8 @@ main(int argc, char **argv)
 	    app.nroots, app.nroots == 1 ? "" : "s", app.ntree, app.nfuncs);
 	PINFO("%s", status);
 
-	if (!(peak_ctx = peak_init_legacy())) {
-		PFATAL("peak_init_legacy failed");
+	if (!(peak_ctx = peak_init())) {
+		PFATAL("peak_init failed");
 		return 1;
 	}
 	width = 1280;

@@ -1,0 +1,3 @@
+name = 'Godstack Heaven'
+description = 'A minimal dark documentation theme with local assets and no required JavaScript.'
+min_version = '0.165.0'

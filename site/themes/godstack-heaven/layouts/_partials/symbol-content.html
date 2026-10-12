@@ -1,0 +1,18 @@
+{{- /* Group rendered symbol entries without changing authored Markdown or anchors. */ -}}
+{{- $open := false -}}
+{{- range $index, $chunk := split .Content "<h" -}}
+  {{- if gt $index 0 -}}
+    {{- $heading := findRE `^[1-4](?:\s|>)` $chunk -}}
+    {{- if $heading -}}
+      {{- if $open -}}</section>{{- $open = false -}}{{- end -}}
+      {{- if strings.HasPrefix $chunk "4 " -}}
+        <section class="symbol-card">
+        {{- $open = true -}}
+      {{- end -}}
+    {{- end -}}
+    {{- printf "<h%s" $chunk | safeHTML -}}
+  {{- else -}}
+    {{- $chunk | safeHTML -}}
+  {{- end -}}
+{{- end -}}
+{{- if $open -}}</section>{{- end -}}

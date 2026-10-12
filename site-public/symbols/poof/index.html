@@ -1,0 +1,932 @@
+<!doctype html>
+<html lang="en" class="no-js">
+    <head>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+        <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark">
+        <script>document.documentElement.classList.replace('no-js','js');</script>
+        <title>Poof symbols · Godstack</title><meta name="description" content="Types, macros, and functions declared by Poof.h."><link rel="canonical" href="https://example.org/symbols/poof/">
+        
+        <link rel="stylesheet" href="/css/main.a87a5ada49af1cc103390b31f69448f8f98137dea361366aade0bedb9598ba04.css" integrity="sha256-qHpa2kmvHMEDOQsx9pRI&#43;PmBN96jYTZqreC&#43;25WYugQ=">
+    </head>
+    <body>
+        
+        <div class="heaven-scenery" aria-hidden="true"><img src="/images/ocean-sky_hu_f78afa269ada3c1a.webp" alt="" fetchpriority="high"><canvas hidden></canvas></div>
+        <a class="skip-link" href="#main">Skip to content</a>
+        <header class="topbar">
+            <a class="brand heaven-button" href="/">Godstack</a>
+            
+            <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="sidebar">Menu</button>
+            
+            <nav class="topnav" aria-label="Main navigation">
+                
+                    <a href="/docs/">Docs</a>
+                    
+
+                
+                    <a href="/demos/">Demos</a>
+                    
+
+                
+                    <a href="/symbols/">Symbols</a>
+                    
+
+                <a href="/ai/">AI</a><a href="https://github.com/godxgun/godstack">GitHub</a></nav><div class="top-actions"><button type="button" class="search-open" aria-haspopup="dialog" aria-controls="site-search">Search <kbd>⌘ K</kbd></button><noscript><a class="noscript-search" href="/docs/">Browse docs</a></noscript></div></header>
+        
+        <div class="site-layout">
+            
+<nav class="sidebar" id="sidebar" aria-label="Documentation and guides">
+
+
+    
+    
+    <h2 class="nav-label">Guides</h2>
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/guides/getting-started/">Getting Started</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/guides/getting-started/#peak---platform-layer">Peak - Platform Layer</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/guides/getting-started/#poof---a-build-system">Poof - A Build System</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+
+    
+    
+    
+    
+    <h2 class="nav-label">Build</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/poof/">Poof</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/poof/#running-a-command">Running a Command</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#compiling-a-program">Compiling a Program</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#platform-flags-and-cross-targets">Platform Flags and Cross Targets</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#building-in-parallel">Building in Parallel</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#skipping-up-to-date-work">Skipping Up-to-Date Work</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#rebuilding-the-build-script">Rebuilding the Build Script</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#printing-status">Printing Status</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">Core Libraries</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/peak/">Peak</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/peak/#opening-a-window">Opening a Window</a>
+    <ul>
+
+  
+  <li>
+    <a href="/docs/peak/#a-basic-event-loop">A Basic Event Loop</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#with-the-callback-api">With The Callback API</a>
+    
+  </li>
+  
+
+</ul>
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#using-the-filesystem">Using the Filesystem</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#spawning-a-tty">Spawning a TTY</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#memory-mapped-circular-ring-buffer">Memory Mapped Circular Ring Buffer</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#streaming-audio">Streaming Audio</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/rend/">Rend</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/rend/#creating-a-renderer">Creating a Renderer</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/rend/#creating-your-first-pipeline">Creating your first Pipeline</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/rend/#drawing-a-triangle">Drawing a triangle</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/rend/#drawing-a-mesh">Drawing a Mesh</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/fuse/">Fuse</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/fuse/#building-a-frame">Building a Frame</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#drawing-the-commands">Drawing the Commands</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#laying-out-with-classes">Laying Out with Classes</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#identifying-widgets">Identifying Widgets</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#sliders-scrolling-and-text-input">Sliders, Scrolling and Text Input</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#docking-windows">Docking Windows</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#handling-errors">Handling Errors</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/grit/">Grit</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/grit/#allocating-from-an-arena">Allocating from an Arena</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#stack-allocation">Stack Allocation</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#pools-of-equal-sized-objects">Pools of Equal-Sized Objects</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#dynamic-arrays-and-hash-maps">Dynamic Arrays and Hash Maps</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#random-numbers">Random Numbers</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#vectors-and-matrices">Vectors and Matrices</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#drawing-pixels">Drawing Pixels</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/type/">Type</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/type/#creating-a-context">Creating a Context</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#rendering-text">Rendering Text</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#scratch-memory">Scratch Memory</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#uploading-the-atlas">Uploading the Atlas</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#faces-styles-and-fallbacks">Faces, Styles and Fallbacks</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#shaped-text">Shaped Text</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#lower-level-building-blocks">Lower-Level Building Blocks</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">Utilities</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/cast/">Cast</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/cast/#tokenizing-source">Tokenizing Source</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#reading-tokens">Reading Tokens</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#parsing-declarations">Parsing Declarations</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#handling-unparsable-input">Handling Unparsable Input</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#sizing-and-reusing-memory">Sizing and Reusing Memory</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">Web</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/cool/">Cool</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/cool/#writing-text">Writing Text</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#writing-markup">Writing Markup</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#choosing-the-output-stream">Choosing the Output Stream</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#rendering-markdown">Rendering Markdown</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#compiling-templates">Compiling Templates</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/wire/">Wire</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/wire/#serving-a-response">Serving a Response</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#routing-requests">Routing Requests</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#serving-static-files">Serving Static Files</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#partial-responses-for-htmx">Partial Responses for htmx</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#running-your-own-loop">Running Your Own Loop</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#limits">Limits</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">API references</h2>
+
+    <ul class="sidebar-list">
+        <li><a href="/symbols/">Symbols</a></li>
+    </ul>
+
+    <div class="sidebar-footer">
+        <a href="/docs/">All libraries</a>
+        <a href="/ai/">Coding agent guide</a>
+    </div>
+</nav>
+
+            <main id="main" tabindex="-1">
+                
+
+  
+  <div class="reading-layout"><article class="article symbol-reference"><div class="article-meta"><a href="/symbols/">Symbols</a><span> / Symbols</span><a class="source-link" href="/symbols/poof.md">View Markdown</a></div>
+  
+  
+  <aside class="notice symbol-guide-hint"><strong>Symbols</strong> — per-function reference. For usage and setup, see the <a href="/docs/poof/">Poof library guide</a>.</aside>
+  <div class="prose"><h1 id="poof-symbols">Poof symbols<a class="heading-anchor" href="#poof-symbols" aria-label="Link to Poof symbols">#</a></h1>
+<p>For setup and API workflows, read the <a href="/docs/poof/">Poof guide</a>
+. This vault lists individual declarations; it is not a tutorial.</p>
+<h2 id="api-reference">API reference<a class="heading-anchor" href="#api-reference" aria-label="Link to API reference">#</a></h2>
+<p>Generated from <code>Poof.h</code> by <code>tools/generate_docs.py</code>. Edit the header comments, not this section.</p>
+<p>Declarations from all platform branches are listed; this is not a preprocessed API.</p>
+<h3 id="types">Types<a class="heading-anchor" href="#types" aria-label="Link to Types">#</a></h3>
+<section class="symbol-card"><h4 id="pooftargetplatform">PoofTargetPlatform<a class="heading-anchor" href="#pooftargetplatform" aria-label="Link to PoofTargetPlatform">#</a></h4>
+<p>Source: <code>Poof.h:65</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">enum</span> <span class="n">PoofTargetPlatform</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">POOF_TARGET_HOST</span>  <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">POOF_TARGET_WIN32</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">POOF_TARGET_LINUX</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">POOF_TARGET_MACOS</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">2</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="poofccflags">PoofCCFlags<a class="heading-anchor" href="#poofccflags" aria-label="Link to PoofCCFlags">#</a></h4>
+<p>Source: <code>Poof.h:72</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">enum</span> <span class="n">PoofCCFlags</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">POOF_CC_GCC</span>     <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">POOF_CC_CLANG</span>   <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">POOF_CC_MSVC</span>    <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">2</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">POOF_CC_MINGW</span>   <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">3</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="poofoptimizationflags">PoofOptimizationFlags<a class="heading-anchor" href="#poofoptimizationflags" aria-label="Link to PoofOptimizationFlags">#</a></h4>
+<p>Source: <code>Poof.h:79</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">enum</span> <span class="n">PoofOptimizationFlags</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">POOF_O0</span>       <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">POOF_O1</span>       <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">POOF_O2</span>       <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">POOF_O3</span>       <span class="o">=</span> <span class="mi">3</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">POOF_MSSE</span>     <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">3</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">POOF_MSSE2</span>    <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">4</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">POOF_AVX</span>      <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">5</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">POOF_AVX2</span>     <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">6</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">POOF_AVX512F</span>  <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">7</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="n">POOF_BMI</span>      <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">8</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_cmd">Poof_Cmd<a class="heading-anchor" href="#poof_cmd" aria-label="Link to Poof_Cmd">#</a></h4>
+<p>Source: <code>Poof.h:94</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">Poof_Cmd</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">const</span> <span class="kt">char</span> <span class="o">**</span><span class="n">items</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">size_t</span> <span class="n">capacity</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">size_t</span> <span class="n">count</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">Poof_Cmd</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_cc">Poof_CC<a class="heading-anchor" href="#poof_cc" aria-label="Link to Poof_CC">#</a></h4>
+<p>Source: <code>Poof.h:100</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">Poof_CC</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">uint8_t</span> <span class="n">compiler</span><span class="p">;</span>               <span class="c1">// enum PoofCCFlags
+</span></span></span><span class="line"><span class="cl">    <span class="kt">uint8_t</span> <span class="n">target_platform</span><span class="p">;</span>        <span class="c1">// enum PoofTargetPlatform
+</span></span></span><span class="line"><span class="cl">    <span class="kt">uint32_t</span> <span class="n">optimization</span><span class="p">;</span>          <span class="c1">// bitwise PoofOptimizationFlags
+</span></span></span><span class="line"><span class="cl">    <span class="kt">bool</span> <span class="n">debug_mode</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Poof_Cmd</span> <span class="n">inputs</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">output</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Poof_Cmd</span> <span class="n">includes</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Poof_Cmd</span> <span class="n">lib_paths</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Poof_Cmd</span> <span class="n">libs</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Poof_Cmd</span> <span class="n">defines</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Poof_Cmd</span> <span class="n">extra_flags</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="cm">/* Platform specific flags */</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Poof_Cmd</span> <span class="n">win32_flags</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Poof_Cmd</span> <span class="n">linux_flags</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Poof_Cmd</span> <span class="n">macos_flags</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">Poof_CC</span><span class="p">;</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_batch">Poof_Batch<a class="heading-anchor" href="#poof_batch" aria-label="Link to Poof_Batch">#</a></h4>
+<p>Source: <code>Poof.h:119</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">typedef</span> <span class="k">struct</span> <span class="n">Poof_Batch</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Poof_Cmd</span> <span class="o">*</span><span class="n">cmds</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">size_t</span> <span class="n">capacity</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">size_t</span> <span class="n">count</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">Poof_Batch</span><span class="p">;</span>
+</span></span></code></pre></div></section><h3 id="macros">Macros<a class="heading-anchor" href="#macros" aria-label="Link to Macros">#</a></h3>
+<section class="symbol-card"><h4 id="poof_isatty">POOF_ISATTY<a class="heading-anchor" href="#poof_isatty" aria-label="Link to POOF_ISATTY">#</a></h4>
+<p>Source: <code>Poof.h:54</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define POOF_ISATTY(fd) (_isatty(fd))
+</span></span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_isatty-1">POOF_ISATTY<a class="heading-anchor" href="#poof_isatty-1" aria-label="Link to POOF_ISATTY">#</a></h4>
+<p>Source: <code>Poof.h:61</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define POOF_ISATTY(fd) (isatty(fd))
+</span></span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_is_set">POOF_IS_SET<a class="heading-anchor" href="#poof_is_set" aria-label="Link to POOF_IS_SET">#</a></h4>
+<p>Source: <code>Poof.h:92</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define POOF_IS_SET(var, flag) (((var) &amp; (flag)) != 0)
+</span></span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_cmd_append">poof_cmd_append<a class="heading-anchor" href="#poof_cmd_append" aria-label="Link to poof_cmd_append">#</a></h4>
+<p>Source: <code>Poof.h:127</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define poof_cmd_append(cmd, ...) poof_cmd_append_internal((cmd), __VA_ARGS__, NULL)
+</span></span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_cc_append">poof_cc_append<a class="heading-anchor" href="#poof_cc_append" aria-label="Link to poof_cc_append">#</a></h4>
+<p>Source: <code>Poof.h:128</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define poof_cc_append(cc, ...)  poof_cmd_append_internal((cc), __VA_ARGS__, NULL)
+</span></span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_cc_append_win32">poof_cc_append_win32<a class="heading-anchor" href="#poof_cc_append_win32" aria-label="Link to poof_cc_append_win32">#</a></h4>
+<p>Source: <code>Poof.h:130</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define poof_cc_append_win32(cc, ...) poof_cmd_append_internal(&amp;((cc)-&gt;win32_flags), __VA_ARGS__, NULL)
+</span></span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_cc_append_linux">poof_cc_append_linux<a class="heading-anchor" href="#poof_cc_append_linux" aria-label="Link to poof_cc_append_linux">#</a></h4>
+<p>Source: <code>Poof.h:131</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define poof_cc_append_linux(cc, ...) poof_cmd_append_internal(&amp;((cc)-&gt;linux_flags), __VA_ARGS__, NULL)
+</span></span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_cc_append_macos">poof_cc_append_macos<a class="heading-anchor" href="#poof_cc_append_macos" aria-label="Link to poof_cc_append_macos">#</a></h4>
+<p>Source: <code>Poof.h:132</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define poof_cc_append_macos(cc, ...) poof_cmd_append_internal(&amp;((cc)-&gt;macos_flags), __VA_ARGS__, NULL)
+</span></span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_batch_append">poof_batch_append<a class="heading-anchor" href="#poof_batch_append" aria-label="Link to poof_batch_append">#</a></h4>
+<p>Source: <code>Poof.h:141</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define poof_batch_append(batch, cmd) poof_batch_append_cmd((batch), (cmd))
+</span></span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_support">poof_support<a class="heading-anchor" href="#poof_support" aria-label="Link to poof_support">#</a></h4>
+<p>Source: <code>Poof.h:166</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define poof_support(...) poof_support_internal(__VA_ARGS__, NULL)
+</span></span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_go_rebuild_urself">POOF_GO_REBUILD_URSELF<a class="heading-anchor" href="#poof_go_rebuild_urself" aria-label="Link to POOF_GO_REBUILD_URSELF">#</a></h4>
+<p>Source: <code>Poof.h:172</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define POOF_GO_REBUILD_URSELF(argc, argv) poof_go_rebuild_urself_impl(argc, argv, __FILE__)
+</span></span></span></code></pre></div></section><h3 id="functions">Functions<a class="heading-anchor" href="#functions" aria-label="Link to Functions">#</a></h3>
+<section class="symbol-card"><h4 id="poof_cmd_append_internal">poof_cmd_append_internal<a class="heading-anchor" href="#poof_cmd_append_internal" aria-label="Link to poof_cmd_append_internal">#</a></h4>
+<p>Source: <code>Poof.h:126</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">void</span> <span class="nf">poof_cmd_append_internal</span><span class="p">(</span><span class="n">Poof_Cmd</span> <span class="o">*</span><span class="n">cmd</span><span class="p">,</span> <span class="p">...);</span>
+</span></span></code></pre></div><p>Command operations</p>
+</section><section class="symbol-card"><h4 id="poof_cmd_free">poof_cmd_free<a class="heading-anchor" href="#poof_cmd_free" aria-label="Link to poof_cmd_free">#</a></h4>
+<p>Source: <code>Poof.h:134</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">void</span> <span class="nf">poof_cmd_free</span><span class="p">(</span><span class="n">Poof_Cmd</span> <span class="o">*</span><span class="n">cmd</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_cmd_clear">poof_cmd_clear<a class="heading-anchor" href="#poof_cmd_clear" aria-label="Link to poof_cmd_clear">#</a></h4>
+<p>Source: <code>Poof.h:135</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">void</span> <span class="nf">poof_cmd_clear</span><span class="p">(</span><span class="n">Poof_Cmd</span> <span class="o">*</span><span class="n">cmd</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_cmd_run">poof_cmd_run<a class="heading-anchor" href="#poof_cmd_run" aria-label="Link to poof_cmd_run">#</a></h4>
+<p>Source: <code>Poof.h:136</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">bool</span> <span class="nf">poof_cmd_run</span><span class="p">(</span><span class="n">Poof_Cmd</span> <span class="o">*</span><span class="n">cmd</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_batch_append_cmd">poof_batch_append_cmd<a class="heading-anchor" href="#poof_batch_append_cmd" aria-label="Link to poof_batch_append_cmd">#</a></h4>
+<p>Source: <code>Poof.h:139</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">void</span> <span class="nf">poof_batch_append_cmd</span><span class="p">(</span><span class="n">Poof_Batch</span> <span class="o">*</span><span class="n">batch</span><span class="p">,</span> <span class="n">Poof_Cmd</span> <span class="n">cmd</span><span class="p">);</span>
+</span></span></code></pre></div><p>Batch operations</p>
+</section><section class="symbol-card"><h4 id="poof_batch_append_cc">poof_batch_append_cc<a class="heading-anchor" href="#poof_batch_append_cc" aria-label="Link to poof_batch_append_cc">#</a></h4>
+<p>Source: <code>Poof.h:140</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">void</span> <span class="nf">poof_batch_append_cc</span><span class="p">(</span><span class="n">Poof_Batch</span> <span class="o">*</span><span class="n">batch</span><span class="p">,</span> <span class="n">Poof_CC</span> <span class="o">*</span><span class="n">cc</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_batch_free">poof_batch_free<a class="heading-anchor" href="#poof_batch_free" aria-label="Link to poof_batch_free">#</a></h4>
+<p>Source: <code>Poof.h:142</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">void</span> <span class="nf">poof_batch_free</span><span class="p">(</span><span class="n">Poof_Batch</span> <span class="o">*</span><span class="n">batch</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_batch_run">poof_batch_run<a class="heading-anchor" href="#poof_batch_run" aria-label="Link to poof_batch_run">#</a></h4>
+<p>Source: <code>Poof.h:143</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">bool</span> <span class="nf">poof_batch_run</span><span class="p">(</span><span class="n">Poof_Batch</span> <span class="o">*</span><span class="n">batch</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">label</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_batch_run_parallel">poof_batch_run_parallel<a class="heading-anchor" href="#poof_batch_run_parallel" aria-label="Link to poof_batch_run_parallel">#</a></h4>
+<p>Source: <code>Poof.h:144</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">bool</span> <span class="nf">poof_batch_run_parallel</span><span class="p">(</span><span class="n">Poof_Batch</span> <span class="o">*</span><span class="n">batch</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">label</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">max_jobs</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_cc_available">poof_cc_available<a class="heading-anchor" href="#poof_cc_available" aria-label="Link to poof_cc_available">#</a></h4>
+<p>Source: <code>Poof.h:147</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">uint8_t</span> <span class="nf">poof_cc_available</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+</span></span></code></pre></div><p>Compiler abstraction</p>
+</section><section class="symbol-card"><h4 id="poof_cpu_available">poof_cpu_available<a class="heading-anchor" href="#poof_cpu_available" aria-label="Link to poof_cpu_available">#</a></h4>
+<p>Source: <code>Poof.h:148</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">uint32_t</span> <span class="nf">poof_cpu_available</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_has_cmd">poof_has_cmd<a class="heading-anchor" href="#poof_has_cmd" aria-label="Link to poof_has_cmd">#</a></h4>
+<p>Source: <code>Poof.h:149</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">bool</span> <span class="nf">poof_has_cmd</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">name</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_cc_init">poof_cc_init<a class="heading-anchor" href="#poof_cc_init" aria-label="Link to poof_cc_init">#</a></h4>
+<p>Source: <code>Poof.h:150</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">void</span> <span class="nf">poof_cc_init</span><span class="p">(</span><span class="n">Poof_CC</span> <span class="o">*</span><span class="n">cc</span><span class="p">,</span> <span class="kt">uint8_t</span> <span class="n">compiler</span><span class="p">,</span> <span class="kt">uint8_t</span> <span class="n">target_platform</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_cc_free">poof_cc_free<a class="heading-anchor" href="#poof_cc_free" aria-label="Link to poof_cc_free">#</a></h4>
+<p>Source: <code>Poof.h:151</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">void</span> <span class="nf">poof_cc_free</span><span class="p">(</span><span class="n">Poof_CC</span> <span class="o">*</span><span class="n">cc</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_cc_run">poof_cc_run<a class="heading-anchor" href="#poof_cc_run" aria-label="Link to poof_cc_run">#</a></h4>
+<p>Source: <code>Poof.h:152</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">bool</span> <span class="nf">poof_cc_run</span><span class="p">(</span><span class="n">Poof_CC</span> <span class="o">*</span><span class="n">cc</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_mkdir">poof_mkdir<a class="heading-anchor" href="#poof_mkdir" aria-label="Link to poof_mkdir">#</a></h4>
+<p>Source: <code>Poof.h:155</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">bool</span> <span class="nf">poof_mkdir</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">path</span><span class="p">);</span>
+</span></span></code></pre></div><p>File and directory utilities</p>
+</section><section class="symbol-card"><h4 id="poof_touch">poof_touch<a class="heading-anchor" href="#poof_touch" aria-label="Link to poof_touch">#</a></h4>
+<p>Source: <code>Poof.h:156</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">bool</span> <span class="nf">poof_touch</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">path</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_rm">poof_rm<a class="heading-anchor" href="#poof_rm" aria-label="Link to poof_rm">#</a></h4>
+<p>Source: <code>Poof.h:157</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">bool</span> <span class="nf">poof_rm</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">path</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_rm_recursive">poof_rm_recursive<a class="heading-anchor" href="#poof_rm_recursive" aria-label="Link to poof_rm_recursive">#</a></h4>
+<p>Source: <code>Poof.h:158</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">bool</span> <span class="nf">poof_rm_recursive</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">path</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_copy_file">poof_copy_file<a class="heading-anchor" href="#poof_copy_file" aria-label="Link to poof_copy_file">#</a></h4>
+<p>Source: <code>Poof.h:159</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">bool</span> <span class="nf">poof_copy_file</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">src</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">dst</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_needs_rebuild">poof_needs_rebuild<a class="heading-anchor" href="#poof_needs_rebuild" aria-label="Link to poof_needs_rebuild">#</a></h4>
+<p>Source: <code>Poof.h:160</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">bool</span> <span class="nf">poof_needs_rebuild</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">target</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">**</span><span class="n">sources</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">source_count</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_print">poof_print<a class="heading-anchor" href="#poof_print" aria-label="Link to poof_print">#</a></h4>
+<p>Source: <code>Poof.h:163</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">int</span> <span class="nf">poof_print</span><span class="p">(</span><span class="kt">uint32_t</span> <span class="n">col</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">text</span><span class="p">,</span> <span class="p">...);</span>
+</span></span></code></pre></div><p>Output and pretty printing</p>
+</section><section class="symbol-card"><h4 id="poof_support_line">poof_support_line<a class="heading-anchor" href="#poof_support_line" aria-label="Link to poof_support_line">#</a></h4>
+<p>Source: <code>Poof.h:164</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">void</span> <span class="nf">poof_support_line</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">name</span><span class="p">,</span> <span class="kt">int</span> <span class="n">yes</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_support_internal">poof_support_internal<a class="heading-anchor" href="#poof_support_internal" aria-label="Link to poof_support_internal">#</a></h4>
+<p>Source: <code>Poof.h:165</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">uint32_t</span> <span class="nf">poof_support_internal</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">label</span><span class="p">,</span> <span class="p">...);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_progress_bar">poof_progress_bar<a class="heading-anchor" href="#poof_progress_bar" aria-label="Link to poof_progress_bar">#</a></h4>
+<p>Source: <code>Poof.h:167</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">int</span> <span class="nf">poof_progress_bar</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">label</span><span class="p">,</span> <span class="kt">float</span> <span class="n">value</span><span class="p">,</span> <span class="kt">float</span> <span class="n">min</span><span class="p">,</span> <span class="kt">float</span> <span class="n">max</span><span class="p">,</span> <span class="kt">float</span> <span class="n">width</span><span class="p">);</span>
+</span></span></code></pre></div></section><section class="symbol-card"><h4 id="poof_go_rebuild_urself_impl">poof_go_rebuild_urself_impl<a class="heading-anchor" href="#poof_go_rebuild_urself_impl" aria-label="Link to poof_go_rebuild_urself_impl">#</a></h4>
+<p>Source: <code>Poof.h:170</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="kt">void</span> <span class="nf">poof_go_rebuild_urself_impl</span><span class="p">(</span><span class="kt">int</span> <span class="n">argc</span><span class="p">,</span> <span class="kt">char</span> <span class="o">**</span><span class="n">argv</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">source_file</span><span class="p">);</span>
+</span></span></code></pre></div><p>Rebuild self macro</p>
+</section></div><nav class="prev-next" aria-label="Page navigation"><a href="/symbols/peak/"><small>Previous</small><strong>← Peak symbols</strong></a><a href="/symbols/rend/"><small>Next</small><strong>Rend symbols →</strong></a></nav></article><aside class="right-toc" aria-label="On this page"><h2>On this page</h2><nav id="TableOfContents">
+  <ul>
+    <li><a href="#api-reference">API reference</a>
+      <ul>
+        <li><a href="#types">Types</a></li>
+        <li><a href="#macros">Macros</a></li>
+        <li><a href="#functions">Functions</a></li>
+      </ul>
+    </li>
+  </ul>
+</nav></aside></div>
+
+</main>
+            </div>
+            
+                <footer class="site-footer"><span>Godstack · MIT License.</span><nav aria-label="Footer"><a href="/docs/">Documentation</a><a href="/demos/">Demos</a><a href="/ai/">AI guide</a><a href="/symbols/">Symbols</a><a href="/llms.txt">llms.txt</a><a href="/catalog.json">Documentation index</a><a href="/agent/SKILL.md">Agent skill</a><a href="https://github.com/godxgun/godstack">GitHub</a><a href="/license/">License</a></nav></footer>
+            <dialog class="search-dialog" id="site-search" aria-labelledby="search-title"><h2 id="search-title">Search</h2><form method="dialog"><label for="search-input">Search documentation</label><input id="search-input" type="search" placeholder="Search libraries, guides, and symbols…" autocomplete="off"><button value="close" aria-label="Close search">×</button></form><p class="search-status" role="status">Search libraries, guides, and symbols.<noscript> Browse the <a href="/docs/">documentation index</a>.</noscript></p><div class="search-results" aria-live="polite"></div></dialog>
+            
+            <script src="/js/site.91617de8440f7e0decb452fb29d31188802484fb967ace6f8d6e2237b3be3ce0.js" integrity="sha256-kWF96EQPfg3stFL7KdMRiIAkhPuWes5vjW4iN7O&#43;POA=" defer></script>
+            <script src="/js/ocean.9e84093c8df56dc7d9d5f8ce9fb81b2abb236ba42cd5ba5af0088399081c1a9b.js" integrity="sha256-noQJPI31bcfZ1fjOn7gbKrsja6Qs1bpa8AiDmQgcGps=" defer></script>
+            <script src="/js/scrollbars.5cd0b9c314b3371d0db03eabe2c5870b013108197b4258c7cda71bd685b60b11.js" integrity="sha256-XNC5wxSzNx0NsD6r4sWHCwExCBl7QljHzacb1oW2CxE=" defer></script>
+    </body></html>

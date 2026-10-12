@@ -1,0 +1,23 @@
+# {{ site.Title }}: complete public documentation
+
+{{ site.Params.description }}
+
+Source: {{ site.Params.github }}
+License: MIT ({{ "license/" | absURL }})
+
+This file includes only the public documentation corpus used for the site's catalog, search, and Markdown outputs. It does not include private repository files or a runtime backend. Page boundaries and source URLs are provided below.
+{{ range partial "public-pages.html" . }}
+
+---
+
+<!-- BEGIN PAGE: {{ .RelPermalink }} -->
+# {{ .Title }}
+
+Documentation: {{ .Permalink }}
+{{ with .OutputFormats.Get "Markdown" }}Markdown: {{ .Permalink }}{{ end }}
+{{ with .Description }}Description: {{ . }}{{ end }}
+
+{{ partial "markdown-content.html" . }}
+
+<!-- END PAGE: {{ .RelPermalink }} -->
+{{ end }}

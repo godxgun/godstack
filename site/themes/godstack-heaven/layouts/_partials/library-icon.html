@@ -1,0 +1,1 @@
+{{- with resources.Get (printf "icons/%s.svg" .) -}}{{ .Content | safeHTML }}{{- end -}}

@@ -339,7 +339,7 @@ static int demo_run(int argc, char **argv, const char *title, int w, int h)
 	}
 	loop.view = (View){NULL, w, h, 0, 0, w, h};
 	loop.view.pixels = malloc((size_t)w * h * sizeof(uint32_t));
-	if (!loop.view.pixels || !(loop.ctx = peak_init_legacy()))
+	if (!loop.view.pixels || !(loop.ctx = peak_init()))
 		goto error;
 	loop.window = peak_window_open(loop.ctx, "canvas", (uint32_t)w, (uint32_t)h, 0);
 	if (!loop.window.running)

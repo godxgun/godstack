@@ -1,10 +1,7 @@
-/* Peak public-API workload: caller-backed sessions, local clipboard delivery,
+/* Peak public-API workload: repeated runtime sessions, local clipboard delivery,
  * mirrored message storage, file round trips, and direct allocation reporting.
  * See LICENSE. No window, desktop clipboard, audio, or GPU is used. */
 #define _POSIX_C_SOURCE 200809L
-#if defined(__linux__)
-#define PEAK_VULKAN /* Peak's caller-backed Linux host profile; no GPU creation. */
-#endif
 #define PEAK_NO_AUDIO
 #define PEAK_NO_GAMEPAD
 
@@ -23,16 +20,15 @@
 
 typedef struct PeakDemo {
 
-	PeakParams params;
 	PeakCtx *ctx;
 	PeakMemoryStats before[PEAK_MEMORY_DOMAIN_COUNT], after;
 	PeakMemoryDomain domain;
 	char directory[512], app[96], path[560], moved[560];
 	char received[DEMO_CAPACITY + 1];
 	unsigned char *ring, *message;
-	void *backing, *storage, *loaded;
+	void *loaded;
 	unsigned long loaded_bytes;
-	size_t size, page, bytes, length, offset, taken;
+	size_t page, bytes, length, offset, taken;
 	uint64_t started;
 	int session, sequence, i, made_directory, ok;
 
@@ -55,18 +51,6 @@ static int demo_prepare(PeakDemo *d)
 		fprintf(stderr, "peak demo: mirrored message storage unavailable\n");
 		return 0;
 	}
-#if defined(PEAK_LINUX)
-	d->size = peak_memory(&d->params);
-	if (!d->size || d->size > SIZE_MAX - 15 || !(d->backing = malloc(d->size + 15))) {
-		fprintf(stderr, "peak demo: caller backing unavailable\n");
-		return 0;
-	}
-	d->storage = (void *)(((uintptr_t)d->backing + 15) & ~(uintptr_t)15);
-#else
-	(void)d->params;
-	(void)d->size;
-	(void)d->storage;
-#endif
 	return 1;
 }
 
@@ -123,11 +107,7 @@ static int demo_deliver(PeakDemo *d)
 static int demo_sessions(PeakDemo *d)
 {
 	for (d->session = 0; d->session < DEMO_SESSIONS; d->session++) {
-#if defined(PEAK_LINUX)
-		d->ctx = peak_place_in_memory_and_init(d->storage, d->size, &d->params);
-#else
-		d->ctx = peak_init_legacy();
-#endif
+		d->ctx = peak_init();
 		if (!d->ctx) {
 			fprintf(stderr, "peak demo: session initialization failed\n");
 			return 0;
@@ -168,7 +148,6 @@ static void demo_shutdown(PeakDemo *d)
 		peak_debug_free_domain_impl(d->message, d->domain, __FILE__, __LINE__, __func__);
 	free(d->loaded);
 	peak_quit(d->ctx);
-	free(d->backing);
 	if (d->ring)
 		peak_mirror_unmap(d->ring, d->page);
 	if (d->made_directory) {
@@ -186,7 +165,6 @@ static void demo_shutdown(PeakDemo *d)
 int main(void)
 {
 	PeakDemo demo = {0};
-	demo.params = (PeakParams){1, DEMO_CAPACITY, DEMO_CAPACITY};
 	demo.domain = PEAK_MEMORY_NON_DRIVER;
 	demo.page = peak_page_size();
 	demo.started = peak_get_time();

@@ -15,10 +15,6 @@ __pycache__/
 *.py[cod]
 
 # Hugo generated output and caches
-/site/public/
-/site/resources/
-/site/.hugo_build.lock
-/site/.hugo_cache/
 
 # Generated demo and tool executables 
 # (legacy output names retained for stale binaries).
@@ -30,7 +26,6 @@ __pycache__/
 /demos/fuse/demo
 /demos/peak/demo
 /demos/rend/demo
-/demos/rend2/demo
 /demos/compute/rend_compute_demo
 /demos/dashboard/dashboard
 /demos/doc-generator/doc_generator

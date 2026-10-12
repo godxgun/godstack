@@ -1,0 +1,10 @@
+{{ define "main" }}
+{{ if eq .Section "demos" }}
+<section class="demo-gallery" aria-labelledby="demo-gallery-title"><header class="demo-gallery-header"><p class="eyebrow">Real APIs. Visible results.</p><h1 id="demo-gallery-title">{{ .Title }}</h1>{{ with .Description }}<p class="lede">{{ . }}</p>{{ end }}</header><div class="demo-gallery-grid">{{ range .Sections.ByWeight }}{{ partial "demo-card.html" . }}{{ end }}{{ range .RegularPages.ByWeight }}{{ partial "demo-card.html" . }}{{ end }}</div></section>
+{{ else }}
+<section class="list-page"><header class="list-header"><div><h1>{{ .Title }}</h1>{{ with .Description }}<p class="lede">{{ . }}</p>{{ end }}</div>{{ with .OutputFormats.Get "Markdown" }}<a class="source-link" href="{{ .RelPermalink }}">View Markdown <span aria-hidden="true">↗</span></a>{{ end }}</header><div class="prose">{{ .Content }}</div></section>
+{{ if in (slice "guides" "symbols") .Section }}
+<section class="article-group" aria-label="{{ .Title }}"><div class="product-grid">{{ $section := .Section }}{{ range .Sections.ByTitle }}{{ $label := title $section }}{{ $action := "Open" }}{{ if eq $section "symbols" }}{{ $label = "Symbols" }}{{ $action = "Browse symbols" }}{{ else if eq $section "guides" }}{{ $label = "Guide" }}{{ $action = "Read guide" }}{{ end }}{{ partial "section-card.html" (dict "page" . "label" $label "action" $action) }}{{ end }}{{ range .RegularPages.ByTitle }}{{ $label := title $section }}{{ $action := "Open" }}{{ if eq $section "symbols" }}{{ $label = "Symbols" }}{{ $action = "Browse symbols" }}{{ else if eq $section "guides" }}{{ $label = "Guide" }}{{ $action = "Read guide" }}{{ end }}{{ partial "section-card.html" (dict "page" . "label" $label "action" $action) }}{{ end }}</div></section>
+{{ else }}{{ partial "article-list.html" . }}{{ end }}
+{{ end }}
+{{ end }}

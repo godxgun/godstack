@@ -1,0 +1,12 @@
+{{- $records := slice -}}
+{{- range hugo.Data.symbols -}}
+  {{- $symbol := . -}}
+  {{- with site.GetPage (printf "/symbols/%s" (lower .library)) -}}
+    {{- if partial "is-public-doc.html" . -}}
+      {{- $markdown := "" -}}
+      {{- with .OutputFormats.Get "Markdown" -}}{{- $markdown = printf "%s#%s" .RelPermalink $symbol.anchor -}}{{- end -}}
+      {{- $records = $records | append (dict "id" $symbol.id "title" $symbol.name "description" ($symbol.description | plainify | truncate 180) "categories" (slice "Symbols") "category" "Symbols" "product" $symbol.library "tags" (slice "API" "symbols" (lower $symbol.kind)) "url" (printf "%s#%s" .RelPermalink $symbol.anchor) "markdown_url" $markdown "access" "free" "content" (printf "%s\n%s" $symbol.declaration $symbol.description)) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- return $records -}}

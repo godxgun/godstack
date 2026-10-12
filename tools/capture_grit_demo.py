@@ -14,8 +14,10 @@ import subprocess
 import tempfile
 import zlib
 
+from site_paths import SITE
+
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / "site/static/images"
+OUTPUT = SITE / "static/images"
 WIDTH, HEIGHT = 720, 420
 
 

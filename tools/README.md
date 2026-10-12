@@ -42,22 +42,25 @@ Requires Python 3 (standard library only). No Cast, Doxygen, or compiler is need
 python3 tools/generate_docs.py          # regenerate API sections
 python3 tools/generate_docs.py --check  # fail if any page is missing or stale
 python3 -m unittest discover -s tools -p 'test_*.py'
-hugo --source site                    # optional: build the website
+hugo --source "${GODSTACK_SITE:-$HOME/rsr/src/site}"  # optional: build the external website
 ```
 
 Commands may be invoked from another working directory using the script's absolute
-path. Header and output paths are always resolved relative to the repository.
+path. Headers are resolved relative to this repository. Website outputs use
+`GODSTACK_SITE` (default `~/rsr/src/site`), independent of the working directory.
+The generator also accepts `--site /path/to/checkout`; browser builders and
+thumbnail tools accept `--output`. Missing site checkouts produce explicit
+skips in integration unit tests and CI, not claims of website validation.
 
 ## Inputs and outputs
 
 The explicit library list in `generate_docs.py` produces one Markdown page for each
 of Cast, Cool, Fuse, Grit, Peak, Poof, Rend, Type, and Wire in
-`site/articles/symbols/`. Helpers such as FuseRend and demo headers are not inputs.
-Rend2 is WIP and excluded from public generation; its existing guide and vault
-page are drafts until the backend/API refactor settles.
-The same extraction writes `site/data/symbols.json`, which Hugo incorporates into
-search and catalog records with stable per-symbol anchors. Library guides in
-`site/articles/docs/` are handwritten, task-oriented documentation.
+`$GODSTACK_SITE/articles/symbols/`. Helpers such as FuseRend and demo headers
+are not inputs. Rend2 is maintained separately in `~/rsr/src/godstack-pro`.
+The same extraction writes `$GODSTACK_SITE/data/symbols.json`, which Hugo uses
+for search and catalog records. Guides in `$GODSTACK_SITE/articles/docs/`
+are handwritten, task-oriented documentation.
 Add a library to `LIBRARIES` when it becomes part of the public collection.
 
 Existing vault front matter and handwritten prose are retained. Only the region between
@@ -98,8 +101,8 @@ Doxygen groups and inheritance.
 
 For ordinary single-header libraries it reads from the public header guard to the
 implementation directive. Poof has no implementation macro, so its existing
-`/* Implementation */` marker is the boundary. Rend2 uses the `rend_` function
-prefix. Changes to these layouts may require updating the extractor.
+`/* Implementation */` marker is the boundary. Changes to these layouts may
+require updating the extractor.
 
 The API extractor does not modify headers, generate guides, delete pages, or
 replace the existing HTML documentation demo. The Hugo website combines its
@@ -107,14 +110,15 @@ output with handwritten product and task guidance.
 
 ## Website workflow
 
-The active theme is `site/themes/godstack-heaven`; content is in `site/articles`.
-The new layout convention requires Hugo 0.146.0 or newer. Site CI pins 0.165.0,
-the version used for verification. Build into a fresh directory to avoid stale
+The active theme is `$GODSTACK_SITE/themes/godstack-heaven`; content is in
+`$GODSTACK_SITE/articles`. Hugo 0.146.0 or newer is required; 0.165.0 was verified.
+CI's website steps require an explicitly supplied external checkout and
+`GODSTACK_SITE`. No hosted repository URL or automatic checkout is assumed. Build into a fresh directory to avoid stale
 files from previous builds:
 
 ```sh
 python3 tools/generate_docs.py --check
-hugo --source site --destination /tmp/godstack-site --cacheDir /tmp/godstack-hugo-cache --noBuildLock
+hugo --source "${GODSTACK_SITE:-$HOME/rsr/src/site}" --destination /tmp/godstack-site --cacheDir /tmp/godstack-hugo-cache --noBuildLock
 python3 tools/test_site.py /tmp/godstack-site
 # Optional browser checks: Node 22+ with native WebSocket, Python 3, Chromium.
 node tools/test_site_browser.mjs /tmp/godstack-site
@@ -133,7 +137,7 @@ renderer used by the demo. Regenerate it with `python3
 tools/capture_grit_demo.py` (requires `cc` and `libm`). A temporary harness
 includes the demo, initializes its real particle state, advances 120 fixed
 steps, and captures the 720×420 software framebuffer without opening a window.
-It writes `site/static/images/grit-demo.png` and requires no image library.
+It writes `$GODSTACK_SITE/static/images/grit-demo.png` and requires no image library.
 
 For deployment, set `--baseURL https://your-domain/` and publish only the generated
 output directory. The checked-in `example.org` URL is a placeholder, not a live
@@ -158,7 +162,7 @@ Hugo generates these from the same explicitly selected public content pages:
   section landing pages at `/docs/index.md` (and equivalents), and public
   licensing, and AI pages. HTML directory URLs are unchanged.
 
-`site/layouts/_partials/is-public-doc.html` explicitly selects the `docs`,
+`$GODSTACK_SITE/layouts/_partials/is-public-doc.html` explicitly selects the `docs`,
 `guides`, `symbols`, and `demos` sections plus the top-level `ai`
 and `license` pages. Per-symbol catalog/search records come from the same header
 extraction that renders the vault. They link directly to reference anchors;
@@ -173,7 +177,7 @@ Add descriptive front matter to public pages: `description`, and `params.id`,
 unique. Internal links should point to existing site pages. Machine-readable
 outputs use generated permalinks rather than handwritten hostnames.
 
-The downloadable skill and AGENTS.md snippet live in `site/static/agent/`.
+The downloadable skill and AGENTS.md snippet live in `$GODSTACK_SITE/static/agent/`.
 They are intentionally project-specific, static guidance, not a runtime
 integration. `/ai/` explains how to give resources to Codex, Claude, and Cursor.
 No MCP server is implemented or advertised.
@@ -188,7 +192,7 @@ python3 tools/capture_demo_thumbnails.py  # capture Particle Observatory and Sna
 
 The Emscripten builder copies an existing compiler cache into a temporary directory
 and never installs or modifies the SDK. It stages all requested builds before
-publishing them under `site/static/demos/<id>/`. Each `demo.js` contains real
+publishing them under `$GODSTACK_SITE/static/demos/<id>/`. Each `demo.js` contains real
 compiled WebAssembly (`SINGLE_FILE`), avoiding runtime WASM fetch/CORS requirements
 inside the `allow-scripts` sandbox. Clicking a gallery card opens a minimal
 viewer that immediately loads the compiled demo; there is no article or extra

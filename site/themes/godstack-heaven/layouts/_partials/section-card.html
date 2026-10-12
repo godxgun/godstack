@@ -1,0 +1,2 @@
+{{ $page := .page }}
+<a class="product-card section-card" href="{{ $page.RelPermalink }}"><span class="product-meta">{{ .label }}</span><h3 class="library-title">{{ partial "library-icon.html" (lower ($page.Params.product | default "")) }}{{ $page.Title }}</h3>{{ with $page.Description }}<p>{{ . }}</p>{{ end }}<span class="card-action">{{ .action }} <span aria-hidden="true">→</span></span></a>

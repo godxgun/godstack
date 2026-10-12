@@ -1,0 +1,9 @@
+{{- $records := slice -}}
+{{- range partial "public-pages.html" . -}}
+  {{- $record := partial "document-record.html" . -}}
+  {{- $records = $records | append (dict "id" $record.id "title" $record.title "description" $record.description "category" $record.category "product" $record.product "tags" $record.tags "url" $record.url "content" (.Plain | plainify)) -}}
+{{- end -}}
+{{- range partial "symbol-records.html" . -}}
+  {{- $records = $records | append (dict "id" .id "title" .title "description" .description "category" .category "product" .product "tags" .tags "url" .url "content" .content) -}}
+{{- end -}}
+{{- $records | jsonify -}}

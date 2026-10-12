@@ -1,0 +1,866 @@
+<!doctype html>
+<html lang="en" class="no-js">
+    <head>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+        <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark">
+        <script>document.documentElement.classList.replace('no-js','js');</script>
+        <title>Cool · Godstack</title><meta name="description" content="Use Cool output helpers for escaped text, trusted markup, and a limited Markdown subset."><link rel="canonical" href="https://example.org/docs/cool/">
+        
+        <link rel="stylesheet" href="/css/main.a87a5ada49af1cc103390b31f69448f8f98137dea361366aade0bedb9598ba04.css" integrity="sha256-qHpa2kmvHMEDOQsx9pRI&#43;PmBN96jYTZqreC&#43;25WYugQ=">
+    </head>
+    <body>
+        
+        <div class="heaven-scenery" aria-hidden="true"><img src="/images/ocean-sky_hu_f78afa269ada3c1a.webp" alt="" fetchpriority="high"><canvas hidden></canvas></div>
+        <a class="skip-link" href="#main">Skip to content</a>
+        <header class="topbar">
+            <a class="brand heaven-button" href="/">Godstack</a>
+            
+            <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="sidebar">Menu</button>
+            
+            <nav class="topnav" aria-label="Main navigation">
+                
+                    <a href="/docs/">Docs</a>
+                    
+
+                
+                    <a href="/demos/">Demos</a>
+                    
+
+                
+                    <a href="/symbols/">Symbols</a>
+                    
+
+                <a href="/ai/">AI</a><a href="https://github.com/godxgun/godstack">GitHub</a></nav><div class="top-actions"><button type="button" class="search-open" aria-haspopup="dialog" aria-controls="site-search">Search <kbd>⌘ K</kbd></button><noscript><a class="noscript-search" href="/docs/">Browse docs</a></noscript></div></header>
+        
+        <div class="site-layout">
+            
+<nav class="sidebar" id="sidebar" aria-label="Documentation and guides">
+
+
+    
+    
+    <h2 class="nav-label">Guides</h2>
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/guides/getting-started/">Getting Started</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/guides/getting-started/#peak---platform-layer">Peak - Platform Layer</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/guides/getting-started/#poof---a-build-system">Poof - A Build System</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+
+    
+    
+    
+    
+    <h2 class="nav-label">Build</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/poof/">Poof</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/poof/#running-a-command">Running a Command</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#compiling-a-program">Compiling a Program</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#platform-flags-and-cross-targets">Platform Flags and Cross Targets</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#building-in-parallel">Building in Parallel</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#skipping-up-to-date-work">Skipping Up-to-Date Work</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#rebuilding-the-build-script">Rebuilding the Build Script</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/poof/#printing-status">Printing Status</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">Core Libraries</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/peak/">Peak</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/peak/#opening-a-window">Opening a Window</a>
+    <ul>
+
+  
+  <li>
+    <a href="/docs/peak/#a-basic-event-loop">A Basic Event Loop</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#with-the-callback-api">With The Callback API</a>
+    
+  </li>
+  
+
+</ul>
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#using-the-filesystem">Using the Filesystem</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#spawning-a-tty">Spawning a TTY</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#memory-mapped-circular-ring-buffer">Memory Mapped Circular Ring Buffer</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/peak/#streaming-audio">Streaming Audio</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/rend/">Rend</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/rend/#creating-a-renderer">Creating a Renderer</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/rend/#creating-your-first-pipeline">Creating your first Pipeline</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/rend/#drawing-a-triangle">Drawing a triangle</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/rend/#drawing-a-mesh">Drawing a Mesh</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/fuse/">Fuse</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/fuse/#building-a-frame">Building a Frame</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#drawing-the-commands">Drawing the Commands</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#laying-out-with-classes">Laying Out with Classes</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#identifying-widgets">Identifying Widgets</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#sliders-scrolling-and-text-input">Sliders, Scrolling and Text Input</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#docking-windows">Docking Windows</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/fuse/#handling-errors">Handling Errors</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/grit/">Grit</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/grit/#allocating-from-an-arena">Allocating from an Arena</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#stack-allocation">Stack Allocation</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#pools-of-equal-sized-objects">Pools of Equal-Sized Objects</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#dynamic-arrays-and-hash-maps">Dynamic Arrays and Hash Maps</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#random-numbers">Random Numbers</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#vectors-and-matrices">Vectors and Matrices</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/grit/#drawing-pixels">Drawing Pixels</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/type/">Type</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/type/#creating-a-context">Creating a Context</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#rendering-text">Rendering Text</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#scratch-memory">Scratch Memory</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#uploading-the-atlas">Uploading the Atlas</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#faces-styles-and-fallbacks">Faces, Styles and Fallbacks</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#shaped-text">Shaped Text</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/type/#lower-level-building-blocks">Lower-Level Building Blocks</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">Utilities</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/cast/">Cast</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/cast/#tokenizing-source">Tokenizing Source</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#reading-tokens">Reading Tokens</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#parsing-declarations">Parsing Declarations</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#handling-unparsable-input">Handling Unparsable Input</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cast/#sizing-and-reusing-memory">Sizing and Reusing Memory</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">Web</h2>
+    
+    <ul class="sidebar-list">
+        
+        
+
+<li class="sidebar-article">
+  
+  <details open>
+    <summary><a href="/docs/cool/" aria-current="page">Cool</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/cool/#writing-text">Writing Text</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#writing-markup">Writing Markup</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#choosing-the-output-stream">Choosing the Output Stream</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#rendering-markdown">Rendering Markdown</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/cool/#compiling-templates">Compiling Templates</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+        
+
+<li class="sidebar-article">
+  
+  <details>
+    <summary><a href="/docs/wire/">Wire</a><span class="sidebar-chevron" aria-hidden="true">›</span></summary>
+    <ul class="sidebar-contents">
+      
+
+  
+    
+
+  
+  <li>
+    <a href="/docs/wire/#serving-a-response">Serving a Response</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#routing-requests">Routing Requests</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#serving-static-files">Serving Static Files</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#partial-responses-for-htmx">Partial Responses for htmx</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#running-your-own-loop">Running Your Own Loop</a>
+    
+  </li>
+  
+
+  
+  <li>
+    <a href="/docs/wire/#limits">Limits</a>
+    
+  </li>
+  
+
+
+  
+
+
+    </ul>
+  </details>
+  
+</li>
+
+        
+    </ul>
+    
+    
+    <h2 class="nav-label">API references</h2>
+
+    <ul class="sidebar-list">
+        <li><a href="/symbols/">Symbols</a></li>
+    </ul>
+
+    <div class="sidebar-footer">
+        <a href="/docs/">All libraries</a>
+        <a href="/ai/">Coding agent guide</a>
+    </div>
+</nav>
+
+            <main id="main" tabindex="-1">
+                
+
+  
+  <div class="reading-layout"><article class="article" data-symbol-vault-url="/symbols/cool/"><div class="article-meta"><a href="/docs/">Documentation</a><span> / Web</span><a href="/symbols/cool/">Symbol reference</a><a class="source-link" href="/docs/cool.md">View Markdown</a></div>
+  
+  
+  
+  <div class="prose"><h1 id="cool">Cool<a class="heading-anchor" href="#cool" aria-label="Link to Cool">#</a></h1>
+<p>Cool generates HTML from C. It writes straight to a <code>FILE *</code> stream: escaped text, raw markup,
+and a small Markdown subset. A separate transpiler turns <code>.cool</code> template files into plain C
+functions that call the same helpers. Cool does not allocate, buffer or sanitize markup for you.</p>
+<p>Define <code>COOL_IMPLEMENTATION</code> in exactly one translation unit before including <code>Cool.h</code>. Other
+translation units include the header without it.</p>
+<h2 id="writing-text">Writing Text<a class="heading-anchor" href="#writing-text" aria-label="Link to Writing Text">#</a></h2>
+<p>The first thing to try is writing user text into a page. <code>cool_html_txt()</code> escapes <code>&lt;</code>, <code>&gt;</code> and
+<code>&amp;</code> and writes the result to standard output:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define COOL_IMPLEMENTATION
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;Cool.h&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">cool_html_txt</span><span class="p">(</span><span class="s">&#34;Hello &amp; welcome&#34;</span><span class="p">,</span> <span class="mi">15</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>This prints <code>Hello &amp;amp; welcome</code>. The length is in bytes; output also stops at the first NUL.
+<code>cool_html_txt()</code> is meant for element content. It does not escape quotes, so it is not safe for
+untrusted values placed inside attribute values.</p>
+<h2 id="writing-markup">Writing Markup<a class="heading-anchor" href="#writing-markup" aria-label="Link to Writing Markup">#</a></h2>
+<p>Markup you control is written unescaped. <code>COOL_SV()</code> wraps a string literal with its length;
+<code>cool_html_raw_cstr()</code> takes any pointer and length; <code>cool_htmlf_raw()</code> is <code>printf</code> into the
+stream. None of the raw helpers escape anything, so use them for literals and numbers, and send
+every user-supplied string through <code>cool_html_txt()</code>.</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="k">const</span> <span class="n">names</span><span class="p">[]</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#34;Peak&#34;</span><span class="p">,</span> <span class="s">&#34;Rend&#34;</span><span class="p">,</span> <span class="s">&#34;Fuse &lt;beta&gt;&#34;</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nf">cool_html_raw</span><span class="p">(</span><span class="nf">COOL_SV</span><span class="p">(</span><span class="s">&#34;&lt;ul class=</span><span class="se">\&#34;</span><span class="s">libs</span><span class="se">\&#34;</span><span class="s">&gt;</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="p">;</span> <span class="o">++</span><span class="n">i</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">cool_htmlf_raw</span><span class="p">(</span><span class="s">&#34;  &lt;li data-index=</span><span class="se">\&#34;</span><span class="s">%d</span><span class="se">\&#34;</span><span class="s">&gt;&#34;</span><span class="p">,</span> <span class="n">i</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">cool_html_txt</span><span class="p">(</span><span class="n">names</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="nf">strlen</span><span class="p">(</span><span class="n">names</span><span class="p">[</span><span class="n">i</span><span class="p">]));</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">cool_html_raw</span><span class="p">(</span><span class="nf">COOL_SV</span><span class="p">(</span><span class="s">&#34;&lt;/li&gt;</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="nf">cool_html_raw</span><span class="p">(</span><span class="nf">COOL_SV</span><span class="p">(</span><span class="s">&#34;&lt;/ul&gt;</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">));</span>
+</span></span></code></pre></div><p>The third name is written as <code>Fuse &amp;lt;beta&amp;gt;</code>.</p>
+<h2 id="choosing-the-output-stream">Choosing the Output Stream<a class="heading-anchor" href="#choosing-the-output-stream" aria-label="Link to Choosing the Output Stream">#</a></h2>
+<p>Output goes to <code>COOL_OUTPUT</code>, which defaults to <code>stdout</code>. Define it before including the header.
+It is evaluated on every write, so it can name a variable that you change at runtime. On POSIX
+systems, <code>open_memstream()</code> captures a page in memory, ready to send as a response body:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#define _POSIX_C_SOURCE 200809L
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;stdio.h&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;stdlib.h&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">static</span> <span class="n">FILE</span> <span class="o">*</span><span class="n">cool_out</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="cp">#define COOL_OUTPUT cool_out
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define COOL_IMPLEMENTATION
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;Cool.h&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">char</span> <span class="o">*</span><span class="n">page</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">size_t</span> <span class="n">size</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">cool_out</span> <span class="o">=</span> <span class="nf">open_memstream</span><span class="p">(</span><span class="o">&amp;</span><span class="n">page</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">size</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">cool_out</span><span class="p">)</span> <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">cool_html_raw</span><span class="p">(</span><span class="nf">COOL_SV</span><span class="p">(</span><span class="s">&#34;&lt;h1&gt;&#34;</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">cool_html_txt</span><span class="p">(</span><span class="s">&#34;Status&#34;</span><span class="p">,</span> <span class="mi">6</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">cool_html_raw</span><span class="p">(</span><span class="nf">COOL_SV</span><span class="p">(</span><span class="s">&#34;&lt;/h1&gt;</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">fclose</span><span class="p">(</span><span class="n">cool_out</span><span class="p">);</span> <span class="cm">/* page and size are valid after the stream is closed */</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nf">fwrite</span><span class="p">(</span><span class="n">page</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="n">stdout</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">free</span><span class="p">(</span><span class="n">page</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>The repository&rsquo;s doc generator uses this pattern to answer <a href="/docs/wire/">Wire</a>
+ requests.</p>
+<h2 id="rendering-markdown">Rendering Markdown<a class="heading-anchor" href="#rendering-markdown" aria-label="Link to Rendering Markdown">#</a></h2>
+<p><code>cool_md()</code> converts a Markdown subset to HTML and writes it to the same stream:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="k">static</span> <span class="k">const</span> <span class="kt">char</span> <span class="n">notes</span><span class="p">[]</span> <span class="o">=</span>
+</span></span><span class="line"><span class="cl">    <span class="s">&#34;## Release</span><span class="se">\n</span><span class="s">&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="s">&#34;</span><span class="se">\n</span><span class="s">&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="s">&#34;The build is **ready**. See [the guide](/docs/cool/).</span><span class="se">\n</span><span class="s">&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="s">&#34;</span><span class="se">\n</span><span class="s">&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="s">&#34;- `cool_md` writes HTML</span><span class="se">\n</span><span class="s">&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="s">&#34;- text is *escaped*</span><span class="se">\n</span><span class="s">&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="s">&#34;</span><span class="se">\n</span><span class="s">&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="s">&#34;| Library | Status |</span><span class="se">\n</span><span class="s">&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="s">&#34;| ------- | ------ |</span><span class="se">\n</span><span class="s">&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="s">&#34;| Cool    | ok     |</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nf">cool_md</span><span class="p">(</span><span class="n">notes</span><span class="p">,</span> <span class="k">sizeof</span> <span class="n">notes</span> <span class="o">-</span> <span class="mi">1</span><span class="p">);</span>
+</span></span></code></pre></div><p>The supported subset is ATX headings (<code>#</code> to <code>######</code>), paragraphs, <code>-</code>/<code>*</code>/<code>+</code> bullet lists,
+<code>1.</code> ordered lists, <code>---</code> rules, fenced code blocks (a simple language name becomes
+<code>class=&quot;language-...&quot;</code>), pipe tables, inline code, <code>**strong**</code>, <code>*emphasis*</code> and
+<code>[text](url)</code> links. Nested lists, block quotes, images, setext headings and underscore emphasis
+are not recognized; such lines come out as paragraph text.</p>
+<p>Text and code are escaped, so HTML embedded in the Markdown is displayed rather than interpreted.
+Link targets are escaped for the attribute, but their scheme is not checked: a <code>javascript:</code> URL
+passes through. Filter links yourself when the Markdown comes from users.</p>
+<h2 id="compiling-templates">Compiling Templates<a class="heading-anchor" href="#compiling-templates" aria-label="Link to Compiling Templates">#</a></h2>
+<p>For larger pages, write markup in a <code>.cool</code> file and let <code>CoolTranspiler.c</code> turn each template
+into a C function. A template starts with a line beginning with <code>COOL</code> followed by a C function
+header, and ends with a line containing only <code>}</code>:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-html" data-lang="html"><span class="line"><span class="cl">COOL void LibCard(char *name, int version) {
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;</span><span class="nt">div</span> <span class="na">class</span><span class="o">=</span><span class="s">&#34;card&#34;</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">        <span class="p">&lt;</span><span class="nt">h3</span><span class="p">&gt;</span>{ name }<span class="p">&lt;/</span><span class="nt">h3</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">        <span class="p">&lt;</span><span class="nt">span</span><span class="p">&gt;</span>v{ version }<span class="p">&lt;/</span><span class="nt">span</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">&lt;/</span><span class="nt">div</span><span class="p">&gt;</span>
+</span></span><span class="line"><span class="cl">}
+</span></span></code></pre></div><p>Inside a template, <code>{ name }</code> inserts a parameter. <code>char *</code> parameters are written with
+<code>cool_html_txt()</code>; numeric parameters go through <code>cool_htmlf_raw()</code> with a matching format.
+An expression that is not exactly a parameter name is a transpile error. <code>@Func(args)</code> emits a
+call to another C function, such as another template. Lines outside templates are copied to the
+output unchanged.</p>
+<p>Build the transpiler once, then generate C from the template:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">cc -std<span class="o">=</span>c99 -Wall -Wextra -I. CoolTranspiler.c -o cool_transpiler
+</span></span><span class="line"><span class="cl">./cool_transpiler view.cool -o view.cool.c
+</span></span></code></pre></div><p>The generated file is a set of plain functions. Include it after <code>Cool.h</code> and <code>&lt;string.h&gt;</code>,
+since text parameters are measured with <code>strlen()</code>:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;string.h&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#define COOL_IMPLEMENTATION
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;Cool.h&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&#34;view.cool.c&#34;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">LibCard</span><span class="p">(</span><span class="s">&#34;Cool&#34;</span><span class="p">,</span> <span class="mi">1</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Parameters are escaped as element text, not as attribute values, so do not place untrusted
+strings inside quoted attributes in a template. See
+<a href="https://github.com/godxgun/godstack/tree/main/demos/doc-generator"><code>demos/doc-generator/</code></a>
+ for a
+template, its generated C, and a server that renders it.</p>
+<p>See <a href="/symbols/cool/">Cool symbols</a>
+ for the generated declarations.</p>
+</div><nav class="prev-next" aria-label="Page navigation"><a href="/docs/cast/"><small>Previous</small><strong>← Cast</strong></a><a href="/docs/fuse/"><small>Next</small><strong>Fuse →</strong></a></nav></article><aside class="right-toc" aria-label="On this page"><h2>On this page</h2><nav id="TableOfContents">
+  <ul>
+    <li><a href="#writing-text">Writing Text</a></li>
+    <li><a href="#writing-markup">Writing Markup</a></li>
+    <li><a href="#choosing-the-output-stream">Choosing the Output Stream</a></li>
+    <li><a href="#rendering-markdown">Rendering Markdown</a></li>
+    <li><a href="#compiling-templates">Compiling Templates</a></li>
+  </ul>
+</nav></aside></div>
+
+</main>
+            </div>
+            
+                <footer class="site-footer"><span>Godstack · MIT License.</span><nav aria-label="Footer"><a href="/docs/">Documentation</a><a href="/demos/">Demos</a><a href="/ai/">AI guide</a><a href="/symbols/">Symbols</a><a href="/llms.txt">llms.txt</a><a href="/catalog.json">Documentation index</a><a href="/agent/SKILL.md">Agent skill</a><a href="https://github.com/godxgun/godstack">GitHub</a><a href="/license/">License</a></nav></footer>
+            <dialog class="search-dialog" id="site-search" aria-labelledby="search-title"><h2 id="search-title">Search</h2><form method="dialog"><label for="search-input">Search documentation</label><input id="search-input" type="search" placeholder="Search libraries, guides, and symbols…" autocomplete="off"><button value="close" aria-label="Close search">×</button></form><p class="search-status" role="status">Search libraries, guides, and symbols.<noscript> Browse the <a href="/docs/">documentation index</a>.</noscript></p><div class="search-results" aria-live="polite"></div></dialog>
+            
+            <script src="/js/site.91617de8440f7e0decb452fb29d31188802484fb967ace6f8d6e2237b3be3ce0.js" integrity="sha256-kWF96EQPfg3stFL7KdMRiIAkhPuWes5vjW4iN7O&#43;POA=" defer></script>
+            <script src="/js/ocean.9e84093c8df56dc7d9d5f8ce9fb81b2abb236ba42cd5ba5af0088399081c1a9b.js" integrity="sha256-noQJPI31bcfZ1fjOn7gbKrsja6Qs1bpa8AiDmQgcGps=" defer></script>
+            <script src="/js/scrollbars.5cd0b9c314b3371d0db03eabe2c5870b013108197b4258c7cda71bd685b60b11.js" integrity="sha256-XNC5wxSzNx0NsD6r4sWHCwExCBl7QljHzacb1oW2CxE=" defer></script>
+    </body></html>

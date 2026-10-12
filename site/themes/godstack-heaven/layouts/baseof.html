@@ -1,0 +1,56 @@
+{{- $showSidebar := not (or (eq .Section "demos") (and .IsSection (in (slice "docs" "symbols") .Section))) -}}
+<!doctype html>
+<html lang="{{ site.Language.Lang }}" class="no-js">
+    <head>
+        <link rel="icon" href="{{ partial "site-url.html" "/favicon.svg" }}" type="image/svg+xml">
+        <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark">
+        <script>document.documentElement.classList.replace('no-js','js');</script>
+        <title>{{ if not .IsHome }}{{ .Title }} · {{ end }}{{ site.Title }}</title><meta name="description" content="{{ .Description | default site.Params.description }}"><link rel="canonical" href="{{ .Permalink }}">
+        {{ if .IsHome }}{{ range slice "Search" "Catalog" "LLMs" "LLMsSmall" "LLMsFull" }}{{ with site.Home.OutputFormats.Get . }}<link rel="alternate" type="{{ .MediaType.Type }}" href="{{ .Permalink }}">{{ end }}{{ end }}{{ end }}
+        {{ with resources.Get "css/main.css" | fingerprint }}<link rel="stylesheet" href="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}">{{ end }}
+    </head>
+    <body>
+        {{ $ocean := (resources.Get "images/ocean-sky.png").Process "webp q88" }}
+        <div class="heaven-scenery" aria-hidden="true"><img src="{{ $ocean.RelPermalink }}" alt="" fetchpriority="high"><canvas hidden></canvas></div>
+        <a class="skip-link" href="#main">Skip to content</a>
+        <header class="topbar">
+            <a class="brand heaven-button" href="{{ site.Home.RelPermalink }}">{{ site.Title }}</a>
+            {{ if $showSidebar }}
+            <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="sidebar">Menu</button>
+            {{ end }}
+            <nav class="topnav" aria-label="Main navigation">
+                {{ with site.GetPage "/docs" }}
+                    <a href="{{ .RelPermalink }}">Docs</a>
+                    {{ else }}
+                    <a href="{{ partial "site-url.html" "/docs/" }}">Docs</a>
+                {{ end }}
+
+                {{ with site.GetPage "/demos" }}
+                    <a href="{{ .RelPermalink }}">Demos</a>
+                    {{ else }}
+                    <a href="{{ partial "site-url.html" "/demos/" }}">Demos</a>
+                {{ end }}
+
+                {{ with site.GetPage "/symbols" }}
+                    <a href="{{ .RelPermalink }}">Symbols</a>
+                    {{ else }}
+                    <a href="{{ partial "site-url.html" "/symbols/" }}">Symbols</a>
+                {{ end }}
+
+                {{ with site.GetPage "/ai" }}<a href="{{ .RelPermalink }}">AI</a>{{ else }}<a href="{{ partial "site-url.html" "/ai/" }}">AI</a>{{ end }}<a href="{{ site.Params.github | default "https://github.com/godxgun/godstack" }}">GitHub</a></nav><div class="top-actions"><button type="button" class="search-open" aria-haspopup="dialog" aria-controls="site-search">Search <kbd>⌘ K</kbd></button><noscript><a class="noscript-search" href="{{ with site.GetPage "/docs" }}{{ .RelPermalink }}{{ else }}{{ partial "site-url.html" "/docs/" }}{{ end }}">Browse docs</a></noscript></div></header>
+        {{ if eq .Section "demos" }}
+    <main id="main" class="demo-stage{{ if in (slice "demos/snake" "demos/grit") .Params.id }} focused-demo-stage{{ end }}" tabindex="-1">
+        {{ else }}
+        <div class="site-layout{{ if not $showSidebar }} landing-layout{{ end }}">
+            {{ if $showSidebar }}{{ partial "navigation.html" . }}{{ end }}
+            <main id="main" tabindex="-1">{{ end }}
+                {{ block "main" . }}{{ end }}</main>
+            {{ if ne .Section "demos" }}</div>{{ end }}
+            {{ if ne .Section "demos" }}
+                <footer class="site-footer"><span>Godstack · MIT License.</span><nav aria-label="Footer"><a href="{{ with site.GetPage "/docs" }}{{ .RelPermalink }}{{ else }}{{ partial "site-url.html" "/docs/" }}{{ end }}">Documentation</a><a href="{{ with site.GetPage "/demos" }}{{ .RelPermalink }}{{ else }}{{ partial "site-url.html" "/demos/" }}{{ end }}">Demos</a><a href="{{ with site.GetPage "/ai" }}{{ .RelPermalink }}{{ else }}{{ partial "site-url.html" "/ai/" }}{{ end }}">AI guide</a><a href="{{ with site.GetPage "/symbols" }}{{ .RelPermalink }}{{ else }}{{ partial "site-url.html" "/symbols/" }}{{ end }}">Symbols</a>{{ with site.Home.OutputFormats.Get "LLMs" }}<a href="{{ .RelPermalink }}">llms.txt</a>{{ end }}{{ with site.Home.OutputFormats.Get "Catalog" }}<a href="{{ .RelPermalink }}">Documentation index</a>{{ end }}<a href="{{ partial "site-url.html" "/agent/SKILL.md" }}">Agent skill</a><a href="{{ site.Params.github | default "https://github.com/godxgun/godstack" }}">GitHub</a><a href="{{ with site.GetPage "/license" }}{{ .RelPermalink }}{{ else }}{{ site.Params.github | default "https://github.com/godxgun/godstack" }}/blob/main/LICENSE{{ end }}">License</a></nav></footer>{{ end }}
+            <dialog class="search-dialog" id="site-search" aria-labelledby="search-title"><h2 id="search-title">Search</h2><form method="dialog"><label for="search-input">Search documentation</label><input id="search-input" type="search" placeholder="Search libraries, guides, and symbols…" autocomplete="off"><button value="close" aria-label="Close search">×</button></form><p class="search-status" role="status">Search libraries, guides, and symbols.<noscript> Browse the <a href="{{ with site.GetPage "/docs" }}{{ .RelPermalink }}{{ else }}{{ partial "site-url.html" "/docs/" }}{{ end }}">documentation index</a>.</noscript></p><div class="search-results" aria-live="polite"></div></dialog>
+            {{ $search := site.Home.OutputFormats.Get "Search" }}{{ $searchURL := partial "site-url.html" "search.json" }}{{ with $search }}{{ $searchURL = .RelPermalink }}{{ end }}
+            {{ $js := resources.Get "js/site.js" | resources.ExecuteAsTemplate "js/site.js" (dict "searchURL" $searchURL) | fingerprint }}<script src="{{ $js.RelPermalink }}" integrity="{{ $js.Data.Integrity }}" defer></script>
+            {{ with resources.Get "js/ocean.js" | fingerprint }}<script src="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" defer></script>{{ end }}
+            {{ with resources.Get "js/scrollbars.js" | fingerprint }}<script src="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" defer></script>{{ end }}
+    </body></html>

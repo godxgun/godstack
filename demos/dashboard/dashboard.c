@@ -840,7 +840,7 @@ static int dash_open(Dashboard *d, int argc, char **argv)
 	d->page = PAGE_SPECIMEN;
 
 	if (!d->headless) {
-		if (!(peak_demo_ctx = peak_init_legacy())) {
+		if (!(peak_demo_ctx = peak_init())) {
 			PFATAL("Failed to init Peak!");
 			return 0;
 		}
