@@ -9,17 +9,17 @@ For a minimal CPU-only start, copy Grit.h into your project and define GRIT_IMPL
 
 ## Essential links
 
-- Getting started: https://example.org/guides/getting-started/
-- Documentation index: https://example.org/docs/
-- Symbols: https://example.org/symbols/
-- Demo gallery: https://example.org/demos/
-- Documentation catalog: https://example.org/catalog.json
-- Choose a library: https://example.org/docs/
-- Agent instructions: https://example.org/ai/
-- Project skill: https://example.org/agent/SKILL.md
-- AGENTS.md snippet: https://example.org/agent/AGENTS.md
-- Full public documentation: https://example.org/llms-full.txt
+- Getting started: https://godxgun.github.io/godstack/guides/getting-started/
+- Documentation index: https://godxgun.github.io/godstack/docs/
+- Symbols: https://godxgun.github.io/godstack/symbols/
+- Demo gallery: https://godxgun.github.io/godstack/demos/
+- Documentation catalog: https://godxgun.github.io/godstack/catalog.json
+- Choose a library: https://godxgun.github.io/godstack/docs/
+- Agent instructions: https://godxgun.github.io/godstack/ai/
+- Project skill: https://godxgun.github.io/godstack/agent/SKILL.md
+- AGENTS.md snippet: https://godxgun.github.io/godstack/agent/AGENTS.md
+- Full public documentation: https://godxgun.github.io/godstack/llms-full.txt
 - Source: https://github.com/godxgun/godstack
-- License: https://example.org/license/
+- License: https://godxgun.github.io/godstack/license/
 
 Use the catalog's markdown_url for the relevant document rather than loading the full collection into every prompt. Verify APIs against the matching header. Do not confuse C browser examples with native execution, assume every detected platform is supported, or use ./build cpu (the current build driver accepts ./build demo <name>). Do not introduce dependencies or an MCP backend without approval.

@@ -1,12 +1,12 @@
 # Type symbols
 
-Documentation: https://example.org/symbols/type/
+Documentation: https://godxgun.github.io/godstack/symbols/type/
 Description: Types, macros, and functions declared by Type.h.
 
 
 # Type symbols
 
-For setup and API workflows, read the [Type guide](/docs/type/). This vault lists individual declarations; it is not a tutorial.
+For setup and API workflows, read the [Type guide](/godstack/docs/type/). This vault lists individual declarations; it is not a tutorial.
 
 <!-- BEGIN GENERATED API -->
 

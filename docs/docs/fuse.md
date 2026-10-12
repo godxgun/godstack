@@ -1,6 +1,6 @@
 # Fuse
 
-Documentation: https://example.org/docs/fuse/
+Documentation: https://godxgun.github.io/godstack/docs/fuse/
 Description: Set up caller-backed canvas storage, feed input, and render Fuse commands.
 
 
@@ -113,8 +113,8 @@ pixels. `FUSE_CMD_TEXT` comes from text boxes: `c->text.slot` indexes the `FuseF
 returned by `fuse_canvas_fields()`, which holds the string, size, color and caret position for a
 proportional font.
 
-`FuseRend.h` is an optional adapter that tessellates these commands for [Rend](/docs/rend/) and
-draws text with [Type](/docs/type/). It has its own implementation macro,
+`FuseRend.h` is an optional adapter that tessellates these commands for [Rend](/godstack/docs/rend/) and
+draws text with [Type](/godstack/docs/type/). It has its own implementation macro,
 `FUSE_REND_IMPLEMENTATION`.
 
 ## Laying Out with Classes
@@ -266,4 +266,4 @@ If a frame overflows a capacity, reuses an ID, or leaves a div or column open,
 `FUSE_ERR_UNBALANCED`), and the next `fuse_canvas_clear()` resets it. `fuse_canvas_debug(ui, true)`
 overlays element boxes and a tree view of the frame.
 
-See [Fuse symbols](/symbols/fuse/) for the generated declarations and header comments.
+See [Fuse symbols](/godstack/symbols/fuse/) for the generated declarations and header comments.

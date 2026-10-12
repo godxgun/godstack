@@ -1,12 +1,12 @@
 # Fuse symbols
 
-Documentation: https://example.org/symbols/fuse/
+Documentation: https://godxgun.github.io/godstack/symbols/fuse/
 Description: Types, macros, and functions declared by Fuse.h.
 
 
 # Fuse symbols
 
-For setup and API workflows, read the [Fuse guide](/docs/fuse/). This vault lists individual declarations; it is not a tutorial.
+For setup and API workflows, read the [Fuse guide](/godstack/docs/fuse/). This vault lists individual declarations; it is not a tutorial.
 
 <!-- BEGIN GENERATED API -->
 

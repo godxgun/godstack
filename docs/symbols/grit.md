@@ -1,12 +1,12 @@
 # Grit symbols
 
-Documentation: https://example.org/symbols/grit/
+Documentation: https://godxgun.github.io/godstack/symbols/grit/
 Description: Types, macros, and functions declared by Grit.h.
 
 
 # Grit symbols
 
-For setup and API workflows, read the [Grit guide](/docs/grit/). This vault lists individual declarations; it is not a tutorial.
+For setup and API workflows, read the [Grit guide](/godstack/docs/grit/). This vault lists individual declarations; it is not a tutorial.
 
 <!-- BEGIN GENERATED API -->
 

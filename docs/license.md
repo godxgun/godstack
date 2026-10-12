@@ -1,6 +1,6 @@
 # License
 
-Documentation: https://example.org/license/
+Documentation: https://godxgun.github.io/godstack/license/
 Description: Godstack is released under the MIT License.
 
 

@@ -1,6 +1,6 @@
 # Getting Started
 
-Documentation: https://example.org/guides/getting-started/
+Documentation: https://godxgun.github.io/godstack/guides/getting-started/
 Description: Compile a minimal C99 program that embeds the Grit single-header library.
 
 

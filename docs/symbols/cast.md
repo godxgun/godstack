@@ -1,12 +1,12 @@
 # Cast symbols
 
-Documentation: https://example.org/symbols/cast/
+Documentation: https://godxgun.github.io/godstack/symbols/cast/
 Description: Types, macros, and functions declared by Cast.h.
 
 
 # Cast symbols
 
-For setup and API workflows, read the [Cast guide](/docs/cast/). This vault lists individual declarations; it is not a tutorial.
+For setup and API workflows, read the [Cast guide](/godstack/docs/cast/). This vault lists individual declarations; it is not a tutorial.
 
 <!-- BEGIN GENERATED API -->
 

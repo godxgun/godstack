@@ -3,28 +3,28 @@
 Single-header C libraries for platform services, graphics, UI, text, and developer tools. Use only the headers your application needs.
 
 Source: https://github.com/godxgun/godstack
-License: MIT (https://example.org/license/)
+License: MIT (https://godxgun.github.io/godstack/license/)
 
 This file includes only the public documentation corpus used for the site's catalog, search, and Markdown outputs. It does not include private repository files or a runtime backend. Page boundaries and source URLs are provided below.
 
 
 ---
 
-<!-- BEGIN PAGE: /ai/ -->
+<!-- BEGIN PAGE: /godstack/ai/ -->
 # AI and agent documentation
 
-Documentation: https://example.org/ai/
-Markdown: https://example.org/ai.md
+Documentation: https://godxgun.github.io/godstack/ai/
+Markdown: https://godxgun.github.io/godstack/ai.md
 Description: Public machine-readable Godstack documentation endpoints and grounded guidance for coding agents.
 
 
 Godstack publishes documentation formats that coding assistants and other automated readers can fetch. These are static documentation resources, not an execution or tool backend:
 
-- [llms.txt](/llms.txt) is a compact index for discovering site content.
-- [llms-small.txt](/llms-small.txt) and [llms-full.txt](/llms-full.txt) provide different-sized text collections.
-- [catalog.json](/catalog.json) is a machine-readable content catalog.
-- Individual documentation pages have Markdown output, for example [Cast Markdown](/docs/cast.md) and [Getting started Markdown](/guides/getting-started.md).
-- Agent guidance is available as [SKILL.md](/agent/SKILL.md) and [AGENTS.md](/agent/AGENTS.md).
+- [llms.txt](/godstack/llms.txt) is a compact index for discovering site content.
+- [llms-small.txt](/godstack/llms-small.txt) and [llms-full.txt](/godstack/llms-full.txt) provide different-sized text collections.
+- [catalog.json](/godstack/catalog.json) is a machine-readable content catalog.
+- Individual documentation pages have Markdown output, for example [Cast Markdown](/godstack/docs/cast.md) and [Getting started Markdown](/godstack/guides/getting-started.md).
+- Agent guidance is available as [SKILL.md](/godstack/agent/SKILL.md) and [AGENTS.md](/godstack/agent/AGENTS.md).
 
 These are explicit URLs to fetch or link from your project; do not assume an editor discovers or loads them automatically. Availability and exact formats depend on the deployed site. There is no MCP server or backend currently available. A possible future MCP adapter could expose catalog search and documentation retrieval, but it does not exist today.
 
@@ -32,7 +32,7 @@ These are explicit URLs to fetch or link from your project; do not assume an edi
 
 ### Codex
 
-Fetch [llms-small.txt](/llms-small.txt) and the relevant page's Markdown (for example [Grit](/docs/grit.md)) into the repository, then link the local paths from `AGENTS.md` or a relevant nested `AGENTS.md`. Codex reads repository guidance files; it does not automatically discover this website's resources.
+Fetch [llms-small.txt](/godstack/llms-small.txt) and the relevant page's Markdown (for example [Grit](/godstack/docs/grit.md)) into the repository, then link the local paths from `AGENTS.md` or a relevant nested `AGENTS.md`. Codex reads repository guidance files; it does not automatically discover this website's resources.
 
 ```text
 In this repository, first read the local Godstack documentation index and the relevant library's Markdown page, then inspect the corresponding header and demo. Treat the header as the API source of truth. Keep the implementation macro in exactly one translation unit where required, respect documented limitations and ownership, and do not assume APIs from another library. If no local docs are present, fetch `/llms-small.txt` and the relevant `/docs/<library>.md` explicitly from this site's origin. Verify examples by compiling when feasible.
@@ -40,7 +40,7 @@ In this repository, first read the local Godstack documentation index and the re
 
 ### Claude Code
 
-Fetch [llms-small.txt](/llms-small.txt) and the relevant Markdown page, then place their paths and reading instructions in a project guidance file such as `CLAUDE.md` (or the applicable Claude Code project instructions). This file is optional project guidance; a URL alone does not make Claude fetch it.
+Fetch [llms-small.txt](/godstack/llms-small.txt) and the relevant Markdown page, then place their paths and reading instructions in a project guidance file such as `CLAUDE.md` (or the applicable Claude Code project instructions). This file is optional project guidance; a URL alone does not make Claude fetch it.
 
 ```text
 Before using a Godstack library, read the project-linked llms-small.txt and the relevant per-page Markdown, then inspect the corresponding C header and demo. Follow only documented APIs and limitations; preserve ownership/lifetime requirements and put any implementation macro in one translation unit. Fetch `/llms-small.txt` and the relevant `/docs/<library>.md` explicitly from this site's origin if local documentation is unavailable. Compile examples when feasible.
@@ -48,95 +48,95 @@ Before using a Godstack library, read the project-linked llms-small.txt and the 
 
 ### Cursor
 
-Fetch [llms-small.txt](/llms-small.txt) and the relevant Markdown page into project files and add them to Cursor's project context or reference them in project rules. Cursor does not automatically load these site URLs merely because this page mentions them.
+Fetch [llms-small.txt](/godstack/llms-small.txt) and the relevant Markdown page into project files and add them to Cursor's project context or reference them in project rules. Cursor does not automatically load these site URLs merely because this page mentions them.
 
 ```text
 Use the project-provided Godstack llms-small.txt and relevant library Markdown page as discovery aids, then verify APIs against the actual header and demo. Respect the header's version, constraints, and ownership rules. Do not infer unsupported symbols or platform support. If the project has no local docs, explicitly fetch `/llms-small.txt` and `/docs/<library>.md` from this site's origin before coding; compile examples where feasible.
 ```
 
 
-<!-- END PAGE: /ai/ -->
+<!-- END PAGE: /godstack/ai/ -->
 
 
 ---
 
-<!-- BEGIN PAGE: /demos/ -->
+<!-- BEGIN PAGE: /godstack/demos/ -->
 # Demos
 
-Documentation: https://example.org/demos/
-Markdown: https://example.org/demos/index.md
+Documentation: https://godxgun.github.io/godstack/demos/
+Markdown: https://godxgun.github.io/godstack/demos/index.md
 Description: Particle Observatory and 3D Snake, running shared native C code in the browser.
 
-- [Particle Observatory](https://example.org/demos/grit/): A luminous particle field driven by Grit pools, vectors, random numbers, and software rasterization. (browser)
-- [Snake](https://example.org/demos/snake/): A native and browser 3D Snake game built with Peak, Grit, and Rend. (browser)
+- [Particle Observatory](https://godxgun.github.io/godstack/demos/grit/): A luminous particle field driven by Grit pools, vectors, random numbers, and software rasterization. (browser)
+- [Snake](https://godxgun.github.io/godstack/demos/snake/): A native and browser 3D Snake game built with Peak, Grit, and Rend. (browser)
 
 
-<!-- END PAGE: /demos/ -->
+<!-- END PAGE: /godstack/demos/ -->
 
 
 ---
 
-<!-- BEGIN PAGE: /demos/grit/ -->
+<!-- BEGIN PAGE: /godstack/demos/grit/ -->
 # Particle Observatory
 
-Documentation: https://example.org/demos/grit/
-Markdown: https://example.org/demos/grit.md
+Documentation: https://godxgun.github.io/godstack/demos/grit/
+Markdown: https://godxgun.github.io/godstack/demos/grit.md
 Description: A luminous particle field driven by Grit pools, vectors, random numbers, and software rasterization.
 
 Source: https://github.com/godxgun/godstack/blob/main/demos/grit/demo.c
 
-[Load the compiled WebAssembly demo](/demos/grit/run.html)
+[Load the compiled WebAssembly demo](/godstack/demos/grit/run.html)
 
 This is a compiled C workload, not a browser C compiler.
 
 
-<!-- END PAGE: /demos/grit/ -->
+<!-- END PAGE: /godstack/demos/grit/ -->
 
 
 ---
 
-<!-- BEGIN PAGE: /demos/snake/ -->
+<!-- BEGIN PAGE: /godstack/demos/snake/ -->
 # Snake
 
-Documentation: https://example.org/demos/snake/
-Markdown: https://example.org/demos/snake.md
+Documentation: https://godxgun.github.io/godstack/demos/snake/
+Markdown: https://godxgun.github.io/godstack/demos/snake.md
 Description: A native and browser 3D Snake game built with Peak, Grit, and Rend.
 
 Source: https://github.com/godxgun/godstack/blob/main/demos/snake/snake.c
 
-[Load the compiled WebAssembly demo](/demos/snake/run.html)
+[Load the compiled WebAssembly demo](/godstack/demos/snake/run.html)
 
 This is a compiled C workload, not a browser C compiler.
 
 
-<!-- END PAGE: /demos/snake/ -->
+<!-- END PAGE: /godstack/demos/snake/ -->
 
 
 ---
 
-<!-- BEGIN PAGE: /docs/ -->
+<!-- BEGIN PAGE: /godstack/docs/ -->
 # Library guides
 
-Documentation: https://example.org/docs/
-Markdown: https://example.org/docs/index.md
+Documentation: https://godxgun.github.io/godstack/docs/
+Markdown: https://godxgun.github.io/godstack/docs/index.md
 Description: Task-oriented guides for using the Godstack C libraries, with separate symbols and demos catalogs.
 
 
 Choose a guide below to learn the workflow, storage rules, and limitations of a library.
-For individual declarations, use the [Symbols](/symbols/); to see the code working, open [Demos](/demos/).
+For individual declarations, use the [Symbols](/godstack/symbols/); to see the code working, open [Demos](/godstack/demos/).
 Reading a function list is not the same thing as having an integration plan.
 
 
-<!-- END PAGE: /docs/ -->
+<!-- END PAGE: /godstack/docs/ -->
 
 
 ---
 
-<!-- BEGIN PAGE: /docs/cast/ -->
+<!-- BEGIN PAGE: /godstack/docs/cast/ -->
 # Cast
 
-Documentation: https://example.org/docs/cast/
-Markdown: https://example.org/docs/cast.md
+Documentation: https://godxgun.github.io/godstack/docs/cast/
+Markdown: https://godxgun.github.io/godstack/docs/cast.md
 Description: A practical guide to tokenizing and walking C source with caller-owned memory.
 
 
@@ -317,19 +317,19 @@ call returns NULL for non-empty input, give it a larger buffer.
 next input. Everything returned before the clear becomes invalid. Cool's template transpiler,
 `CoolTranspiler.c`, uses Cast this way to read each template's parameter list.
 
-See [Cast symbols](/symbols/cast/) for the generated declarations.
+See [Cast symbols](/godstack/symbols/cast/) for the generated declarations.
 
 
-<!-- END PAGE: /docs/cast/ -->
+<!-- END PAGE: /godstack/docs/cast/ -->
 
 
 ---
 
-<!-- BEGIN PAGE: /docs/cool/ -->
+<!-- BEGIN PAGE: /godstack/docs/cool/ -->
 # Cool
 
-Documentation: https://example.org/docs/cool/
-Markdown: https://example.org/docs/cool.md
+Documentation: https://godxgun.github.io/godstack/docs/cool/
+Markdown: https://godxgun.github.io/godstack/docs/cool.md
 Description: Use Cool output helpers for escaped text, trusted markup, and a limited Markdown subset.
 
 
@@ -417,7 +417,7 @@ int main(void)
 }
 ```
 
-The repository's doc generator uses this pattern to answer [Wire](/docs/wire/) requests.
+The repository's doc generator uses this pattern to answer [Wire](/godstack/docs/wire/) requests.
 
 ## Rendering Markdown
 
@@ -498,19 +498,19 @@ strings inside quoted attributes in a template. See
 [`demos/doc-generator/`](https://github.com/godxgun/godstack/tree/main/demos/doc-generator) for a
 template, its generated C, and a server that renders it.
 
-See [Cool symbols](/symbols/cool/) for the generated declarations.
+See [Cool symbols](/godstack/symbols/cool/) for the generated declarations.
 
 
-<!-- END PAGE: /docs/cool/ -->
+<!-- END PAGE: /godstack/docs/cool/ -->
 
 
 ---
 
-<!-- BEGIN PAGE: /docs/fuse/ -->
+<!-- BEGIN PAGE: /godstack/docs/fuse/ -->
 # Fuse
 
-Documentation: https://example.org/docs/fuse/
-Markdown: https://example.org/docs/fuse.md
+Documentation: https://godxgun.github.io/godstack/docs/fuse/
+Markdown: https://godxgun.github.io/godstack/docs/fuse.md
 Description: Set up caller-backed canvas storage, feed input, and render Fuse commands.
 
 
@@ -623,8 +623,8 @@ pixels. `FUSE_CMD_TEXT` comes from text boxes: `c->text.slot` indexes the `FuseF
 returned by `fuse_canvas_fields()`, which holds the string, size, color and caret position for a
 proportional font.
 
-`FuseRend.h` is an optional adapter that tessellates these commands for [Rend](/docs/rend/) and
-draws text with [Type](/docs/type/). It has its own implementation macro,
+`FuseRend.h` is an optional adapter that tessellates these commands for [Rend](/godstack/docs/rend/) and
+draws text with [Type](/godstack/docs/type/). It has its own implementation macro,
 `FUSE_REND_IMPLEMENTATION`.
 
 ## Laying Out with Classes
@@ -776,19 +776,19 @@ If a frame overflows a capacity, reuses an ID, or leaves a div or column open,
 `FUSE_ERR_UNBALANCED`), and the next `fuse_canvas_clear()` resets it. `fuse_canvas_debug(ui, true)`
 overlays element boxes and a tree view of the frame.
 
-See [Fuse symbols](/symbols/fuse/) for the generated declarations and header comments.
+See [Fuse symbols](/godstack/symbols/fuse/) for the generated declarations and header comments.
 
 
-<!-- END PAGE: /docs/fuse/ -->
+<!-- END PAGE: /godstack/docs/fuse/ -->
 
 
 ---
 
-<!-- BEGIN PAGE: /docs/grit/ -->
+<!-- BEGIN PAGE: /godstack/docs/grit/ -->
 # Grit
 
-Documentation: https://example.org/docs/grit/
-Markdown: https://example.org/docs/grit.md
+Documentation: https://godxgun.github.io/godstack/docs/grit/
+Markdown: https://godxgun.github.io/godstack/docs/grit.md
 Description: Choose caller-backed allocators and use Grit utilities with explicit lifetimes.
 
 
@@ -1006,21 +1006,21 @@ bottom-right, bottom-left; triangles interpolate their three vertex colors; line
 blend from the first color to the second. `grit_draw_blit()` copies a block of pixels and
 `grit_draw_pixel()` sets one. To show the result in a window, upload the buffer with your platform
 layer, as the [Grit demo](https://github.com/godxgun/godstack/tree/main/demos/grit) does with
-[Peak](/docs/peak/).
+[Peak](/godstack/docs/peak/).
 
-See [Grit symbols](/symbols/grit/) for the generated declarations.
+See [Grit symbols](/godstack/symbols/grit/) for the generated declarations.
 
 
-<!-- END PAGE: /docs/grit/ -->
+<!-- END PAGE: /godstack/docs/grit/ -->
 
 
 ---
 
-<!-- BEGIN PAGE: /docs/peak/ -->
+<!-- BEGIN PAGE: /godstack/docs/peak/ -->
 # Peak
 
-Documentation: https://example.org/docs/peak/
-Markdown: https://example.org/docs/peak.md
+Documentation: https://godxgun.github.io/godstack/docs/peak/
+Markdown: https://godxgun.github.io/godstack/docs/peak.md
 Description: Set up Peak runtime contexts and a platform event loop with target-specific dependencies.
 
 
@@ -1120,7 +1120,7 @@ if (!peak_filesystem_rm("peak-note-copy.txt")) return 1;
 Use `peak_filesystem_cwd()` and `peak_filesystem_chdir()` to inspect or change the working
 directory. `peak_filesystem_mkdir()` creates one directory level, and `peak_filesystem_list()`
 calls your callback for each entry. For bounded, directory-handle-based I/O on supported Linux
-systems, see the `peak_io_*` API in the [symbol reference](/symbols/peak/).
+systems, see the `peak_io_*` API in the [symbol reference](/godstack/symbols/peak/).
 
 ## Spawning a TTY
 
@@ -1198,16 +1198,16 @@ peak_audio_stop();
 
 
 
-<!-- END PAGE: /docs/peak/ -->
+<!-- END PAGE: /godstack/docs/peak/ -->
 
 
 ---
 
-<!-- BEGIN PAGE: /docs/poof/ -->
+<!-- BEGIN PAGE: /godstack/docs/poof/ -->
 # Poof
 
-Documentation: https://example.org/docs/poof/
-Markdown: https://example.org/docs/poof.md
+Documentation: https://godxgun.github.io/godstack/docs/poof/
+Markdown: https://godxgun.github.io/godstack/docs/poof.md
 Description: Construct process commands and compiler configurations with Poof.
 
 
@@ -1390,19 +1390,19 @@ if (POOF_IS_SET(simd, POOF_AVX2)) poof_print(0x888888, "using AVX2 paths\n");
 This repository's own [`build.c`](https://github.com/godxgun/godstack/blob/main/build.c) is a
 full example: run `cc build.c -o build` and then `./build demo <name>` from the repository root.
 
-See [Poof symbols](/symbols/poof/) for all declarations.
+See [Poof symbols](/godstack/symbols/poof/) for all declarations.
 
 
-<!-- END PAGE: /docs/poof/ -->
+<!-- END PAGE: /godstack/docs/poof/ -->
 
 
 ---
 
-<!-- BEGIN PAGE: /docs/rend/ -->
+<!-- BEGIN PAGE: /godstack/docs/rend/ -->
 # Rend
 
-Documentation: https://example.org/docs/rend/
-Markdown: https://example.org/docs/rend.md
+Documentation: https://godxgun.github.io/godstack/docs/rend/
+Markdown: https://godxgun.github.io/godstack/docs/rend.md
 Description: Use legacy Rend with Peak on native Vulkan and browser WebGL2.
 
 
@@ -1428,7 +1428,7 @@ omitted for Emscripten:
 #include "Rend.h"
 ```
 
-See the [Peak guide](/docs/peak/) for platform dependencies and window setup.
+See the [Peak guide](/godstack/docs/peak/) for platform dependencies and window setup.
 
 ## Creating a Renderer
 
@@ -1602,16 +1602,16 @@ pipeline provides the matching shader for each backend.
 
 
 
-<!-- END PAGE: /docs/rend/ -->
+<!-- END PAGE: /godstack/docs/rend/ -->
 
 
 ---
 
-<!-- BEGIN PAGE: /docs/type/ -->
+<!-- BEGIN PAGE: /godstack/docs/type/ -->
 # Type
 
-Documentation: https://example.org/docs/type/
-Markdown: https://example.org/docs/type.md
+Documentation: https://godxgun.github.io/godstack/docs/type/
+Markdown: https://godxgun.github.io/godstack/docs/type.md
 Description: Place a Type context, load font bytes, and lay out and rasterize glyphs into a coverage atlas.
 
 
@@ -1898,19 +1898,19 @@ truncated sequence; `type_utf8_validate()` checks a whole string.
 Color emoji are not rendered, `TYPE_AA_SDF` returns `TYPE_ERR_UNIMPLEMENTED`, and the character
 width and emoji queries (`type_width()`, `type_is_emoji()` and related calls) are placeholders.
 
-See [Type symbols](/symbols/type/) for the generated declarations and their full contracts.
+See [Type symbols](/godstack/symbols/type/) for the generated declarations and their full contracts.
 
 
-<!-- END PAGE: /docs/type/ -->
+<!-- END PAGE: /godstack/docs/type/ -->
 
 
 ---
 
-<!-- BEGIN PAGE: /docs/wire/ -->
+<!-- BEGIN PAGE: /godstack/docs/wire/ -->
 # Wire
 
-Documentation: https://example.org/docs/wire/
-Markdown: https://example.org/docs/wire.md
+Documentation: https://godxgun.github.io/godstack/docs/wire/
+Markdown: https://godxgun.github.io/godstack/docs/wire.md
 Description: Handle GET requests with Wire on Unix and understand its deliberately narrow HTTP scope.
 
 
@@ -1982,7 +1982,7 @@ static int route(int fd, const WireHttpRequest *req, void *user)
 
 `wire_http_error()` writes a small HTML page such as `<h1>404 Not Found</h1>`. The path comes from
 the client: escape it before echoing it into HTML, for example with
-[Cool](/docs/cool/)'s `cool_html_txt()`.
+[Cool](/godstack/docs/cool/)'s `cool_html_txt()`.
 
 ## Serving Static Files
 
@@ -2063,35 +2063,35 @@ Wire handles one connection at a time and has no timeouts, so a slow client dela
 There is no keep-alive, TLS, request body, chunked encoding or header access beyond `HX-Request`.
 Put it behind a reverse proxy, or use a larger server, when you need those.
 
-See [Wire symbols](/symbols/wire/) for the generated declarations.
+See [Wire symbols](/godstack/symbols/wire/) for the generated declarations.
 
 
-<!-- END PAGE: /docs/wire/ -->
+<!-- END PAGE: /godstack/docs/wire/ -->
 
 
 ---
 
-<!-- BEGIN PAGE: /guides/ -->
+<!-- BEGIN PAGE: /godstack/guides/ -->
 # Guides
 
-Documentation: https://example.org/guides/
-Markdown: https://example.org/guides/index.md
+Documentation: https://godxgun.github.io/godstack/guides/
+Markdown: https://godxgun.github.io/godstack/guides/index.md
 Description: Practical introductions to building projects with Godstack libraries.
 
 
-Start with [Getting started](/guides/getting-started/) for a small, CPU-only C99 example. Then visit the [library documentation](/docs/) for focused introductions and API references.
+Start with [Getting started](/godstack/guides/getting-started/) for a small, CPU-only C99 example. Then visit the [library documentation](/godstack/docs/) for focused introductions and API references.
 
 
-<!-- END PAGE: /guides/ -->
+<!-- END PAGE: /godstack/guides/ -->
 
 
 ---
 
-<!-- BEGIN PAGE: /guides/getting-started/ -->
+<!-- BEGIN PAGE: /godstack/guides/getting-started/ -->
 # Getting Started
 
-Documentation: https://example.org/guides/getting-started/
-Markdown: https://example.org/guides/getting-started.md
+Documentation: https://godxgun.github.io/godstack/guides/getting-started/
+Markdown: https://godxgun.github.io/godstack/guides/getting-started.md
 Description: Compile a minimal C99 program that embeds the Grit single-header library.
 
 
@@ -2117,16 +2117,16 @@ You don't have to use poof if you prefer other tools, but it is quite convenient
 
 
 
-<!-- END PAGE: /guides/getting-started/ -->
+<!-- END PAGE: /godstack/guides/getting-started/ -->
 
 
 ---
 
-<!-- BEGIN PAGE: /license/ -->
+<!-- BEGIN PAGE: /godstack/license/ -->
 # License
 
-Documentation: https://example.org/license/
-Markdown: https://example.org/license.md
+Documentation: https://godxgun.github.io/godstack/license/
+Markdown: https://godxgun.github.io/godstack/license.md
 Description: Godstack is released under the MIT License.
 
 
@@ -2147,40 +2147,40 @@ Contributions are accepted under the same MIT terms. See [CONTRIBUTING.md](https
 Previously released versions keep the license they were published under, including MIT where originally supplied.
 
 
-<!-- END PAGE: /license/ -->
+<!-- END PAGE: /godstack/license/ -->
 
 
 ---
 
-<!-- BEGIN PAGE: /symbols/ -->
+<!-- BEGIN PAGE: /godstack/symbols/ -->
 # Symbols
 
-Documentation: https://example.org/symbols/
-Markdown: https://example.org/symbols/index.md
+Documentation: https://godxgun.github.io/godstack/symbols/
+Markdown: https://godxgun.github.io/godstack/symbols/index.md
 Description: Search or browse individual Godstack API declarations, separate from the task-oriented guides.
 
 
 Look up an exact symbol with search, or choose a library below. Declarations and comments come from the public headers; all platform branches are listed, not all promises are portable.
 
-Learning the API? Start with the [library guides](/docs/). This is the reference shelf, not the lesson plan.
+Learning the API? Start with the [library guides](/godstack/docs/). This is the reference shelf, not the lesson plan.
 
 
-<!-- END PAGE: /symbols/ -->
+<!-- END PAGE: /godstack/symbols/ -->
 
 
 ---
 
-<!-- BEGIN PAGE: /symbols/cast/ -->
+<!-- BEGIN PAGE: /godstack/symbols/cast/ -->
 # Cast symbols
 
-Documentation: https://example.org/symbols/cast/
-Markdown: https://example.org/symbols/cast.md
+Documentation: https://godxgun.github.io/godstack/symbols/cast/
+Markdown: https://godxgun.github.io/godstack/symbols/cast.md
 Description: Types, macros, and functions declared by Cast.h.
 
 
 # Cast symbols
 
-For setup and API workflows, read the [Cast guide](/docs/cast/). This vault lists individual declarations; it is not a tutorial.
+For setup and API workflows, read the [Cast guide](/godstack/docs/cast/). This vault lists individual declarations; it is not a tutorial.
 
 <!-- BEGIN GENERATED API -->
 
@@ -2332,22 +2332,22 @@ Does not free. Clears the Arena so you can reuse the memory.
 <!-- END GENERATED API -->
 
 
-<!-- END PAGE: /symbols/cast/ -->
+<!-- END PAGE: /godstack/symbols/cast/ -->
 
 
 ---
 
-<!-- BEGIN PAGE: /symbols/cool/ -->
+<!-- BEGIN PAGE: /godstack/symbols/cool/ -->
 # Cool symbols
 
-Documentation: https://example.org/symbols/cool/
-Markdown: https://example.org/symbols/cool.md
+Documentation: https://godxgun.github.io/godstack/symbols/cool/
+Markdown: https://godxgun.github.io/godstack/symbols/cool.md
 Description: Types, macros, and functions declared by Cool.h.
 
 
 # Cool symbols
 
-For setup and API workflows, read the [Cool guide](/docs/cool/). This vault lists individual declarations; it is not a tutorial.
+For setup and API workflows, read the [Cool guide](/godstack/docs/cool/). This vault lists individual declarations; it is not a tutorial.
 
 <!-- BEGIN GENERATED API -->
 
@@ -2435,22 +2435,22 @@ Markdown subset to HTML. Not CommonMark.
 <!-- END GENERATED API -->
 
 
-<!-- END PAGE: /symbols/cool/ -->
+<!-- END PAGE: /godstack/symbols/cool/ -->
 
 
 ---
 
-<!-- BEGIN PAGE: /symbols/fuse/ -->
+<!-- BEGIN PAGE: /godstack/symbols/fuse/ -->
 # Fuse symbols
 
-Documentation: https://example.org/symbols/fuse/
-Markdown: https://example.org/symbols/fuse.md
+Documentation: https://godxgun.github.io/godstack/symbols/fuse/
+Markdown: https://godxgun.github.io/godstack/symbols/fuse.md
 Description: Types, macros, and functions declared by Fuse.h.
 
 
 # Fuse symbols
 
-For setup and API workflows, read the [Fuse guide](/docs/fuse/). This vault lists individual declarations; it is not a tutorial.
+For setup and API workflows, read the [Fuse guide](/godstack/docs/fuse/). This vault lists individual declarations; it is not a tutorial.
 
 <!-- BEGIN GENERATED API -->
 
@@ -3585,22 +3585,22 @@ void fuse_dock_feedback(FuseDock *, FuseCanvas, uint32_t color);
 <!-- END GENERATED API -->
 
 
-<!-- END PAGE: /symbols/fuse/ -->
+<!-- END PAGE: /godstack/symbols/fuse/ -->
 
 
 ---
 
-<!-- BEGIN PAGE: /symbols/grit/ -->
+<!-- BEGIN PAGE: /godstack/symbols/grit/ -->
 # Grit symbols
 
-Documentation: https://example.org/symbols/grit/
-Markdown: https://example.org/symbols/grit.md
+Documentation: https://godxgun.github.io/godstack/symbols/grit/
+Markdown: https://godxgun.github.io/godstack/symbols/grit.md
 Description: Types, macros, and functions declared by Grit.h.
 
 
 # Grit symbols
 
-For setup and API workflows, read the [Grit guide](/docs/grit/). This vault lists individual declarations; it is not a tutorial.
+For setup and API workflows, read the [Grit guide](/godstack/docs/grit/). This vault lists individual declarations; it is not a tutorial.
 
 <!-- BEGIN GENERATED API -->
 
@@ -4369,22 +4369,22 @@ void grit_draw_circle(GritDraw *d, int cx, int cy, int radius, uint32_t color);
 <!-- END GENERATED API -->
 
 
-<!-- END PAGE: /symbols/grit/ -->
+<!-- END PAGE: /godstack/symbols/grit/ -->
 
 
 ---
 
-<!-- BEGIN PAGE: /symbols/peak/ -->
+<!-- BEGIN PAGE: /godstack/symbols/peak/ -->
 # Peak symbols
 
-Documentation: https://example.org/symbols/peak/
-Markdown: https://example.org/symbols/peak.md
+Documentation: https://godxgun.github.io/godstack/symbols/peak/
+Markdown: https://godxgun.github.io/godstack/symbols/peak.md
 Description: Types, macros, and functions declared by Peak.h.
 
 
 # Peak symbols
 
-For setup and API workflows, read the [Peak guide](/docs/peak/). This vault lists individual declarations; it is not a tutorial.
+For setup and API workflows, read the [Peak guide](/godstack/docs/peak/). This vault lists individual declarations; it is not a tutorial.
 
 <!-- BEGIN GENERATED API -->
 
@@ -5882,22 +5882,22 @@ Unknown-pointer operations clear completeness; no release is invented.
 <!-- END GENERATED API -->
 
 
-<!-- END PAGE: /symbols/peak/ -->
+<!-- END PAGE: /godstack/symbols/peak/ -->
 
 
 ---
 
-<!-- BEGIN PAGE: /symbols/poof/ -->
+<!-- BEGIN PAGE: /godstack/symbols/poof/ -->
 # Poof symbols
 
-Documentation: https://example.org/symbols/poof/
-Markdown: https://example.org/symbols/poof.md
+Documentation: https://godxgun.github.io/godstack/symbols/poof/
+Markdown: https://godxgun.github.io/godstack/symbols/poof.md
 Description: Types, macros, and functions declared by Poof.h.
 
 
 # Poof symbols
 
-For setup and API workflows, read the [Poof guide](/docs/poof/). This vault lists individual declarations; it is not a tutorial.
+For setup and API workflows, read the [Poof guide](/godstack/docs/poof/). This vault lists individual declarations; it is not a tutorial.
 
 <!-- BEGIN GENERATED API -->
 
@@ -6318,22 +6318,22 @@ Rebuild self macro
 <!-- END GENERATED API -->
 
 
-<!-- END PAGE: /symbols/poof/ -->
+<!-- END PAGE: /godstack/symbols/poof/ -->
 
 
 ---
 
-<!-- BEGIN PAGE: /symbols/rend/ -->
+<!-- BEGIN PAGE: /godstack/symbols/rend/ -->
 # Rend symbols
 
-Documentation: https://example.org/symbols/rend/
-Markdown: https://example.org/symbols/rend.md
+Documentation: https://godxgun.github.io/godstack/symbols/rend/
+Markdown: https://godxgun.github.io/godstack/symbols/rend.md
 Description: Types, macros, and functions declared by Rend.h.
 
 
 # Rend symbols
 
-For setup and API workflows, read the [Rend guide](/docs/rend/). This vault lists individual declarations; it is not a tutorial.
+For setup and API workflows, read the [Rend guide](/godstack/docs/rend/). This vault lists individual declarations; it is not a tutorial.
 
 <!-- BEGIN GENERATED API -->
 
@@ -7203,22 +7203,22 @@ Blit. dst may be color_target(). Inside a frame, outside a pass. color_target st
 <!-- END GENERATED API -->
 
 
-<!-- END PAGE: /symbols/rend/ -->
+<!-- END PAGE: /godstack/symbols/rend/ -->
 
 
 ---
 
-<!-- BEGIN PAGE: /symbols/type/ -->
+<!-- BEGIN PAGE: /godstack/symbols/type/ -->
 # Type symbols
 
-Documentation: https://example.org/symbols/type/
-Markdown: https://example.org/symbols/type.md
+Documentation: https://godxgun.github.io/godstack/symbols/type/
+Markdown: https://godxgun.github.io/godstack/symbols/type.md
 Description: Types, macros, and functions declared by Type.h.
 
 
 # Type symbols
 
-For setup and API workflows, read the [Type guide](/docs/type/). This vault lists individual declarations; it is not a tutorial.
+For setup and API workflows, read the [Type guide](/godstack/docs/type/). This vault lists individual declarations; it is not a tutorial.
 
 <!-- BEGIN GENERATED API -->
 
@@ -8316,22 +8316,22 @@ int type_is_combining(uint32_t codepoint);
 <!-- END GENERATED API -->
 
 
-<!-- END PAGE: /symbols/type/ -->
+<!-- END PAGE: /godstack/symbols/type/ -->
 
 
 ---
 
-<!-- BEGIN PAGE: /symbols/wire/ -->
+<!-- BEGIN PAGE: /godstack/symbols/wire/ -->
 # Wire symbols
 
-Documentation: https://example.org/symbols/wire/
-Markdown: https://example.org/symbols/wire.md
+Documentation: https://godxgun.github.io/godstack/symbols/wire/
+Markdown: https://godxgun.github.io/godstack/symbols/wire.md
 Description: Types, macros, and functions declared by Wire.h.
 
 
 # Wire symbols
 
-For setup and API workflows, read the [Wire guide](/docs/wire/). This vault lists individual declarations; it is not a tutorial.
+For setup and API workflows, read the [Wire guide](/godstack/docs/wire/). This vault lists individual declarations; it is not a tutorial.
 
 <!-- BEGIN GENERATED API -->
 
@@ -8438,5 +8438,5 @@ GET /static/* from ./static. Returns status.
 <!-- END GENERATED API -->
 
 
-<!-- END PAGE: /symbols/wire/ -->
+<!-- END PAGE: /godstack/symbols/wire/ -->
 

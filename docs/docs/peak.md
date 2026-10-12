@@ -1,6 +1,6 @@
 # Peak
 
-Documentation: https://example.org/docs/peak/
+Documentation: https://godxgun.github.io/godstack/docs/peak/
 Description: Set up Peak runtime contexts and a platform event loop with target-specific dependencies.
 
 
@@ -100,7 +100,7 @@ if (!peak_filesystem_rm("peak-note-copy.txt")) return 1;
 Use `peak_filesystem_cwd()` and `peak_filesystem_chdir()` to inspect or change the working
 directory. `peak_filesystem_mkdir()` creates one directory level, and `peak_filesystem_list()`
 calls your callback for each entry. For bounded, directory-handle-based I/O on supported Linux
-systems, see the `peak_io_*` API in the [symbol reference](/symbols/peak/).
+systems, see the `peak_io_*` API in the [symbol reference](/godstack/symbols/peak/).
 
 ## Spawning a TTY
 

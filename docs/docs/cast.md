@@ -1,6 +1,6 @@
 # Cast
 
-Documentation: https://example.org/docs/cast/
+Documentation: https://godxgun.github.io/godstack/docs/cast/
 Description: A practical guide to tokenizing and walking C source with caller-owned memory.
 
 
@@ -181,4 +181,4 @@ call returns NULL for non-empty input, give it a larger buffer.
 next input. Everything returned before the clear becomes invalid. Cool's template transpiler,
 `CoolTranspiler.c`, uses Cast this way to read each template's parameter list.
 
-See [Cast symbols](/symbols/cast/) for the generated declarations.
+See [Cast symbols](/godstack/symbols/cast/) for the generated declarations.

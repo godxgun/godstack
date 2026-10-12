@@ -1,6 +1,6 @@
 # Cool
 
-Documentation: https://example.org/docs/cool/
+Documentation: https://godxgun.github.io/godstack/docs/cool/
 Description: Use Cool output helpers for escaped text, trusted markup, and a limited Markdown subset.
 
 
@@ -88,7 +88,7 @@ int main(void)
 }
 ```
 
-The repository's doc generator uses this pattern to answer [Wire](/docs/wire/) requests.
+The repository's doc generator uses this pattern to answer [Wire](/godstack/docs/wire/) requests.
 
 ## Rendering Markdown
 
@@ -169,4 +169,4 @@ strings inside quoted attributes in a template. See
 [`demos/doc-generator/`](https://github.com/godxgun/godstack/tree/main/demos/doc-generator) for a
 template, its generated C, and a server that renders it.
 
-See [Cool symbols](/symbols/cool/) for the generated declarations.
+See [Cool symbols](/godstack/symbols/cool/) for the generated declarations.

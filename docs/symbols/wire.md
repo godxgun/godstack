@@ -1,12 +1,12 @@
 # Wire symbols
 
-Documentation: https://example.org/symbols/wire/
+Documentation: https://godxgun.github.io/godstack/symbols/wire/
 Description: Types, macros, and functions declared by Wire.h.
 
 
 # Wire symbols
 
-For setup and API workflows, read the [Wire guide](/docs/wire/). This vault lists individual declarations; it is not a tutorial.
+For setup and API workflows, read the [Wire guide](/godstack/docs/wire/). This vault lists individual declarations; it is not a tutorial.
 
 <!-- BEGIN GENERATED API -->
 

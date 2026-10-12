@@ -6,72 +6,72 @@ Godstack is an MIT-licensed collection of single-header C libraries. Headers and
 
 ## Start here
 
-- [Getting started](https://example.org/guides/getting-started/): compile a minimal program.
-- [Libraries](https://example.org/docs/): choose a library.
-- [AI instructions](https://example.org/ai/): prompts for Codex, Claude, and Cursor.
-- [Compact setup](https://example.org/llms-small.txt).
-- [Complete public documentation](https://example.org/llms-full.txt).
-- [Catalog](https://example.org/catalog.json): IDs, descriptions, tags, HTML and Markdown URLs.
-- [Project skill](https://example.org/agent/SKILL.md).
-- [AGENTS.md snippet](https://example.org/agent/AGENTS.md).
+- [Getting started](https://godxgun.github.io/godstack/guides/getting-started/): compile a minimal program.
+- [Libraries](https://godxgun.github.io/godstack/docs/): choose a library.
+- [AI instructions](https://godxgun.github.io/godstack/ai/): prompts for Codex, Claude, and Cursor.
+- [Compact setup](https://godxgun.github.io/godstack/llms-small.txt).
+- [Complete public documentation](https://godxgun.github.io/godstack/llms-full.txt).
+- [Catalog](https://godxgun.github.io/godstack/catalog.json): IDs, descriptions, tags, HTML and Markdown URLs.
+- [Project skill](https://godxgun.github.io/godstack/agent/SKILL.md).
+- [AGENTS.md snippet](https://godxgun.github.io/godstack/agent/AGENTS.md).
 - [Source](https://github.com/godxgun/godstack).
-- [License](https://example.org/license/).
+- [License](https://godxgun.github.io/godstack/license/).
 
 ## Public documentation
 
-- [AI and agent documentation](https://example.org/ai/): Public machine-readable Godstack documentation endpoints and grounded guidance for coding agents. ([Markdown](https://example.org/ai.md))
+- [AI and agent documentation](https://godxgun.github.io/godstack/ai/): Public machine-readable Godstack documentation endpoints and grounded guidance for coding agents. ([Markdown](https://godxgun.github.io/godstack/ai.md))
 
-- [Demos](https://example.org/demos/): Particle Observatory and 3D Snake, running shared native C code in the browser. ([Markdown](https://example.org/demos/index.md))
+- [Demos](https://godxgun.github.io/godstack/demos/): Particle Observatory and 3D Snake, running shared native C code in the browser. ([Markdown](https://godxgun.github.io/godstack/demos/index.md))
 
-- [Particle Observatory](https://example.org/demos/grit/): A luminous particle field driven by Grit pools, vectors, random numbers, and software rasterization. ([Markdown](https://example.org/demos/grit.md))
+- [Particle Observatory](https://godxgun.github.io/godstack/demos/grit/): A luminous particle field driven by Grit pools, vectors, random numbers, and software rasterization. ([Markdown](https://godxgun.github.io/godstack/demos/grit.md))
 
-- [Snake](https://example.org/demos/snake/): A native and browser 3D Snake game built with Peak, Grit, and Rend. ([Markdown](https://example.org/demos/snake.md))
+- [Snake](https://godxgun.github.io/godstack/demos/snake/): A native and browser 3D Snake game built with Peak, Grit, and Rend. ([Markdown](https://godxgun.github.io/godstack/demos/snake.md))
 
-- [Library guides](https://example.org/docs/): Task-oriented guides for using the Godstack C libraries, with separate symbols and demos catalogs. ([Markdown](https://example.org/docs/index.md))
+- [Library guides](https://godxgun.github.io/godstack/docs/): Task-oriented guides for using the Godstack C libraries, with separate symbols and demos catalogs. ([Markdown](https://godxgun.github.io/godstack/docs/index.md))
 
-- [Cast](https://example.org/docs/cast/): A practical guide to tokenizing and walking C source with caller-owned memory. ([Markdown](https://example.org/docs/cast.md))
+- [Cast](https://godxgun.github.io/godstack/docs/cast/): A practical guide to tokenizing and walking C source with caller-owned memory. ([Markdown](https://godxgun.github.io/godstack/docs/cast.md))
 
-- [Cool](https://example.org/docs/cool/): Use Cool output helpers for escaped text, trusted markup, and a limited Markdown subset. ([Markdown](https://example.org/docs/cool.md))
+- [Cool](https://godxgun.github.io/godstack/docs/cool/): Use Cool output helpers for escaped text, trusted markup, and a limited Markdown subset. ([Markdown](https://godxgun.github.io/godstack/docs/cool.md))
 
-- [Fuse](https://example.org/docs/fuse/): Set up caller-backed canvas storage, feed input, and render Fuse commands. ([Markdown](https://example.org/docs/fuse.md))
+- [Fuse](https://godxgun.github.io/godstack/docs/fuse/): Set up caller-backed canvas storage, feed input, and render Fuse commands. ([Markdown](https://godxgun.github.io/godstack/docs/fuse.md))
 
-- [Grit](https://example.org/docs/grit/): Choose caller-backed allocators and use Grit utilities with explicit lifetimes. ([Markdown](https://example.org/docs/grit.md))
+- [Grit](https://godxgun.github.io/godstack/docs/grit/): Choose caller-backed allocators and use Grit utilities with explicit lifetimes. ([Markdown](https://godxgun.github.io/godstack/docs/grit.md))
 
-- [Peak](https://example.org/docs/peak/): Set up Peak runtime contexts and a platform event loop with target-specific dependencies. ([Markdown](https://example.org/docs/peak.md))
+- [Peak](https://godxgun.github.io/godstack/docs/peak/): Set up Peak runtime contexts and a platform event loop with target-specific dependencies. ([Markdown](https://godxgun.github.io/godstack/docs/peak.md))
 
-- [Poof](https://example.org/docs/poof/): Construct process commands and compiler configurations with Poof. ([Markdown](https://example.org/docs/poof.md))
+- [Poof](https://godxgun.github.io/godstack/docs/poof/): Construct process commands and compiler configurations with Poof. ([Markdown](https://godxgun.github.io/godstack/docs/poof.md))
 
-- [Rend](https://example.org/docs/rend/): Use legacy Rend with Peak on native Vulkan and browser WebGL2. ([Markdown](https://example.org/docs/rend.md))
+- [Rend](https://godxgun.github.io/godstack/docs/rend/): Use legacy Rend with Peak on native Vulkan and browser WebGL2. ([Markdown](https://godxgun.github.io/godstack/docs/rend.md))
 
-- [Type](https://example.org/docs/type/): Place a Type context, load font bytes, and lay out and rasterize glyphs into a coverage atlas. ([Markdown](https://example.org/docs/type.md))
+- [Type](https://godxgun.github.io/godstack/docs/type/): Place a Type context, load font bytes, and lay out and rasterize glyphs into a coverage atlas. ([Markdown](https://godxgun.github.io/godstack/docs/type.md))
 
-- [Wire](https://example.org/docs/wire/): Handle GET requests with Wire on Unix and understand its deliberately narrow HTTP scope. ([Markdown](https://example.org/docs/wire.md))
+- [Wire](https://godxgun.github.io/godstack/docs/wire/): Handle GET requests with Wire on Unix and understand its deliberately narrow HTTP scope. ([Markdown](https://godxgun.github.io/godstack/docs/wire.md))
 
-- [Guides](https://example.org/guides/): Practical introductions to building projects with Godstack libraries. ([Markdown](https://example.org/guides/index.md))
+- [Guides](https://godxgun.github.io/godstack/guides/): Practical introductions to building projects with Godstack libraries. ([Markdown](https://godxgun.github.io/godstack/guides/index.md))
 
-- [Getting Started](https://example.org/guides/getting-started/): Compile a minimal C99 program that embeds the Grit single-header library. ([Markdown](https://example.org/guides/getting-started.md))
+- [Getting Started](https://godxgun.github.io/godstack/guides/getting-started/): Compile a minimal C99 program that embeds the Grit single-header library. ([Markdown](https://godxgun.github.io/godstack/guides/getting-started.md))
 
-- [License](https://example.org/license/): Godstack is released under the MIT License. ([Markdown](https://example.org/license.md))
+- [License](https://godxgun.github.io/godstack/license/): Godstack is released under the MIT License. ([Markdown](https://godxgun.github.io/godstack/license.md))
 
-- [Symbols](https://example.org/symbols/): Search or browse individual Godstack API declarations, separate from the task-oriented guides. ([Markdown](https://example.org/symbols/index.md))
+- [Symbols](https://godxgun.github.io/godstack/symbols/): Search or browse individual Godstack API declarations, separate from the task-oriented guides. ([Markdown](https://godxgun.github.io/godstack/symbols/index.md))
 
-- [Cast symbols](https://example.org/symbols/cast/): Types, macros, and functions declared by Cast.h. ([Markdown](https://example.org/symbols/cast.md))
+- [Cast symbols](https://godxgun.github.io/godstack/symbols/cast/): Types, macros, and functions declared by Cast.h. ([Markdown](https://godxgun.github.io/godstack/symbols/cast.md))
 
-- [Cool symbols](https://example.org/symbols/cool/): Types, macros, and functions declared by Cool.h. ([Markdown](https://example.org/symbols/cool.md))
+- [Cool symbols](https://godxgun.github.io/godstack/symbols/cool/): Types, macros, and functions declared by Cool.h. ([Markdown](https://godxgun.github.io/godstack/symbols/cool.md))
 
-- [Fuse symbols](https://example.org/symbols/fuse/): Types, macros, and functions declared by Fuse.h. ([Markdown](https://example.org/symbols/fuse.md))
+- [Fuse symbols](https://godxgun.github.io/godstack/symbols/fuse/): Types, macros, and functions declared by Fuse.h. ([Markdown](https://godxgun.github.io/godstack/symbols/fuse.md))
 
-- [Grit symbols](https://example.org/symbols/grit/): Types, macros, and functions declared by Grit.h. ([Markdown](https://example.org/symbols/grit.md))
+- [Grit symbols](https://godxgun.github.io/godstack/symbols/grit/): Types, macros, and functions declared by Grit.h. ([Markdown](https://godxgun.github.io/godstack/symbols/grit.md))
 
-- [Peak symbols](https://example.org/symbols/peak/): Types, macros, and functions declared by Peak.h. ([Markdown](https://example.org/symbols/peak.md))
+- [Peak symbols](https://godxgun.github.io/godstack/symbols/peak/): Types, macros, and functions declared by Peak.h. ([Markdown](https://godxgun.github.io/godstack/symbols/peak.md))
 
-- [Poof symbols](https://example.org/symbols/poof/): Types, macros, and functions declared by Poof.h. ([Markdown](https://example.org/symbols/poof.md))
+- [Poof symbols](https://godxgun.github.io/godstack/symbols/poof/): Types, macros, and functions declared by Poof.h. ([Markdown](https://godxgun.github.io/godstack/symbols/poof.md))
 
-- [Rend symbols](https://example.org/symbols/rend/): Types, macros, and functions declared by Rend.h. ([Markdown](https://example.org/symbols/rend.md))
+- [Rend symbols](https://godxgun.github.io/godstack/symbols/rend/): Types, macros, and functions declared by Rend.h. ([Markdown](https://godxgun.github.io/godstack/symbols/rend.md))
 
-- [Type symbols](https://example.org/symbols/type/): Types, macros, and functions declared by Type.h. ([Markdown](https://example.org/symbols/type.md))
+- [Type symbols](https://godxgun.github.io/godstack/symbols/type/): Types, macros, and functions declared by Type.h. ([Markdown](https://godxgun.github.io/godstack/symbols/type.md))
 
-- [Wire symbols](https://example.org/symbols/wire/): Types, macros, and functions declared by Wire.h. ([Markdown](https://example.org/symbols/wire.md))
+- [Wire symbols](https://godxgun.github.io/godstack/symbols/wire/): Types, macros, and functions declared by Wire.h. ([Markdown](https://godxgun.github.io/godstack/symbols/wire.md))
 
 ## Integration boundary
 

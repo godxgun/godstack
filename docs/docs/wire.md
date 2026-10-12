@@ -1,6 +1,6 @@
 # Wire
 
-Documentation: https://example.org/docs/wire/
+Documentation: https://godxgun.github.io/godstack/docs/wire/
 Description: Handle GET requests with Wire on Unix and understand its deliberately narrow HTTP scope.
 
 
@@ -72,7 +72,7 @@ static int route(int fd, const WireHttpRequest *req, void *user)
 
 `wire_http_error()` writes a small HTML page such as `<h1>404 Not Found</h1>`. The path comes from
 the client: escape it before echoing it into HTML, for example with
-[Cool](/docs/cool/)'s `cool_html_txt()`.
+[Cool](/godstack/docs/cool/)'s `cool_html_txt()`.
 
 ## Serving Static Files
 
@@ -153,4 +153,4 @@ Wire handles one connection at a time and has no timeouts, so a slow client dela
 There is no keep-alive, TLS, request body, chunked encoding or header access beyond `HX-Request`.
 Put it behind a reverse proxy, or use a larger server, when you need those.
 
-See [Wire symbols](/symbols/wire/) for the generated declarations.
+See [Wire symbols](/godstack/symbols/wire/) for the generated declarations.

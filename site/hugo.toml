@@ -1,5 +1,4 @@
-# Override baseURL when deploying: hugo --source "$GODSTACK_SITE" --baseURL https://your-domain/
-baseURL = 'https://example.org/'
+baseURL = 'https://godxgun.github.io/godstack/'
 locale = 'en'
 title = 'Godstack'
 contentDir = 'articles'

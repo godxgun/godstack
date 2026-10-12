@@ -1,6 +1,6 @@
 # Grit
 
-Documentation: https://example.org/docs/grit/
+Documentation: https://godxgun.github.io/godstack/docs/grit/
 Description: Choose caller-backed allocators and use Grit utilities with explicit lifetimes.
 
 
@@ -218,6 +218,6 @@ bottom-right, bottom-left; triangles interpolate their three vertex colors; line
 blend from the first color to the second. `grit_draw_blit()` copies a block of pixels and
 `grit_draw_pixel()` sets one. To show the result in a window, upload the buffer with your platform
 layer, as the [Grit demo](https://github.com/godxgun/godstack/tree/main/demos/grit) does with
-[Peak](/docs/peak/).
+[Peak](/godstack/docs/peak/).
 
-See [Grit symbols](/symbols/grit/) for the generated declarations.
+See [Grit symbols](/godstack/symbols/grit/) for the generated declarations.

@@ -1,12 +1,12 @@
 # Peak symbols
 
-Documentation: https://example.org/symbols/peak/
+Documentation: https://godxgun.github.io/godstack/symbols/peak/
 Description: Types, macros, and functions declared by Peak.h.
 
 
 # Peak symbols
 
-For setup and API workflows, read the [Peak guide](/docs/peak/). This vault lists individual declarations; it is not a tutorial.
+For setup and API workflows, read the [Peak guide](/godstack/docs/peak/). This vault lists individual declarations; it is not a tutorial.
 
 <!-- BEGIN GENERATED API -->
 

@@ -1,6 +1,6 @@
 # Type
 
-Documentation: https://example.org/docs/type/
+Documentation: https://godxgun.github.io/godstack/docs/type/
 Description: Place a Type context, load font bytes, and lay out and rasterize glyphs into a coverage atlas.
 
 
@@ -287,4 +287,4 @@ truncated sequence; `type_utf8_validate()` checks a whole string.
 Color emoji are not rendered, `TYPE_AA_SDF` returns `TYPE_ERR_UNIMPLEMENTED`, and the character
 width and emoji queries (`type_width()`, `type_is_emoji()` and related calls) are placeholders.
 
-See [Type symbols](/symbols/type/) for the generated declarations and their full contracts.
+See [Type symbols](/godstack/symbols/type/) for the generated declarations and their full contracts.

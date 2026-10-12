@@ -1,12 +1,12 @@
 # Cool symbols
 
-Documentation: https://example.org/symbols/cool/
+Documentation: https://godxgun.github.io/godstack/symbols/cool/
 Description: Types, macros, and functions declared by Cool.h.
 
 
 # Cool symbols
 
-For setup and API workflows, read the [Cool guide](/docs/cool/). This vault lists individual declarations; it is not a tutorial.
+For setup and API workflows, read the [Cool guide](/godstack/docs/cool/). This vault lists individual declarations; it is not a tutorial.
 
 <!-- BEGIN GENERATED API -->
 

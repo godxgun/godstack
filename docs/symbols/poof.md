@@ -1,12 +1,12 @@
 # Poof symbols
 
-Documentation: https://example.org/symbols/poof/
+Documentation: https://godxgun.github.io/godstack/symbols/poof/
 Description: Types, macros, and functions declared by Poof.h.
 
 
 # Poof symbols
 
-For setup and API workflows, read the [Poof guide](/docs/poof/). This vault lists individual declarations; it is not a tutorial.
+For setup and API workflows, read the [Poof guide](/godstack/docs/poof/). This vault lists individual declarations; it is not a tutorial.
 
 <!-- BEGIN GENERATED API -->
 

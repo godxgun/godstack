@@ -1,12 +1,12 @@
 # Rend symbols
 
-Documentation: https://example.org/symbols/rend/
+Documentation: https://godxgun.github.io/godstack/symbols/rend/
 Description: Types, macros, and functions declared by Rend.h.
 
 
 # Rend symbols
 
-For setup and API workflows, read the [Rend guide](/docs/rend/). This vault lists individual declarations; it is not a tutorial.
+For setup and API workflows, read the [Rend guide](/godstack/docs/rend/). This vault lists individual declarations; it is not a tutorial.
 
 <!-- BEGIN GENERATED API -->
 

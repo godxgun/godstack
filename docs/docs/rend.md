@@ -1,6 +1,6 @@
 # Rend
 
-Documentation: https://example.org/docs/rend/
+Documentation: https://godxgun.github.io/godstack/docs/rend/
 Description: Use legacy Rend with Peak on native Vulkan and browser WebGL2.
 
 
@@ -26,7 +26,7 @@ omitted for Emscripten:
 #include "Rend.h"
 ```
 
-See the [Peak guide](/docs/peak/) for platform dependencies and window setup.
+See the [Peak guide](/godstack/docs/peak/) for platform dependencies and window setup.
 
 ## Creating a Renderer
 

@@ -1,6 +1,6 @@
 # Poof
 
-Documentation: https://example.org/docs/poof/
+Documentation: https://godxgun.github.io/godstack/docs/poof/
 Description: Construct process commands and compiler configurations with Poof.
 
 
@@ -183,4 +183,4 @@ if (POOF_IS_SET(simd, POOF_AVX2)) poof_print(0x888888, "using AVX2 paths\n");
 This repository's own [`build.c`](https://github.com/godxgun/godstack/blob/main/build.c) is a
 full example: run `cc build.c -o build` and then `./build demo <name>` from the repository root.
 
-See [Poof symbols](/symbols/poof/) for all declarations.
+See [Poof symbols](/godstack/symbols/poof/) for all declarations.
