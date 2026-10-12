@@ -26,6 +26,8 @@ add_peak_config(Poof_CC *cc)
 #else
     poof_cc_append_linux(cc, "-lvulkan");
 #endif
+    /* Strict -std=c99 hides BSD symbols that Apple's signal.h needs (NSIG). */
+    poof_cc_append_macos(cc, "-D_DARWIN_C_SOURCE");
 }
 
 static void
