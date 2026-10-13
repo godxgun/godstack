@@ -27,6 +27,9 @@
  * - Does not grow the face list, the fallback list, or the glyph cache.
  *   Sizes are fixed when the context is placed.
  *
+ * Define TYPE_FLOOR, TYPE_CEIL or TYPE_SQRT (double -> double) before the
+ * implementation to replace the built-in floor, ceil or sqrt.
+ *
  * PREFIX: TYPE_ (macros)  Type (types)  type_ (functions)
  *
  * USAGE:
@@ -53,9 +56,11 @@
 
 #define TYPE_MAJOR 0
 #define TYPE_MINOR 3
-#define TYPE_PATCH 0
+#define TYPE_PATCH 1
 
 /* CHANGE LOG
+ * 0.3.1 - built-in floor, ceil and sqrt, replaceable with TYPE_FLOOR,
+ *         TYPE_CEIL and TYPE_SQRT, so the rasterizer needs no libm.
  * 0.3.0 - bounded native sfnt/glyf/CFF/CFF2 parser and coverage rasterizer.
  *         No public signature removals. Default admission now parses safely;
  *         trusted calls are aliases. TTC defaults to face 0; place_index
@@ -483,6 +488,55 @@ int type_is_combining(uint32_t codepoint);
 #include <math.h>
 #include <string.h>
 
+#if !defined(TYPE_SQRT) && (defined(__SSE2__) || defined(_M_X64))
+#include <emmintrin.h>
+#elif !defined(TYPE_SQRT) && (defined(__aarch64__) || defined(_M_ARM64))
+#include <arm_neon.h>
+#endif
+
+#ifndef TYPE_FLOOR
+#define TYPE_FLOOR type_floor
+/* Values at or above 2^52 in magnitude, infinities and NaN are already integral. */
+static double type_floor(double x)
+{
+    double t;
+    if (!(fabs(x) < 4503599627370496.0) || x == 0)
+        return x;
+    t = (double)(int64_t)x;
+    return t > x ? t - 1 : t;
+}
+#endif
+
+#ifndef TYPE_CEIL
+#define TYPE_CEIL type_ceil
+static double type_ceil(double x)
+{
+    double t;
+    if (!(fabs(x) < 4503599627370496.0) || x == 0)
+        return x;
+    t = (double)(int64_t)x;
+    if (t < x)
+        return t + 1;
+    return t == 0 && x < 0 ? -0.0 : t;
+}
+#endif
+
+#ifndef TYPE_SQRT
+#define TYPE_SQRT type_sqrt
+/* The hardware square root is correctly rounded; other targets use libm. */
+static double type_sqrt(double x)
+{
+#if defined(__SSE2__) || defined(_M_X64)
+    __m128d v = _mm_set_sd(x);
+    return _mm_cvtsd_f64(_mm_sqrt_sd(v, v));
+#elif defined(__aarch64__) || defined(_M_ARM64)
+    return vget_lane_f64(vsqrt_f64(vdup_n_f64(x)), 0);
+#else
+    return sqrt(x);
+#endif
+}
+#endif
+
 #define TYPE_MAX_FONT_BYTES (128u * 1024u * 1024u)
 #define TYPE_MAX_TABLES 256u
 #define TYPE_MAX_POINTS 16384u
@@ -801,7 +855,7 @@ static int type_dict(TypeView view, TypeDict *d)
         if (op == 17 || op == 19 || op == 0x124 || op == 0x125 || op == 24 || op == 15 ||
             op == 16 || op == 22) {
             uint32_t x;
-            if (n != 1 || s[0] < 0 || s[0] > UINT32_MAX || floor(s[0]) != s[0])
+            if (n != 1 || s[0] < 0 || s[0] > UINT32_MAX || TYPE_FLOOR(s[0]) != s[0])
                 return 0;
             x = (uint32_t)s[0];
             if (op == 17)
@@ -822,7 +876,7 @@ static int type_dict(TypeView view, TypeDict *d)
                 d->encoding = x;
         } else if (op == 18) {
             if (n != 2 || s[0] < 0 || s[1] < 0 || s[0] > UINT32_MAX || s[1] > UINT32_MAX ||
-                floor(s[0]) != s[0] || floor(s[1]) != s[1])
+                TYPE_FLOOR(s[0]) != s[0] || TYPE_FLOOR(s[1]) != s[1])
                 return 0;
             d->private_n = (uint32_t)s[0];
             d->private_at = (uint32_t)s[1];
@@ -1735,8 +1789,8 @@ static TypeError type_tt_walk(const TypeTTF *f, uint16_t gid, TypeWalk *w, unsig
                     tx = t;
                 }
                 if (bits & 4u) {
-                    tx = floor(tx + 0.5);
-                    ty = floor(ty + 0.5);
+                    tx = TYPE_FLOOR(tx + 0.5);
+                    ty = TYPE_FLOOR(ty + 0.5);
                 }
             } else {
                 if (a >= childbase - base || b >= w->n - childbase)
@@ -1934,7 +1988,7 @@ static void type_cs_curve(TypeCS *c, double dx1, double dy1, double dx2, double 
 }
 static int type_cs_int(double v, int32_t *out)
 {
-    if (!isfinite(v) || v < INT32_MIN || v > INT32_MAX || floor(v) != v)
+    if (!isfinite(v) || v < INT32_MIN || v > INT32_MAX || TYPE_FLOOR(v) != v)
         return 0;
     *out = (int32_t)v;
     return 1;
@@ -2260,7 +2314,7 @@ static TypeError type_cs_run(TypeCS *s, TypeView v, unsigned depth, int sub)
                 else {
                     if (x < 0)
                         return TYPE_ERR_INVALID_FONT;
-                    a[n - 1] = sqrt(x);
+                    a[n - 1] = TYPE_SQRT(x);
                 }
             } else if (op == 18) {
                 if (!n)
@@ -2576,10 +2630,10 @@ TypeError type_font_bitmap_info(const TypeFont *f, uint16_t gid, float px, TypeB
     top = -(float)b[3] * scale;
     right = (float)b[2] * scale;
     bottom = -(float)b[1] * scale;
-    x0 = floor(left);
-    y0 = floor(top);
-    x1 = ceil(right);
-    y1 = ceil(bottom);
+    x0 = TYPE_FLOOR(left);
+    y0 = TYPE_FLOOR(top);
+    x1 = TYPE_CEIL(right);
+    y1 = TYPE_CEIL(bottom);
     if (x1 <= x0 || y1 <= y0)
         return TYPE_OK;
     if (x1 - x0 > 65535 || y1 - y0 > 65535 || fabs(x0) > 32767 || fabs(y0) > 32767)
@@ -2628,7 +2682,7 @@ static int32_t type_fixed(TypeEdges *e, double x, double scale, int offset)
         e->err = TYPE_ERR_LIMIT;
         return 0;
     }
-    rounded = floor(shifted * 65536.0 + 0.5);
+    rounded = TYPE_FLOOR(shifted * 65536.0 + 0.5);
     return (int32_t)rounded;
 }
 static int32_t type_mid(int32_t a, int32_t b)
